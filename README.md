@@ -17,9 +17,12 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 
 ### Work with a server
 ```shell
-# cdt works with the environment variables to connecto the server
+# cdt works with the environment variables to connect to the server
 export CONDUCTOR_SERVER_URL=http://server:port/api
 
+########################################
+### REQUIRED when using Orkes hosted ###
+########################################
 # When using an Orkes server which requires api key/secret, set the following env variables 
 export CONDUCTOR_AUTH_KEY=api_key
 export CONDUCTOR_AUTH_SECRET=api_key_secret
