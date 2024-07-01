@@ -1,5 +1,17 @@
-# conductor-cli
-CLI for Orkes Conductor
+# CLI for Conductor
+
+[Conductor](https://www.conductor-oss.org/) is the leading open-source orchestration platform allowing developers to build highly scalable distributed applications. 
+
+Check out the [official documentation for Conductor](https://orkes.io/content).
+
+This repository provides a Java client for the Orkes Conductor Server. 
+
+## ⭐ Conductor OSS
+
+Show support for the Conductor OSS.  Please help spread the awareness by starring Conductor repo.
+
+[![GitHub stars](https://img.shields.io/github/stars/conductor-oss/conductor.svg?style=social&label=Star&maxAge=)](https://GitHub.com/conductor-oss/conductor/)
+
 
 ## Server Commands
 
