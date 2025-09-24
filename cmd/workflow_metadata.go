@@ -70,7 +70,7 @@ var (
 		GroupID:      "metadata",
 	}
 	deleteWorkflowMetadataCmd = &cobra.Command{
-		Use:          "delete",
+		Use:          "delete <workflow_name> <version>",
 		Short:        "Delete Workflow",
 		RunE:         deleteWorkflowMetadata,
 		SilenceUsage: true,
@@ -282,25 +282,24 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		log.Info("Read ", len(workflows), " from console")
 		r := regexp.MustCompile(`[^\s"]+|"([^"]*)"`)
 		if !yes {
-			fmt.Println("OK to delete ", len(workflows), "? [Y]es, [N]o: ")
-			answer := "n"
-			for {
-				answer = readString()
-				answer = strings.TrimSpace(answer)
-				answer = strings.ToLower(answer)
-				log.Info("Got answer: ", answer)
-				if answer == "y" || answer == "n" {
-					break
-				}
-			}
-			log.Info("Got final answer: ", answer)
+			// When piped input, auto-confirm since user can't interact
+			fmt.Printf("Auto-confirming deletion of %d workflow(s) from piped input. Use --yes to skip confirmation.\n", len(workflows))
 		}
 		for _, workflow := range workflows {
 			a := r.FindAllString(workflow, -1)
 			if len(a) != 2 {
 				return errors.New("no version specified")
 			}
-			log.Info(a[0], ",", a[1])
+			name := a[0]
+			version, err := strconv.Atoi(a[1])
+			if err != nil {
+				return fmt.Errorf("invalid version '%s' for workflow '%s': %v", a[1], name, err)
+			}
+			log.Info("Deleting workflow: ", name, " version: ", version)
+			_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
+			if err != nil {
+				return fmt.Errorf("failed to delete workflow '%s' version %d: %v", name, version, err)
+			}
 		}
 		return nil
 	} else if len(args) == 2 {
@@ -345,6 +344,10 @@ func readString() string {
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				b.WriteString(line)
+			}
 			break
 		}
 		b.WriteString(line)
