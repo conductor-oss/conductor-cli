@@ -163,7 +163,21 @@ func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+		
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+		
 		data = read()
+		if len(data) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
 	}
 	var workflowDefs []model.WorkflowDef
 
@@ -197,7 +211,21 @@ func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+		
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+		
 		data = read()
+		if len(data) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
 	}
 	js := string(data)
 	var json string
@@ -236,9 +264,20 @@ func deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	metadataClient := internal.GetMetadataClient()
 	if len(args) == 0 {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+		
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+		
 		workflows := readLines()
 		if len(workflows) == 0 {
-			return cmd.Usage()
+			return fmt.Errorf("no workflow data received from stdin")
 		}
 		log.Info("Read ", len(workflows), " from console")
 		r := regexp.MustCompile(`[^\s"]+|"([^"]*)"`)
@@ -274,6 +313,7 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		return nil
 	}
 
 	return cmd.Usage()
@@ -287,6 +327,10 @@ func read() []byte {
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				b.WriteString(line)
+			}
 			break
 		}
 		b.WriteString(line)
@@ -315,11 +359,19 @@ func readLines() []string {
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				line = strings.TrimSpace(line)
+				if len(line) > 0 {
+					lines = append(lines, line)
+				}
+			}
 			break
 		}
 		line = strings.TrimSpace(line)
-		//fmt.Println(line)
-		lines = append(lines, line)
+		if len(line) > 0 {
+			lines = append(lines, line)
+		}
 	}
 	return lines
 }
