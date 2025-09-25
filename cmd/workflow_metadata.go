@@ -55,7 +55,7 @@ var (
 	}
 
 	updateWorkflowMetadataCmd = &cobra.Command{
-		Use:          "update",
+		Use:          "update <workflow_definition.json>",
 		Short:        "Update Workflow",
 		RunE:         updateWorkflowMetadata,
 		SilenceUsage: true,
@@ -63,7 +63,7 @@ var (
 	}
 
 	createWorkflowMetadataCmd = &cobra.Command{
-		Use:          "create",
+		Use:          "create <workflow_definition.json>",
 		Short:        "Create Workflow",
 		RunE:         createWorkflowMetadata,
 		SilenceUsage: true,
