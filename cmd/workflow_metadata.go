@@ -39,7 +39,7 @@ var (
 		GroupID:      "metadata",
 	}
 	getWorkflowMetadataCmd = &cobra.Command{
-		Use:          "get",
+		Use:          "get <workflow_name> <version>",
 		Short:        "Get Workflow",
 		RunE:         getWorkflowMetadata,
 		SilenceUsage: true,
@@ -96,22 +96,25 @@ func listWorkflow(cmd *cobra.Command, args []string) error {
 }
 
 func getWorkflowMetadata(cmd *cobra.Command, args []string) error {
-	metadataClient := internal.GetMetadataClient()
-	for i := 0; i < len(args); i++ {
-		var version *client.MetadataResourceApiGetOpts
-		nameAndVersion := strings.Split(args[i], ",")
-		name := nameAndVersion[0]
-		if len(nameAndVersion) > 1 {
-			ver, _ := strconv.Atoi(nameAndVersion[1])
-			version = &client.MetadataResourceApiGetOpts{Version: optional.NewInt32(int32(ver))}
-		}
-		metadata, _, err := metadataClient.Get(context.Background(), html.EscapeString(name), version)
-		if err != nil {
-			return err
-		}
-		bytes, _ := json.MarshalIndent(metadata, "", "   ")
-		fmt.Println(string(bytes))
+	if len(args) != 2 {
+		return cmd.Usage()
 	}
+	
+	metadataClient := internal.GetMetadataClient()
+	name := args[0]
+	version, err := strconv.Atoi(args[1])
+	if err != nil {
+		return fmt.Errorf("invalid version '%s': must be a number", args[1])
+	}
+	
+	versionOpts := &client.MetadataResourceApiGetOpts{Version: optional.NewInt32(int32(version))}
+	metadata, _, err := metadataClient.Get(context.Background(), html.EscapeString(name), versionOpts)
+	if err != nil {
+		return parseAPIError(err, fmt.Sprintf("Failed to get workflow '%s' version %d", name, version))
+	}
+	
+	bytes, _ := json.MarshalIndent(metadata, "", "   ")
+	fmt.Println(string(bytes))
 	return nil
 }
 
