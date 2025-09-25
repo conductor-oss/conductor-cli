@@ -198,7 +198,10 @@ func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	}
 	workflowDefs = append(workflowDefs, workflowDef)
 	_, err = metadataClient.Update(context.Background(), workflowDefs)
-	return err
+	if err != nil {
+		return parseAPIError(err, "Failed to update workflow")
+	}
+	return nil
 }
 
 func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
@@ -249,7 +252,10 @@ func registerWorkflow(data []byte, force bool) error {
 		return parseJSONError(err, string(data), "workflow definition")
 	}
 	_, err = metadataClient.RegisterWorkflowDef(context.Background(), force, workflowDef)
-	return err
+	if err != nil {
+		return parseAPIError(err, "Failed to create workflow")
+	}
+	return nil
 }
 
 func deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
@@ -368,14 +374,38 @@ func parseAPIError(err error, defaultMsg string) error {
 	}
 	
 	if jsonStr != "" {
-		// Try to parse the JSON
+		// Try to parse the JSON with validation errors
 		var errorResponse struct {
-			Status  int    `json:"status"`
-			Message string `json:"message"`
+			Status           int    `json:"status"`
+			Message          string `json:"message"`
+			ValidationErrors []struct {
+				Path    string `json:"path"`
+				Message string `json:"message"`
+			} `json:"validationErrors"`
 		}
 		
-		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil && errorResponse.Message != "" {
-			return fmt.Errorf("%s: %s (status: %d)", defaultMsg, errorResponse.Message, errorResponse.Status)
+		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil {
+			if errorResponse.Message != "" {
+				message := fmt.Sprintf("%s: %s", defaultMsg, errorResponse.Message)
+				
+				// Add validation error details if available
+				if len(errorResponse.ValidationErrors) > 0 {
+					message += "\nValidation errors:"
+					for _, validationErr := range errorResponse.ValidationErrors {
+						if validationErr.Path != "" {
+							message += fmt.Sprintf("\n  - %s: %s", validationErr.Path, validationErr.Message)
+						} else {
+							message += fmt.Sprintf("\n  - %s", validationErr.Message)
+						}
+					}
+				}
+				
+				if errorResponse.Status > 0 {
+					message += fmt.Sprintf(" (status: %d)", errorResponse.Status)
+				}
+				
+				return fmt.Errorf(message)
+			}
 		}
 	}
 	
