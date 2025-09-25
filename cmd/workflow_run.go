@@ -243,7 +243,7 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 		if startErr != nil {
 			return startErr
 		}
-		fmt.Println("http://localhost:5000/execution/" + workflowId)
+		fmt.Println(workflowId)
 	}
 
 	return nil
