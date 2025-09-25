@@ -254,12 +254,7 @@ func registerWorkflow(data []byte, force bool) error {
 }
 
 func deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
-	err := _deleteWorkflowMetadata(cmd, args)
-	if err != nil {
-		log.Error("Got error ", err)
-		return err
-	}
-	return nil
+	return _deleteWorkflowMetadata(cmd, args)
 }
 func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	metadataClient := internal.GetMetadataClient()
@@ -298,7 +293,7 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 			log.Info("Deleting workflow: ", name, " version: ", version)
 			_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
 			if err != nil {
-				return fmt.Errorf("failed to delete workflow '%s' version %d: %v", name, version, err)
+				return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
 			}
 		}
 		return nil
@@ -310,13 +305,50 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		}
 		_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
 		}
 		return nil
 	}
 
 	return cmd.Usage()
 
+}
+
+// parseAPIError extracts useful error information from API responses
+func parseAPIError(err error, defaultMsg string) error {
+	errStr := err.Error()
+	
+	// Try to extract JSON from error message
+	// Error format: "error: {...}, body: {...}"
+	var jsonStr string
+	if strings.Contains(errStr, "body: {") {
+		// Extract the body part
+		parts := strings.Split(errStr, "body: ")
+		if len(parts) > 1 {
+			jsonStr = parts[1]
+		}
+	} else if strings.Contains(errStr, "error: {") {
+		// Extract the error part  
+		parts := strings.Split(errStr, "error: ")
+		if len(parts) > 1 {
+			jsonStr = strings.Split(parts[1], ", body:")[0]
+		}
+	}
+	
+	if jsonStr != "" {
+		// Try to parse the JSON
+		var errorResponse struct {
+			Status  int    `json:"status"`
+			Message string `json:"message"`
+		}
+		
+		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil && errorResponse.Message != "" {
+			return fmt.Errorf("%s: %s (status: %d)", defaultMsg, errorResponse.Message, errorResponse.Status)
+		}
+	}
+	
+	// Fallback to original error if parsing fails
+	return fmt.Errorf("%s: %v", defaultMsg, err)
 }
 
 func read() []byte {
