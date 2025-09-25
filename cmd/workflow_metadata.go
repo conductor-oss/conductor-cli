@@ -194,7 +194,7 @@ func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	var workflowDef model.WorkflowDef
 	err = json.Unmarshal(data, &workflowDef)
 	if err != nil {
-		return err
+		return parseJSONError(err, string(data), "workflow definition")
 	}
 	workflowDefs = append(workflowDefs, workflowDef)
 	_, err = metadataClient.Update(context.Background(), workflowDefs)
@@ -246,8 +246,7 @@ func registerWorkflow(data []byte, force bool) error {
 	var workflowDef model.WorkflowDef
 	err := json.Unmarshal(data, &workflowDef)
 	if err != nil {
-		fmt.Println("Error parsing", string(data))
-		return errors.New("Input is not a valid workflow definition: " + err.Error())
+		return parseJSONError(err, string(data), "workflow definition")
 	}
 	_, err = metadataClient.RegisterWorkflowDef(context.Background(), force, workflowDef)
 	return err
@@ -312,6 +311,39 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 
 	return cmd.Usage()
 
+}
+
+// parseJSONError provides helpful error messages for JSON parsing failures
+func parseJSONError(err error, jsonContent string, contextName string) error {
+	errStr := err.Error()
+	
+	// Common JSON syntax error patterns
+	if strings.Contains(errStr, "invalid character") && strings.Contains(errStr, "in string literal") {
+		// Find the approximate line number by counting newlines
+		lines := strings.Split(jsonContent, "\n")
+		
+		// Look for unterminated strings (missing quotes)
+		for i, line := range lines {
+			// Simple heuristic: look for lines with odd number of quotes
+			quoteCount := strings.Count(line, "\"") - strings.Count(line, "\\\"")
+			if quoteCount%2 != 0 && strings.Contains(line, ":") {
+				return fmt.Errorf("JSON syntax error in %s: unterminated string on line %d\nLine content: %s\nHint: Check for missing closing quote (\") on this line", contextName, i+1, strings.TrimSpace(line))
+			}
+		}
+		
+		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for unterminated strings (missing quotes)", contextName, errStr)
+	}
+	
+	if strings.Contains(errStr, "unexpected end of JSON input") {
+		return fmt.Errorf("JSON syntax error in %s: unexpected end of file\nHint: Check for missing closing braces } or brackets ]", contextName)
+	}
+	
+	if strings.Contains(errStr, "invalid character") {
+		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for invalid characters, missing commas, or malformed values", contextName, errStr)
+	}
+	
+	// Fallback for other JSON errors
+	return fmt.Errorf("Invalid %s format: %s", contextName, errStr)
 }
 
 // parseAPIError extracts useful error information from API responses
