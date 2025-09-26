@@ -59,6 +59,22 @@ var (
 		SilenceUsage: true,
 		Example:      "terminate [flags]",
 	}
+
+	pauseWorkflowCmd = &cobra.Command{
+		Use:          "pause <workflow_id>",
+		Short:        "Pauses a running workflow",
+		RunE:         pauseWorkflow,
+		SilenceUsage: true,
+		Example:      "pause [workflow_id]",
+	}
+
+	resumeWorkflowCmd = &cobra.Command{
+		Use:          "resume <workflow_id>",
+		Short:        "Resumes a paused workflow",
+		RunE:         resumeWorkflow,
+		SilenceUsage: true,
+		Example:      "resume [workflow_id]",
+	}
 )
 
 // parseTimeToEpochMillis parses human-readable time formats to epoch milliseconds
@@ -311,6 +327,44 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func pauseWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+	
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		id := args[i]
+		_, err := workflowClient.PauseWorkflow(context.Background(), id)
+		if err != nil {
+			fmt.Printf("error pausing workflow %s: %s\n", id, err.Error())
+		} else {
+			fmt.Printf("workflow %s paused successfully\n", id)
+		}
+	}
+	
+	return nil
+}
+
+func resumeWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+	
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		id := args[i]
+		_, err := workflowClient.ResumeWorkflow(context.Background(), id)
+		if err != nil {
+			fmt.Printf("error resuming workflow %s: %s\n", id, err.Error())
+		} else {
+			fmt.Printf("workflow %s resumed successfully\n", id)
+		}
+	}
+	
+	return nil
+}
+
 func init() {
 	searchWorkflowCmd.Flags().Int32P("count", "c", 10, "No of workflows to return (max 1000)")
 	searchWorkflowCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
@@ -339,5 +393,7 @@ func init() {
 		startWorkflowCmd,
 		executeWorkflowCmd,
 		terminateWorkflowCmd,
+		pauseWorkflowCmd,
+		resumeWorkflowCmd,
 	)
 }
