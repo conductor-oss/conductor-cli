@@ -39,7 +39,7 @@ var (
 		GroupID:      "metadata",
 	}
 	getWorkflowMetadataCmd = &cobra.Command{
-		Use:          "get",
+		Use:          "get <workflow_name> <version>",
 		Short:        "Get Workflow",
 		RunE:         getWorkflowMetadata,
 		SilenceUsage: true,
@@ -55,7 +55,7 @@ var (
 	}
 
 	updateWorkflowMetadataCmd = &cobra.Command{
-		Use:          "update",
+		Use:          "update <workflow_definition.json>",
 		Short:        "Update Workflow",
 		RunE:         updateWorkflowMetadata,
 		SilenceUsage: true,
@@ -63,14 +63,14 @@ var (
 	}
 
 	createWorkflowMetadataCmd = &cobra.Command{
-		Use:          "create",
+		Use:          "create <workflow_definition.json>",
 		Short:        "Create Workflow",
 		RunE:         createWorkflowMetadata,
 		SilenceUsage: true,
 		GroupID:      "metadata",
 	}
 	deleteWorkflowMetadataCmd = &cobra.Command{
-		Use:          "delete",
+		Use:          "delete <workflow_name> <version>",
 		Short:        "Delete Workflow",
 		RunE:         deleteWorkflowMetadata,
 		SilenceUsage: true,
@@ -96,22 +96,25 @@ func listWorkflow(cmd *cobra.Command, args []string) error {
 }
 
 func getWorkflowMetadata(cmd *cobra.Command, args []string) error {
-	metadataClient := internal.GetMetadataClient()
-	for i := 0; i < len(args); i++ {
-		var version *client.MetadataResourceApiGetOpts
-		nameAndVersion := strings.Split(args[i], ",")
-		name := nameAndVersion[0]
-		if len(nameAndVersion) > 1 {
-			ver, _ := strconv.Atoi(nameAndVersion[1])
-			version = &client.MetadataResourceApiGetOpts{Version: optional.NewInt32(int32(ver))}
-		}
-		metadata, _, err := metadataClient.Get(context.Background(), html.EscapeString(name), version)
-		if err != nil {
-			return err
-		}
-		bytes, _ := json.MarshalIndent(metadata, "", "   ")
-		fmt.Println(string(bytes))
+	if len(args) != 2 {
+		return cmd.Usage()
 	}
+	
+	metadataClient := internal.GetMetadataClient()
+	name := args[0]
+	version, err := strconv.Atoi(args[1])
+	if err != nil {
+		return fmt.Errorf("invalid version '%s': must be a number", args[1])
+	}
+	
+	versionOpts := &client.MetadataResourceApiGetOpts{Version: optional.NewInt32(int32(version))}
+	metadata, _, err := metadataClient.Get(context.Background(), html.EscapeString(name), versionOpts)
+	if err != nil {
+		return parseAPIError(err, fmt.Sprintf("Failed to get workflow '%s' version %d", name, version))
+	}
+	
+	bytes, _ := json.MarshalIndent(metadata, "", "   ")
+	fmt.Println(string(bytes))
 	return nil
 }
 
@@ -163,7 +166,21 @@ func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+		
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+		
 		data = read()
+		if len(data) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
 	}
 	var workflowDefs []model.WorkflowDef
 
@@ -180,11 +197,14 @@ func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	var workflowDef model.WorkflowDef
 	err = json.Unmarshal(data, &workflowDef)
 	if err != nil {
-		return err
+		return parseJSONError(err, string(data), "workflow definition")
 	}
 	workflowDefs = append(workflowDefs, workflowDef)
 	_, err = metadataClient.Update(context.Background(), workflowDefs)
-	return err
+	if err != nil {
+		return parseAPIError(err, "Failed to update workflow")
+	}
+	return nil
 }
 
 func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
@@ -197,7 +217,21 @@ func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+		
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+		
 		data = read()
+		if len(data) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
 	}
 	js := string(data)
 	var json string
@@ -218,50 +252,57 @@ func registerWorkflow(data []byte, force bool) error {
 	var workflowDef model.WorkflowDef
 	err := json.Unmarshal(data, &workflowDef)
 	if err != nil {
-		fmt.Println("Error parsing", string(data))
-		return errors.New("Input is not a valid workflow definition: " + err.Error())
+		return parseJSONError(err, string(data), "workflow definition")
 	}
 	_, err = metadataClient.RegisterWorkflowDef(context.Background(), force, workflowDef)
-	return err
+	if err != nil {
+		return parseAPIError(err, "Failed to create workflow")
+	}
+	return nil
 }
 
 func deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
-	err := _deleteWorkflowMetadata(cmd, args)
-	if err != nil {
-		log.Error("Got error ", err)
-		return err
-	}
-	return nil
+	return _deleteWorkflowMetadata(cmd, args)
 }
 func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	metadataClient := internal.GetMetadataClient()
 	if len(args) == 0 {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+		
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+		
 		workflows := readLines()
 		if len(workflows) == 0 {
-			return cmd.Usage()
+			return fmt.Errorf("no workflow data received from stdin")
 		}
 		log.Info("Read ", len(workflows), " from console")
 		r := regexp.MustCompile(`[^\s"]+|"([^"]*)"`)
 		if !yes {
-			fmt.Println("OK to delete ", len(workflows), "? [Y]es, [N]o: ")
-			answer := "n"
-			for {
-				answer = readString()
-				answer = strings.TrimSpace(answer)
-				answer = strings.ToLower(answer)
-				log.Info("Got answer: ", answer)
-				if answer == "y" || answer == "n" {
-					break
-				}
-			}
-			log.Info("Got final answer: ", answer)
+			// When piped input, auto-confirm since user can't interact
+			fmt.Printf("Auto-confirming deletion of %d workflow(s) from piped input. Use --yes to skip confirmation.\n", len(workflows))
 		}
 		for _, workflow := range workflows {
 			a := r.FindAllString(workflow, -1)
 			if len(a) != 2 {
 				return errors.New("no version specified")
 			}
-			log.Info(a[0], ",", a[1])
+			name := a[0]
+			version, err := strconv.Atoi(a[1])
+			if err != nil {
+				return fmt.Errorf("invalid version '%s' for workflow '%s': %v", a[1], name, err)
+			}
+			log.Info("Deleting workflow: ", name, " version: ", version)
+			_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
+			if err != nil {
+				return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
+			}
 		}
 		return nil
 	} else if len(args) == 2 {
@@ -272,12 +313,107 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		}
 		_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
 		}
+		return nil
 	}
 
 	return cmd.Usage()
 
+}
+
+// parseJSONError provides helpful error messages for JSON parsing failures
+func parseJSONError(err error, jsonContent string, contextName string) error {
+	errStr := err.Error()
+	
+	// Common JSON syntax error patterns
+	if strings.Contains(errStr, "invalid character") && strings.Contains(errStr, "in string literal") {
+		// Find the approximate line number by counting newlines
+		lines := strings.Split(jsonContent, "\n")
+		
+		// Look for unterminated strings (missing quotes)
+		for i, line := range lines {
+			// Simple heuristic: look for lines with odd number of quotes
+			quoteCount := strings.Count(line, "\"") - strings.Count(line, "\\\"")
+			if quoteCount%2 != 0 && strings.Contains(line, ":") {
+				return fmt.Errorf("JSON syntax error in %s: unterminated string on line %d\nLine content: %s\nHint: Check for missing closing quote (\") on this line", contextName, i+1, strings.TrimSpace(line))
+			}
+		}
+		
+		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for unterminated strings (missing quotes)", contextName, errStr)
+	}
+	
+	if strings.Contains(errStr, "unexpected end of JSON input") {
+		return fmt.Errorf("JSON syntax error in %s: unexpected end of file\nHint: Check for missing closing braces } or brackets ]", contextName)
+	}
+	
+	if strings.Contains(errStr, "invalid character") {
+		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for invalid characters, missing commas, or malformed values", contextName, errStr)
+	}
+	
+	// Fallback for other JSON errors
+	return fmt.Errorf("Invalid %s format: %s", contextName, errStr)
+}
+
+// parseAPIError extracts useful error information from API responses
+func parseAPIError(err error, defaultMsg string) error {
+	errStr := err.Error()
+	
+	// Try to extract JSON from error message
+	// Error format: "error: {...}, body: {...}"
+	var jsonStr string
+	if strings.Contains(errStr, "body: {") {
+		// Extract the body part
+		parts := strings.Split(errStr, "body: ")
+		if len(parts) > 1 {
+			jsonStr = parts[1]
+		}
+	} else if strings.Contains(errStr, "error: {") {
+		// Extract the error part  
+		parts := strings.Split(errStr, "error: ")
+		if len(parts) > 1 {
+			jsonStr = strings.Split(parts[1], ", body:")[0]
+		}
+	}
+	
+	if jsonStr != "" {
+		// Try to parse the JSON with validation errors
+		var errorResponse struct {
+			Status           int    `json:"status"`
+			Message          string `json:"message"`
+			ValidationErrors []struct {
+				Path    string `json:"path"`
+				Message string `json:"message"`
+			} `json:"validationErrors"`
+		}
+		
+		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil {
+			if errorResponse.Message != "" {
+				message := fmt.Sprintf("%s: %s", defaultMsg, errorResponse.Message)
+				
+				// Add validation error details if available
+				if len(errorResponse.ValidationErrors) > 0 {
+					message += "\nValidation errors:"
+					for _, validationErr := range errorResponse.ValidationErrors {
+						if validationErr.Path != "" {
+							message += fmt.Sprintf("\n  - %s: %s", validationErr.Path, validationErr.Message)
+						} else {
+							message += fmt.Sprintf("\n  - %s", validationErr.Message)
+						}
+					}
+				}
+				
+				if errorResponse.Status > 0 {
+					message += fmt.Sprintf(" (status: %d)", errorResponse.Status)
+				}
+				
+				return fmt.Errorf(message)
+			}
+		}
+	}
+	
+	// Fallback to original error if parsing fails
+	return fmt.Errorf("%s: %v", defaultMsg, err)
 }
 
 func read() []byte {
@@ -287,6 +423,10 @@ func read() []byte {
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				b.WriteString(line)
+			}
 			break
 		}
 		b.WriteString(line)
@@ -301,6 +441,10 @@ func readString() string {
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				b.WriteString(line)
+			}
 			break
 		}
 		b.WriteString(line)
@@ -315,11 +459,19 @@ func readLines() []string {
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				line = strings.TrimSpace(line)
+				if len(line) > 0 {
+					lines = append(lines, line)
+				}
+			}
 			break
 		}
 		line = strings.TrimSpace(line)
-		//fmt.Println(line)
-		lines = append(lines, line)
+		if len(line) > 0 {
+			lines = append(lines, line)
+		}
 	}
 	return lines
 }

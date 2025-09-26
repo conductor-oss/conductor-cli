@@ -12,6 +12,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var (
@@ -56,7 +59,54 @@ var (
 		SilenceUsage: true,
 		Example:      "terminate [flags]",
 	}
+
+	pauseWorkflowCmd = &cobra.Command{
+		Use:          "pause <workflow_id>",
+		Short:        "Pauses a running workflow",
+		RunE:         pauseWorkflow,
+		SilenceUsage: true,
+		Example:      "pause [workflow_id]",
+	}
+
+	resumeWorkflowCmd = &cobra.Command{
+		Use:          "resume <workflow_id>",
+		Short:        "Resumes a paused workflow",
+		RunE:         resumeWorkflow,
+		SilenceUsage: true,
+		Example:      "resume [workflow_id]",
+	}
 )
+
+// parseTimeToEpochMillis parses human-readable time formats to epoch milliseconds
+func parseTimeToEpochMillis(timeStr string) (int64, error) {
+	if timeStr == "" {
+		return 0, fmt.Errorf("empty time string")
+	}
+
+	// Try common formats
+	formats := []string{
+		"2006-01-02 15:04:05",  // YYYY-MM-DD HH:MM:SS
+		"2006-01-02T15:04:05Z", // RFC3339 UTC
+		"2006-01-02T15:04:05",  // RFC3339 without timezone
+		"2006-01-02 15:04",     // YYYY-MM-DD HH:MM
+		"2006-01-02",           // YYYY-MM-DD
+		"01/02/2006 15:04:05",  // MM/DD/YYYY HH:MM:SS
+		"01/02/2006",           // MM/DD/YYYY
+	}
+
+	for _, format := range formats {
+		if t, err := time.Parse(format, timeStr); err == nil {
+			return t.Unix() * 1000, nil // Convert to milliseconds
+		}
+	}
+
+	// Try parsing as epoch milliseconds directly
+	if epochMs, err := strconv.ParseInt(timeStr, 10, 64); err == nil {
+		return epochMs, nil
+	}
+
+	return 0, fmt.Errorf("unable to parse time '%s'. Supported formats: YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, MM/DD/YYYY, epoch milliseconds", timeStr)
+}
 
 func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 
@@ -75,37 +125,65 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 		count = 10
 	}
 
-	query := ""
+	// Build query dynamically with AND conditions
+	var queryParts []string
+
+	// Workflow name filter
 	workflowName, _ := cmd.Flags().GetString("workflow")
 	if workflowName != "" {
-		query = query + " workflowType IN (" + workflowName + ") "
-	}
-	status, _ := cmd.Flags().GetString("status")
-	if status != "" {
-		if query != "" {
-			query = query + " AND status IN (" + status + ") "
-		} else {
-			query = query + " status IN (" + status + ") "
-		}
+		queryParts = append(queryParts, "workflowType IN ("+workflowName+")")
 	}
 
-	query = query + " AND startTime>1716706800000 AND startTime<1716965999000 "
+	// Status filter
+	status, _ := cmd.Flags().GetString("status")
+	if status != "" {
+		queryParts = append(queryParts, "status IN ("+status+")")
+	}
+
+	// Start time filter (after)
+	startTimeAfter, _ := cmd.Flags().GetString("start-time-after")
+	if startTimeAfter != "" {
+		startTimeAfterMs, err := parseTimeToEpochMillis(startTimeAfter)
+		if err != nil {
+			return fmt.Errorf("invalid start-time-after: %v", err)
+		}
+		queryParts = append(queryParts, "startTime>"+strconv.FormatInt(startTimeAfterMs, 10))
+	}
+
+	// Start time filter (before)
+	startTimeBefore, _ := cmd.Flags().GetString("start-time-before")
+	if startTimeBefore != "" {
+		startTimeBeforeMs, err := parseTimeToEpochMillis(startTimeBefore)
+		if err != nil {
+			return fmt.Errorf("invalid start-time-before: %v", err)
+		}
+		queryParts = append(queryParts, "startTime<"+strconv.FormatInt(startTimeBeforeMs, 10))
+	}
+
+	// Combine all query parts with AND
+	query := strings.Join(queryParts, " AND ")
 
 	searchOpts := client.WorkflowResourceApiSearchOpts{
 		Start:    optional.NewInt32(0),
 		Size:     optional.NewInt32(count),
 		FreeText: optional.NewString(freeText),
-		Query:    optional.NewString(query),
 		Sort:     optional.NewString("startTime:DESC"),
 	}
 
-	results, _, err := workflowClient.Search(context.Background(), &searchOpts)
-	for _, item := range results.Results {
-		fmt.Println(item.WorkflowId)
+	// Only add query if we have conditions
+	if query != "" {
+		searchOpts.Query = optional.NewString(query)
 	}
+
+	results, _, err := workflowClient.Search(context.Background(), &searchOpts)
 	if err != nil {
 		return err
 	}
+
+	for _, item := range results.Results {
+		fmt.Println(item.WorkflowId)
+	}
+
 	return nil
 }
 
@@ -243,16 +321,56 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 		if startErr != nil {
 			return startErr
 		}
-		fmt.Println("http://localhost:5000/execution/" + workflowId)
+		fmt.Println(workflowId)
 	}
 
 	return nil
 }
 
+func pauseWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+	
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		id := args[i]
+		_, err := workflowClient.PauseWorkflow(context.Background(), id)
+		if err != nil {
+			fmt.Printf("error pausing workflow %s: %s\n", id, err.Error())
+		} else {
+			fmt.Printf("workflow %s paused successfully\n", id)
+		}
+	}
+	
+	return nil
+}
+
+func resumeWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+	
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		id := args[i]
+		_, err := workflowClient.ResumeWorkflow(context.Background(), id)
+		if err != nil {
+			fmt.Printf("error resuming workflow %s: %s\n", id, err.Error())
+		} else {
+			fmt.Printf("workflow %s resumed successfully\n", id)
+		}
+	}
+	
+	return nil
+}
+
 func init() {
 	searchWorkflowCmd.Flags().Int32P("count", "c", 10, "No of workflows to return (max 1000)")
-	searchWorkflowCmd.Flags().StringP("status", "s", "", "Filter by status one of (EXECUTED, FAILED)")
+	searchWorkflowCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
 	searchWorkflowCmd.Flags().StringP("workflow", "w", "", "Workflow name")
+	searchWorkflowCmd.Flags().String("start-time-after", "", "Filter workflows started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
+	searchWorkflowCmd.Flags().String("start-time-before", "", "Filter workflows started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 
 	startWorkflowCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	startWorkflowCmd.Flags().StringP("input", "i", "", "Input json")
@@ -275,5 +393,7 @@ func init() {
 		startWorkflowCmd,
 		executeWorkflowCmd,
 		terminateWorkflowCmd,
+		pauseWorkflowCmd,
+		resumeWorkflowCmd,
 	)
 }
