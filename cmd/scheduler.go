@@ -349,7 +349,7 @@ func init() {
 	updateSchedulerCmd.Flags().Int32P("version", "v", 0, "Workflow Version")
 
 	searchSchedulerCmd.Flags().Int32P("count", "c", 10, "No of workflows to return (max 1000)")
-	searchSchedulerCmd.Flags().StringP("status", "s", "", "Filter by status one of (EXECUTED, FAILED)")
+	searchSchedulerCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
 
 	schedulerCmd.AddCommand(
 		listSchedulerCmd,

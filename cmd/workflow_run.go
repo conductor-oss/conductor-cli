@@ -313,7 +313,7 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 
 func init() {
 	searchWorkflowCmd.Flags().Int32P("count", "c", 10, "No of workflows to return (max 1000)")
-	searchWorkflowCmd.Flags().StringP("status", "s", "", "Filter by status one of (EXECUTED, FAILED)")
+	searchWorkflowCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
 	searchWorkflowCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	searchWorkflowCmd.Flags().String("start-time-after", "", "Filter workflows started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchWorkflowCmd.Flags().String("start-time-before", "", "Filter workflows started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
