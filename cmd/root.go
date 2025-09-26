@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"context"
+	"io"
+	stdlog "log"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
+	sdklog "github.com/conductor-sdk/conductor-go/sdk/log"
 	"github.com/orkes-io/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -28,6 +31,8 @@ var rootCmd = &cobra.Command{
 	Short: "cdt",
 	Long:  "CLI for Conductor",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Suppress debug logs from conductor-go SDK at runtime
+		stdlog.SetOutput(io.Discard)
 
 		if verbose {
 			log.SetLevel(log.DebugLevel)
@@ -93,6 +98,13 @@ func getHttpClient() *http.Client {
 }
 
 func init() {
+	// Suppress debug logs from conductor-go SDK
+	stdlog.SetOutput(io.Discard)
+	stdlog.SetFlags(0)
+	
+	// Disable conductor-go SDK logging by using the noop logger
+	sdklog.SetLogger(sdklog.NewNop())
+	
 	rootCmd.PersistentFlags().StringVar(&url, "url", "", "server url")
 	rootCmd.PersistentFlags().StringVar(&token, "token", "", "auth token")
 	rootCmd.PersistentFlags().StringVar(&key, "key", "", "auth key")

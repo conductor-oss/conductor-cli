@@ -97,7 +97,7 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		workflowName = optional.NewString(args[0])
 	}
-	options := client.GetAllSchedulesOpts{WorkflowName: workflowName}
+	options := client.SchedulerResourceApiGetAllSchedulesOpts{WorkflowName: workflowName}
 	schedules, _, err := schedulerClient.GetAllSchedules(context.Background(), &options)
 	verbose, _ := cmd.Flags().GetBool("json")
 	cron, _ := cmd.Flags().GetBool("cron")
@@ -155,7 +155,7 @@ func deleteSchedule(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < len(args); i++ {
-		_, err := schedulerClient.DeleteSchedule(context.Background(), args[i])
+		_, _, err := schedulerClient.DeleteSchedule(context.Background(), args[i])
 		if err != nil {
 			return err
 		}
@@ -171,7 +171,7 @@ func pauseSchedule(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < len(args); i++ {
-		_, err := schedulerClient.PauseSchedule(context.Background(), args[i])
+		_, _, err := schedulerClient.PauseSchedule(context.Background(), args[i])
 		if err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func resumeSchedule(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < len(args); i++ {
-		_, err := schedulerClient.ResumeSchedule(context.Background(), args[i])
+		_, _, err := schedulerClient.ResumeSchedule(context.Background(), args[i])
 		if err != nil {
 			return err
 		}
@@ -227,7 +227,7 @@ func searchScheduledExecutions(cmd *cobra.Command, args []string) error {
 		Sort:     optional.NewString("startTime:DESC"),
 	}
 	for i := 0; i < len(args); i++ {
-		results, _, err := schedulerClient.Search(context.Background(), &searchOpts)
+		results, _, err := schedulerClient.SearchV2(context.Background(), &searchOpts)
 		if err != nil {
 			return err
 		}
@@ -320,7 +320,7 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 	if update {
 
 	}
-	_, err = schedulerClient.SaveSchedule(context.Background(), request)
+	_, _, err = schedulerClient.SaveSchedule(context.Background(), request)
 	if err != nil {
 		return err
 	}

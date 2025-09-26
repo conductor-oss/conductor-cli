@@ -21,13 +21,13 @@ func GetMetadataClient() *client.MetadataResourceApiService {
 }
 
 func GetWebhooksConfigClient() client.WebhooksConfigClient {
-	webhookConfigClient := client.GetWebhooksConfigService(apiClient)
+	webhookConfigClient := client.NewWebhooksConfigClient(apiClient)
 	return webhookConfigClient
 
 }
 
 func GetSchedulerClient() client.SchedulerClient {
-	return client.GetSchedulerService(apiClient)
+	return client.NewSchedulerClient(apiClient)
 }
 
 func SetAPIClient(client *client.APIClient) {

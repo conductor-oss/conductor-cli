@@ -25,7 +25,7 @@ var (
 )
 
 func listUsers(cmd *cobra.Command, args []string) error {
-
+	//FIXME this is task list
 	metadataClient := internal.GetMetadataClient()
 	tasks, _, err := metadataClient.GetTaskDefs(context.Background())
 	verbose, _ := cmd.Flags().GetBool("json")
@@ -46,7 +46,7 @@ func listUsers(cmd *cobra.Command, args []string) error {
 
 func init() {
 	rootCmd.AddCommand(userCmd)
-	taskCmd.AddCommand(
+	userCmd.AddCommand(
 		listUsersCmd,
 	)
 }
