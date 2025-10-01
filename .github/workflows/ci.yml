@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23
+    
+    - name: Build
+      run: go build -x -v ./...
+    
+    - name: Run tests
+      run: go test -v -race -coverprofile=coverage.out -covermode=atomic -json ./... > test-results.json
+    
+    - name: Convert test results to JUnit format
+      if: always()
+      run: |
+        go install github.com/jstemmer/go-junit-report/v2@latest
+        cat test-results.json | go-junit-report -out test-results.xml
+    
+    - name: Publish Test Results
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Go Tests
+        path: test-results.xml
+        reporter: java-junit
+    
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage.out
+        flags: unittests
+        name: codecov-umbrella
