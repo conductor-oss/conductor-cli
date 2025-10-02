@@ -13,12 +13,6 @@ setup() {
         echo "ERROR: orkes binary not found. Please build it first."
         exit 1
     fi
-
-    # Verify required environment variables are set
-    if [ -z "$CONDUCTOR_SERVER_URL" ]; then
-        echo "ERROR: CONDUCTOR_SERVER_URL environment variable is not set"
-        exit 1
-    fi
 }
 
 # Helper function to extract workflow ID from execution start output
@@ -49,7 +43,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(get_workflow_id "$output")
     [ -n "$WORKFLOW_ID" ]
     echo "$WORKFLOW_ID" > /tmp/workflow_id.txt
-    echo "Workflow ID: $WORKFLOW_ID"
+    echo "Started workflow UUID: $WORKFLOW_ID"
 }
 
 @test "4. Check workflow status is RUNNING" {
@@ -71,6 +65,7 @@ get_workflow_id() {
     run ./orkes execution terminate "$WORKFLOW_ID"
     echo "Output: $output"
     [ "$status" -eq 0 ]
+    echo "Terminated workflow UUID: $WORKFLOW_ID"
 }
 
 @test "6. Check workflow status is TERMINATED" {
@@ -95,6 +90,7 @@ get_workflow_id() {
     run ./orkes execution delete "$WORKFLOW_ID"
     echo "Output: $output"
     [ "$status" -eq 0 ]
+    echo "Deleted workflow UUID: $WORKFLOW_ID"
 }
 
 @test "8. Verify execution no longer exists" {

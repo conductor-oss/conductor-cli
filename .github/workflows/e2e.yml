@@ -42,7 +42,7 @@ jobs:
         CONDUCTOR_AUTH_KEY: ${{ secrets.CONDUCTOR_AUTH_KEY }}
         CONDUCTOR_AUTH_SECRET: ${{ secrets.CONDUCTOR_AUTH_SECRET }}
       run: |
-        bats test/e2e/workflow.bats
+        bats test/e2e/workflow.bats --show-output-of-passing-tests
 
     - name: Upload test artifacts
       if: always()
