@@ -1,5 +1,5 @@
 {
-  "name": "e2e_test_workflow",
+  "name": "cli_e2e_test_workflow",
   "description": "End-to-end test workflow with a simple wait task",
   "version": 1,
   "tasks": [

@@ -3,7 +3,7 @@
 # E2E tests for conductor-cli
 # Tests must be run in order as they depend on each other
 
-WORKFLOW_NAME="e2e_test_workflow"
+WORKFLOW_NAME="cli_e2e_test_workflow"
 WORKFLOW_FILE="test/e2e/test-workflow.json"
 WORKFLOW_ID=""
 
