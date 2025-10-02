@@ -18,7 +18,14 @@ import (
 	"time"
 )
 
-var NAME = "cdt"
+var (
+	// Version information - set via ldflags at build time
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+)
+
+var NAME = "orkes"
 
 var (
 	cfgFile string
@@ -30,9 +37,10 @@ var (
 	yes     bool
 )
 var rootCmd = &cobra.Command{
-	Use:   NAME,
-	Short: "cdt",
-	Long:  "CLI for Conductor",
+	Use:     NAME,
+	Short:   "orkes",
+	Long:    "CLI for Conductor",
+	Version: fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, Date),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Suppress debug logs from conductor-go SDK at runtime
 		stdlog.SetOutput(io.Discard)
