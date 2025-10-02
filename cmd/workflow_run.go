@@ -18,63 +18,78 @@ import (
 )
 
 var (
+	// Execution command group
+	executionCmd = &cobra.Command{
+		Use:   "execution",
+		Short: "Workflow execution management",
+		Long:  "Commands for managing workflow executions",
+	}
 
-	//Workflow Runtime
-	searchWorkflowCmd = &cobra.Command{
+	// Execution subcommands
+	searchExecutionCmd = &cobra.Command{
 		Use:          "search",
-		Short:        "Search for workflows",
+		Short:        "Search for workflow executions",
 		RunE:         searchWorkflowExecutions,
 		SilenceUsage: true,
-		Example:      "search [flags] search_text",
+		Example:      "execution search [flags] search_text",
 	}
 
-	getWorkflowCmd = &cobra.Command{
+	statusExecutionCmd = &cobra.Command{
 		Use:          "status",
-		Short:        "Get Workflow Status",
+		Short:        "Get workflow execution status",
 		RunE:         getWorkflowExecution,
 		SilenceUsage: true,
-		Example:      "status [flags] [workflow_id] [workflow_id2]...",
+		Example:      "execution status [flags] [workflow_id] [workflow_id2]...",
 	}
 
-	startWorkflowCmd = &cobra.Command{
+	startExecutionCmd = &cobra.Command{
 		Use:          "start",
-		Short:        "Start Workflow",
+		Short:        "Start workflow execution",
 		RunE:         startWorkflow,
 		SilenceUsage: true,
-		Example:      "start [flags]",
+		Example:      "execution start [flags]",
 	}
 
-	executeWorkflowCmd = &cobra.Command{
+	executeExecutionCmd = &cobra.Command{
 		Use:          "execute",
-		Short:        "Execute Workflow and get output",
+		Short:        "Execute workflow and get output",
 		RunE:         startWorkflow,
 		SilenceUsage: true,
-		Example:      "execute [flags]",
+		Example:      "execution execute [flags]",
 	}
 
-	terminateWorkflowCmd = &cobra.Command{
+	terminateExecutionCmd = &cobra.Command{
 		Use:          "terminate",
-		Short:        "Terminates a running workflow",
+		Short:        "Terminate a running workflow execution",
 		RunE:         terminateWorkflow,
 		SilenceUsage: true,
-		Example:      "terminate [flags]",
+		Example:      "execution terminate [flags]",
 	}
 
-	pauseWorkflowCmd = &cobra.Command{
+	pauseExecutionCmd = &cobra.Command{
 		Use:          "pause <workflow_id>",
-		Short:        "Pauses a running workflow",
+		Short:        "Pause a running workflow execution",
 		RunE:         pauseWorkflow,
 		SilenceUsage: true,
-		Example:      "pause [workflow_id]",
+		Example:      "execution pause [workflow_id]",
 	}
 
-	resumeWorkflowCmd = &cobra.Command{
+	resumeExecutionCmd = &cobra.Command{
 		Use:          "resume <workflow_id>",
-		Short:        "Resumes a paused workflow",
+		Short:        "Resume a paused workflow execution",
 		RunE:         resumeWorkflow,
 		SilenceUsage: true,
-		Example:      "resume [workflow_id]",
+		Example:      "execution resume [workflow_id]",
 	}
+
+	deleteExecutionCmd = &cobra.Command{
+		Use:          "delete <workflow_id>",
+		Short:        "Delete a workflow execution",
+		RunE:         deleteWorkflowExecution,
+		SilenceUsage: true,
+		Example:      "execution delete [workflow_id]\nexecution delete --archive [workflow_id]",
+	}
+
 )
 
 // parseTimeToEpochMillis parses human-readable time formats to epoch milliseconds
@@ -331,7 +346,7 @@ func pauseWorkflow(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return cmd.Usage()
 	}
-	
+
 	workflowClient := internal.GetWorkflowClient()
 	for i := 0; i < len(args); i++ {
 		id := args[i]
@@ -342,7 +357,7 @@ func pauseWorkflow(cmd *cobra.Command, args []string) error {
 			fmt.Printf("workflow %s paused successfully\n", id)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -350,7 +365,7 @@ func resumeWorkflow(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return cmd.Usage()
 	}
-	
+
 	workflowClient := internal.GetWorkflowClient()
 	for i := 0; i < len(args); i++ {
 		id := args[i]
@@ -361,39 +376,70 @@ func resumeWorkflow(cmd *cobra.Command, args []string) error {
 			fmt.Printf("workflow %s resumed successfully\n", id)
 		}
 	}
+
+	return nil
+}
+
+func deleteWorkflowExecution(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+
+	archive, _ := cmd.Flags().GetBool("archive")
 	
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		workflowId := args[i]
+
+		options := &client.WorkflowResourceApiDeleteOpts{
+			ArchiveWorkflow: optional.NewBool(archive),
+		}
+		_, err := workflowClient.Delete(context.Background(), workflowId, options)
+		if err != nil {
+			fmt.Printf("error deleting workflow execution %s: %s\n", workflowId, err.Error())
+		} else {
+			fmt.Printf("workflow execution %s deleted successfully\n", workflowId)
+		}
+	}
+
 	return nil
 }
 
 func init() {
-	searchWorkflowCmd.Flags().Int32P("count", "c", 10, "No of workflows to return (max 1000)")
-	searchWorkflowCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
-	searchWorkflowCmd.Flags().StringP("workflow", "w", "", "Workflow name")
-	searchWorkflowCmd.Flags().String("start-time-after", "", "Filter workflows started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
-	searchWorkflowCmd.Flags().String("start-time-before", "", "Filter workflows started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
+	searchExecutionCmd.Flags().Int32P("count", "c", 10, "No of workflow executions to return (max 1000)")
+	searchExecutionCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
+	searchExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
+	searchExecutionCmd.Flags().String("start-time-after", "", "Filter executions started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
+	searchExecutionCmd.Flags().String("start-time-before", "", "Filter executions started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 
-	startWorkflowCmd.Flags().StringP("workflow", "w", "", "Workflow name")
-	startWorkflowCmd.Flags().StringP("input", "i", "", "Input json")
-	startWorkflowCmd.Flags().StringP("file", "f", "", "Input file with json data")
-	startWorkflowCmd.Flags().Int32("version", 0, "Workflow version (optional)")
-	startWorkflowCmd.MarkFlagsMutuallyExclusive("input", "file")
+	startExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
+	startExecutionCmd.Flags().StringP("input", "i", "", "Input json")
+	startExecutionCmd.Flags().StringP("file", "f", "", "Input file with json data")
+	startExecutionCmd.Flags().Int32("version", 0, "Workflow version (optional)")
+	startExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
 
-	executeWorkflowCmd.Flags().StringP("workflow", "w", "", "Workflow name")
-	executeWorkflowCmd.Flags().StringP("input", "i", "", "Input json")
-	executeWorkflowCmd.Flags().StringP("file", "f", "", "Input file with json data")
-	executeWorkflowCmd.Flags().StringP("wait-until", "u", "", "Wait until task completes (instead of entire workflow)")
-	executeWorkflowCmd.Flags().Int32("version", 1, "Workflow version (optional)")
-	executeWorkflowCmd.Flags().BoolP("sync", "s", true, "Run synchronously")
-	executeWorkflowCmd.MarkFlagsMutuallyExclusive("input", "file")
+	executeExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
+	executeExecutionCmd.Flags().StringP("input", "i", "", "Input json")
+	executeExecutionCmd.Flags().StringP("file", "f", "", "Input file with json data")
+	executeExecutionCmd.Flags().StringP("wait-until", "u", "", "Wait until task completes (instead of entire workflow)")
+	executeExecutionCmd.Flags().Int32("version", 1, "Workflow version (optional)")
+	executeExecutionCmd.Flags().BoolP("sync", "s", true, "Run synchronously")
+	executeExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
 
-	getWorkflowCmd.Flags().BoolP("complete", "c", false, "Include complete details")
-	workflowCmd.AddCommand(
-		searchWorkflowCmd,
-		getWorkflowCmd,
-		startWorkflowCmd,
-		executeWorkflowCmd,
-		terminateWorkflowCmd,
-		pauseWorkflowCmd,
-		resumeWorkflowCmd,
+	statusExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")
+	deleteExecutionCmd.Flags().BoolP("archive", "a", false, "Archive the workflow execution instead of removing it completely")
+
+	executionCmd.AddCommand(
+		searchExecutionCmd,
+		statusExecutionCmd,
+		startExecutionCmd,
+		executeExecutionCmd,
+		terminateExecutionCmd,
+		pauseExecutionCmd,
+		resumeExecutionCmd,
+		deleteExecutionCmd,
 	)
+
+	// Add execution command to root
+	rootCmd.AddCommand(executionCmd)
 }
