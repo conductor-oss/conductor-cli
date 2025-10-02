@@ -1,0 +1,55 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  e2e-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23
+
+    - name: Build CLI
+      run: |
+        VERSION="${GITHUB_REF_NAME:-dev}"
+        COMMIT="${GITHUB_SHA:-none}"
+        DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        go build -o orkes -v -ldflags "-X github.com/orkes-io/conductor-cli/cmd.Version=${VERSION} -X github.com/orkes-io/conductor-cli/cmd.Commit=${COMMIT} -X github.com/orkes-io/conductor-cli/cmd.Date=${DATE}" .
+        chmod +x orkes
+        ./orkes --version
+
+    - name: Setup bats
+      uses: bats-core/bats-action@2.0.0
+
+    - name: Run E2E tests
+      env:
+        CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
+        CONDUCTOR_AUTH_KEY: ${{ secrets.CONDUCTOR_AUTH_KEY }}
+        CONDUCTOR_AUTH_SECRET: ${{ secrets.CONDUCTOR_AUTH_SECRET }}
+      run: |
+        bats test/e2e/workflow.bats
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-artifacts
+        path: |
+          test/e2e/*.log
+          test/e2e/*.json
+        if-no-files-found: ignore

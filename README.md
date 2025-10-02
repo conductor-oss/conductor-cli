@@ -32,13 +32,13 @@ You must use **one** of the following authentication methods:
 
 ```bash
 # Option 1: API Key + Secret
-cdt --server http://localhost:8080/api --auth-key your-api-key --auth-secret your-api-secret workflow list
+orkes --server http://localhost:8080/api --auth-key your-api-key --auth-secret your-api-secret workflow list
 
 # Option 2: Auth Token (copy from UI)
-cdt --server http://localhost:8080/api --auth-token your-auth-token workflow list
+orkes --server http://localhost:8080/api --auth-token your-auth-token workflow list
 
 # Using config file
-cdt --config /path/to/config.yaml workflow list
+orkes --config /path/to/config.yaml workflow list
 ```
 
 ### Environment Variables
@@ -84,27 +84,27 @@ verbose: false
 You can also specify a custom config file location:
 
 ```bash
-cdt --config /path/to/my-config.yaml workflow list
+orkes --config /path/to/my-config.yaml workflow list
 ```
 
 ## Workflow Metadata Management
 
 ```shell
 # List the workflows on the server
-cdt workflow list
+orkes workflow list
 
 # Get the workflows definition - fetches the latest version
-cdt workflow get <workflowname>
+orkes workflow get <workflowname>
 
 # or you can specify a version
-cdt workflow get <workflowname> <version>
+orkes workflow get <workflowname> <version>
 
 # You can use quotes for workflow name if the name contains spaces, comma or special characters
-cdt workflow get "<workflow name with spaces>"
+orkes workflow get "<workflow name with spaces>"
 
 ```
 ### Create a workflow
 ```shell
 # Register a workflow stored in the file
-cdt workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
+orkes workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
 ```

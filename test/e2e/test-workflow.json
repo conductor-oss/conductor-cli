@@ -1,0 +1,25 @@
+{
+  "name": "e2e_test_workflow",
+  "description": "End-to-end test workflow with a simple wait task",
+  "version": 1,
+  "tasks": [
+    {
+      "name": "wait_task",
+      "taskReferenceName": "wait_task_ref",
+      "inputParameters": {
+        "duration": "5 minutes"
+      },
+      "type": "WAIT",
+      "startDelay": 0,
+      "optional": false
+    }
+  ],
+  "inputParameters": [],
+  "outputParameters": {},
+  "schemaVersion": 2,
+  "restartable": true,
+  "workflowStatusListenerEnabled": false,
+  "ownerEmail": "test@example.com",
+  "timeoutPolicy": "ALERT_ONLY",
+  "timeoutSeconds": 0
+}
