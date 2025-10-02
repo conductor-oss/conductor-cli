@@ -37,9 +37,17 @@ var (
 	statusExecutionCmd = &cobra.Command{
 		Use:          "status",
 		Short:        "Get workflow execution status",
+		RunE:         getWorkflowExecutionStatus,
+		SilenceUsage: true,
+		Example:      "execution status [workflow_id] [workflow_id2]...",
+	}
+
+	getExecutionCmd = &cobra.Command{
+		Use:          "get",
+		Short:        "Get full workflow execution details",
 		RunE:         getWorkflowExecution,
 		SilenceUsage: true,
-		Example:      "execution status [flags] [workflow_id] [workflow_id2]...",
+		Example:      "execution get [flags] [workflow_id] [workflow_id2]...",
 	}
 
 	startExecutionCmd = &cobra.Command{
@@ -202,6 +210,23 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func getWorkflowExecutionStatus(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+	workflowClient := internal.GetWorkflowClient()
+
+	for i := 0; i < len(args); i++ {
+		id := args[i]
+		status, _, getStateErr := workflowClient.GetWorkflowState(context.Background(), id, true, true)
+		if getStateErr != nil {
+			return getStateErr
+		}
+		fmt.Println(status.Status)
+	}
+	return nil
+}
+
 func getWorkflowExecution(cmd *cobra.Command, args []string) error {
 
 	if len(args) == 0 {
@@ -226,10 +251,13 @@ func getWorkflowExecution(cmd *cobra.Command, args []string) error {
 			fmt.Println(string(data))
 
 		} else {
-			status, _, getStateErr := workflowClient.GetWorkflowState(context.Background(), id, true, true)
-			if getStateErr != nil {
-				return getStateErr
+			options := &client.WorkflowResourceApiGetExecutionStatusOpts{IncludeTasks: optional.NewBool(false)}
+			status, _, err := workflowClient.GetExecutionStatus(context.Background(), id, options)
+			if err != nil {
+				return err
 			}
+			// Remove workflowDefinition from output
+			status.WorkflowDefinition = nil
 			data, marshallError := json.MarshalIndent(status, "", "   ")
 			if marshallError != nil {
 				return marshallError
@@ -426,12 +454,13 @@ func init() {
 	executeExecutionCmd.Flags().BoolP("sync", "s", true, "Run synchronously")
 	executeExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
 
-	statusExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")
+	getExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")
 	deleteExecutionCmd.Flags().BoolP("archive", "a", false, "Archive the workflow execution instead of removing it completely")
 
 	executionCmd.AddCommand(
 		searchExecutionCmd,
 		statusExecutionCmd,
+		getExecutionCmd,
 		startExecutionCmd,
 		executeExecutionCmd,
 		terminateExecutionCmd,
