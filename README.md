@@ -106,15 +106,5 @@ cdt workflow get "<workflow name with spaces>"
 ### Create a workflow
 ```shell
 # Register a workflow stored in the file
-cdt workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing   
-```
-## Code Generation
-```shell
-# Generate a project of type (worker/application) in a particular language from a boilerplate (default is core)
-# See https://github.com/conductor-sdk/boilerplates for available boilerplates
-cdt code generate -n <name> -l <language> -t <type> -b <boilerplate>
-```
-Example:
-```shell
-cdt code generate -n myapp -l javascript -t worker
+cdt workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
 ```
