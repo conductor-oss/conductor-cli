@@ -1,10 +1,10 @@
 # CLI for Conductor
 
-[Conductor](https://www.conductor-oss.org/) is the leading open-source orchestration platform allowing developers to build highly scalable distributed applications. 
+[Conductor](https://www.conductor-oss.org/) is the leading open-source orchestration platform allowing developers to build highly scalable distributed applications.
 
 Check out the [official documentation for Conductor](https://orkes.io/content).
 
-This repository provides a Java client for the Orkes Conductor Server. 
+This repository provides a CLI for the Orkes Conductor Server.
 
 ## ⭐ Conductor OSS
 
@@ -12,6 +12,63 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 
 [![GitHub stars](https://img.shields.io/github/stars/conductor-oss/conductor.svg?style=social&label=Star&maxAge=)](https://GitHub.com/conductor-oss/conductor/)
 
+## Installation
+
+### Using npm
+
+If you have Node.js installed:
+
+```bash
+npm install -g @mp-orkes/conductor-cli
+```
+
+This will automatically download and install the appropriate binary for your platform.
+
+### Quick Install (macOS/Linux)
+
+Install the latest version using curl:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/conductor-oss/conductor-cli/main/install.sh | sh
+```
+
+This will automatically:
+- Detect your OS and architecture
+- Download the latest release
+- Install to `/usr/local/bin`
+- Verify the installation
+
+### Custom Installation Directory
+
+To install to a custom directory:
+
+```bash
+INSTALL_DIR=$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/conductor-oss/conductor-cli/main/install.sh | sh
+```
+
+### Manual Installation
+
+Download the appropriate binary for your platform from the [releases page](https://github.com/conductor-oss/conductor-cli/releases):
+
+- **Linux amd64**: `orkes_linux_amd64`
+- **Linux arm64**: `orkes_linux_arm64`
+- **macOS amd64**: `orkes_darwin_amd64`
+- **macOS arm64**: `orkes_darwin_arm64`
+- **Windows amd64**: `orkes_windows_amd64.exe`
+- **Windows arm64**: `orkes_windows_arm64.exe`
+
+Then make it executable and move it to your PATH:
+
+```bash
+chmod +x orkes_*
+mv orkes_* /usr/local/bin/orkes
+```
+
+### Verify Installation
+
+```bash
+orkes --version
+```
 
 ## Configuration
 
