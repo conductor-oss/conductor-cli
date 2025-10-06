@@ -1,0 +1,34 @@
+# Source files
+*.go
+go.mod
+go.sum
+
+# Build artifacts
+/dist
+
+# Git
+.git
+.github
+.gitignore
+
+# Tests
+test/
+*_test.go
+
+# Documentation
+docs/
+
+# CI/CD
+.github/
+
+# Development
+.vscode/
+.idea/
+
+# Binaries (will be downloaded during install)
+/bin
+
+# Misc
+*.md
+!README.md
+LICENSE

@@ -14,6 +14,16 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 
 ## Installation
 
+### Using npm
+
+If you have Node.js installed:
+
+```bash
+npm install -g @mp-orkes/conductor-cli
+```
+
+This will automatically download and install the appropriate binary for your platform.
+
 ### Quick Install (macOS/Linux)
 
 Install the latest version using curl:
