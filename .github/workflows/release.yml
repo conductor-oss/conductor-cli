@@ -91,9 +91,21 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Update install script permissions
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Update package.json version
       run: |
-        # Ensure install.sh has correct permissions in the repo
-        if [ -f install.sh ]; then
-          chmod +x install.sh
-        fi
+        VERSION="${{ steps.get_version.outputs.VERSION }}"
+        # Remove 'v' prefix from version tag
+        NPM_VERSION="${VERSION#v}"
+        # Update package.json with the new version
+        npm version $NPM_VERSION --no-git-tag-version --allow-same-version
+
+    - name: Publish to npm
+      run: npm publish --access public
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
