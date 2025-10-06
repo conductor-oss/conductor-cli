@@ -19,7 +19,7 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 If you have Node.js installed:
 
 ```bash
-npm install -g @orkes-io/conductor-cli
+npm install -g @io-orkes/conductor-cli
 ```
 
 This will automatically download and install the appropriate binary for your platform.

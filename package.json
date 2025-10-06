@@ -1,6 +1,6 @@
 {
-  "name": "@orkes-io/conductor-cli",
-  "version": "0.0.2",
+  "name": "@io-orkes/conductor-cli",
+  "version": "0.0.4",
   "description": "CLI for Conductor - The leading open-source orchestration platform",
   "main": "index.js",
   "bin": {
