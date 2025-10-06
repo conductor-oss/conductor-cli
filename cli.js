@@ -11,7 +11,7 @@ const binaryPath = path.join(__dirname, 'bin', binaryName);
 // Check if binary exists
 if (!fs.existsSync(binaryPath)) {
   console.error('Error: Binary not found. Please reinstall the package.');
-  console.error('Run: npm uninstall -g @mp-orkes/conductor-cli && npm install -g @mp-orkes/conductor-cli');
+  console.error('Run: npm uninstall -g @orkes-io/conductor-cli && npm install -g @orkes-io/conductor-cli');
   process.exit(1);
 }
 
