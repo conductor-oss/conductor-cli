@@ -30,6 +30,10 @@ func GetSchedulerClient() client.SchedulerClient {
 	return client.NewSchedulerClient(apiClient)
 }
 
+func GetTaskClient() *client.TaskResourceApiService {
+	return &client.TaskResourceApiService{APIClient: apiClient}
+}
+
 func SetAPIClient(client *client.APIClient) {
 	apiClient = client
 }
