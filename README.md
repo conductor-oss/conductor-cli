@@ -14,6 +14,19 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 
 ## Installation
 
+### Using Homebrew (macOS/Linux)
+
+```bash
+brew tap conductor-oss/conductor-tools
+brew install orkes
+```
+
+Or in one line:
+
+```bash
+brew install conductor-oss/conductor-tools/orkes
+```
+
 ### Using npm
 
 If you have Node.js installed:
