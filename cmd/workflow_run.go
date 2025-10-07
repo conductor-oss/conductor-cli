@@ -98,6 +98,54 @@ var (
 		Example:      "execution delete [workflow_id]\nexecution delete --archive [workflow_id]",
 	}
 
+	restartExecutionCmd = &cobra.Command{
+		Use:          "restart <workflow_id>",
+		Short:        "Restart a completed workflow",
+		RunE:         restartWorkflow,
+		SilenceUsage: true,
+		Example:      "execution restart [workflow_id]\nexecution restart --use-latest [workflow_id]",
+	}
+
+	retryExecutionCmd = &cobra.Command{
+		Use:          "retry <workflow_id>",
+		Short:        "Retry the last failed task",
+		RunE:         retryWorkflow,
+		SilenceUsage: true,
+		Example:      "execution retry [workflow_id]",
+	}
+
+	skipTaskExecutionCmd = &cobra.Command{
+		Use:          "skip-task <workflow_id> <task_reference_name>",
+		Short:        "Skip a task in a running workflow",
+		RunE:         skipTask,
+		SilenceUsage: true,
+		Example:      "execution skip-task [workflow_id] [task_ref_name]",
+	}
+
+	rerunExecutionCmd = &cobra.Command{
+		Use:          "rerun <workflow_id>",
+		Short:        "Rerun workflow from a specific task",
+		RunE:         rerunWorkflow,
+		SilenceUsage: true,
+		Example:      "execution rerun [workflow_id] --task-id [task_id]",
+	}
+
+	jumpExecutionCmd = &cobra.Command{
+		Use:          "jump <workflow_id> <task_reference_name>",
+		Short:        "Jump workflow execution to given task",
+		RunE:         jumpToTask,
+		SilenceUsage: true,
+		Example:      "execution jump [workflow_id] [task_ref_name]",
+	}
+
+	updateStateExecutionCmd = &cobra.Command{
+		Use:          "update-state <workflow_id>",
+		Short:        "Update workflow state (variables and tasks)",
+		RunE:         updateWorkflowState,
+		SilenceUsage: true,
+		Example:      "execution update-state [workflow_id] --variables '{\"key\":\"value\"}'",
+	}
+
 )
 
 // parseTimeToEpochMillis parses human-readable time formats to epoch milliseconds
@@ -433,6 +481,233 @@ func deleteWorkflowExecution(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func restartWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+
+	useLatest, _ := cmd.Flags().GetBool("use-latest")
+
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		workflowId := args[i]
+
+		options := &client.WorkflowResourceApiRestartOpts{
+			UseLatestDefinitions: optional.NewBool(useLatest),
+		}
+		_, err := workflowClient.Restart(context.Background(), workflowId, options)
+		if err != nil {
+			fmt.Printf("error restarting workflow %s: %s\n", workflowId, err.Error())
+		} else {
+			fmt.Printf("workflow %s restarted successfully\n", workflowId)
+		}
+	}
+
+	return nil
+}
+
+func retryWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+
+	resumeSubworkflowTasks, _ := cmd.Flags().GetBool("resume-subworkflow-tasks")
+
+	workflowClient := internal.GetWorkflowClient()
+	for i := 0; i < len(args); i++ {
+		workflowId := args[i]
+
+		options := &client.WorkflowResourceApiRetryOpts{
+			ResumeSubworkflowTasks: optional.NewBool(resumeSubworkflowTasks),
+		}
+		_, err := workflowClient.Retry(context.Background(), workflowId, options)
+		if err != nil {
+			fmt.Printf("error retrying workflow %s: %s\n", workflowId, err.Error())
+		} else {
+			fmt.Printf("workflow %s retry initiated successfully\n", workflowId)
+		}
+	}
+
+	return nil
+}
+
+func skipTask(cmd *cobra.Command, args []string) error {
+	if len(args) < 2 {
+		return cmd.Usage()
+	}
+
+	workflowId := args[0]
+	taskReferenceName := args[1]
+
+	taskInput, _ := cmd.Flags().GetString("task-input")
+	taskOutput, _ := cmd.Flags().GetString("task-output")
+
+	var inputMap map[string]interface{}
+	var outputMap map[string]interface{}
+
+	if taskInput != "" {
+		err := json.Unmarshal([]byte(taskInput), &inputMap)
+		if err != nil {
+			return fmt.Errorf("invalid task-input JSON: %v", err)
+		}
+	}
+
+	if taskOutput != "" {
+		err := json.Unmarshal([]byte(taskOutput), &outputMap)
+		if err != nil {
+			return fmt.Errorf("invalid task-output JSON: %v", err)
+		}
+	}
+
+	skipTaskRequest := model.SkipTaskRequest{
+		TaskInput:  inputMap,
+		TaskOutput: outputMap,
+	}
+
+	workflowClient := internal.GetWorkflowClient()
+	_, err := workflowClient.SkipTaskFromWorkflow(context.Background(), workflowId, taskReferenceName, skipTaskRequest)
+	if err != nil {
+		return fmt.Errorf("error skipping task %s in workflow %s: %v", taskReferenceName, workflowId, err)
+	}
+
+	fmt.Printf("task %s in workflow %s skipped successfully\n", taskReferenceName, workflowId)
+	return nil
+}
+
+func rerunWorkflow(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+
+	workflowId := args[0]
+	taskId, _ := cmd.Flags().GetString("task-id")
+	correlationId, _ := cmd.Flags().GetString("correlation-id")
+	taskInput, _ := cmd.Flags().GetString("task-input")
+	workflowInput, _ := cmd.Flags().GetString("workflow-input")
+
+	var taskInputMap map[string]interface{}
+	var workflowInputMap map[string]interface{}
+
+	if taskInput != "" {
+		err := json.Unmarshal([]byte(taskInput), &taskInputMap)
+		if err != nil {
+			return fmt.Errorf("invalid task-input JSON: %v", err)
+		}
+	}
+
+	if workflowInput != "" {
+		err := json.Unmarshal([]byte(workflowInput), &workflowInputMap)
+		if err != nil {
+			return fmt.Errorf("invalid workflow-input JSON: %v", err)
+		}
+	}
+
+	rerunRequest := model.RerunWorkflowRequest{
+		ReRunFromTaskId:     taskId,
+		ReRunFromWorkflowId: workflowId,
+		CorrelationId:       correlationId,
+		TaskInput:           taskInputMap,
+		WorkflowInput:       workflowInputMap,
+	}
+
+	workflowClient := internal.GetWorkflowClient()
+	newWorkflowId, _, err := workflowClient.Rerun(context.Background(), rerunRequest, workflowId)
+	if err != nil {
+		return fmt.Errorf("error rerunning workflow %s: %v", workflowId, err)
+	}
+
+	fmt.Println(newWorkflowId)
+	return nil
+}
+
+func jumpToTask(cmd *cobra.Command, args []string) error {
+	if len(args) < 2 {
+		return cmd.Usage()
+	}
+
+	workflowId := args[0]
+	taskReferenceName := args[1]
+	taskInput, _ := cmd.Flags().GetString("task-input")
+
+	var inputMap map[string]interface{}
+	if taskInput != "" {
+		err := json.Unmarshal([]byte(taskInput), &inputMap)
+		if err != nil {
+			return fmt.Errorf("invalid task-input JSON: %v", err)
+		}
+	}
+
+	if inputMap == nil {
+		inputMap = make(map[string]interface{})
+	}
+
+	opts := &client.WorkflowResourceApiJumpToTaskOpts{
+		TaskReferenceName: optional.NewString(taskReferenceName),
+	}
+
+	workflowClient := internal.GetWorkflowClient()
+	_, err := workflowClient.JumpToTask(context.Background(), inputMap, workflowId, opts)
+	if err != nil {
+		return fmt.Errorf("error jumping to task %s in workflow %s: %v", taskReferenceName, workflowId, err)
+	}
+
+	fmt.Printf("workflow %s jumped to task %s successfully\n", workflowId, taskReferenceName)
+	return nil
+}
+
+func updateWorkflowState(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return cmd.Usage()
+	}
+
+	workflowId := args[0]
+	requestId, _ := cmd.Flags().GetString("request-id")
+	waitUntilTaskRef, _ := cmd.Flags().GetString("wait-until-task-ref")
+	waitForSeconds, _ := cmd.Flags().GetInt32("wait-for-seconds")
+	variables, _ := cmd.Flags().GetString("variables")
+	taskUpdates, _ := cmd.Flags().GetString("task-updates")
+
+	if requestId == "" {
+		reqId, _ := uuid.NewRandom()
+		requestId = reqId.String()
+	}
+
+	stateUpdate := model.WorkflowStateUpdate{}
+
+	if variables != "" {
+		var varsMap map[string]interface{}
+		err := json.Unmarshal([]byte(variables), &varsMap)
+		if err != nil {
+			return fmt.Errorf("invalid variables JSON: %v", err)
+		}
+		stateUpdate.Variables = varsMap
+	}
+
+	if taskUpdates != "" {
+		var taskResult model.TaskResult
+		err := json.Unmarshal([]byte(taskUpdates), &taskResult)
+		if err != nil {
+			return fmt.Errorf("invalid task-updates JSON: %v", err)
+		}
+		stateUpdate.TaskResult = &taskResult
+	}
+
+	opts := &client.WorkflowResourceApiUpdateWorkflowAndTaskStateOpts{
+		WaitUntilTaskRef: optional.NewString(waitUntilTaskRef),
+		WaitForSeconds:   optional.NewInt32(waitForSeconds),
+	}
+
+	workflowClient := internal.GetWorkflowClient()
+	workflow, _, err := workflowClient.UpdateWorkflowAndTaskState(context.Background(), stateUpdate, requestId, workflowId, opts)
+	if err != nil {
+		return fmt.Errorf("error updating workflow state for %s: %v", workflowId, err)
+	}
+
+	data, _ := json.MarshalIndent(workflow, "", "   ")
+	fmt.Println(string(data))
+	return nil
+}
+
 func init() {
 	searchExecutionCmd.Flags().Int32P("count", "c", 10, "No of workflow executions to return (max 1000)")
 	searchExecutionCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
@@ -457,6 +732,24 @@ func init() {
 	getExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")
 	deleteExecutionCmd.Flags().BoolP("archive", "a", false, "Archive the workflow execution instead of removing it completely")
 
+	restartExecutionCmd.Flags().Bool("use-latest", false, "Use latest workflow definition when restarting")
+	retryExecutionCmd.Flags().Bool("resume-subworkflow-tasks", false, "Resume subworkflow tasks")
+	skipTaskExecutionCmd.Flags().String("task-input", "", "Task input as JSON string")
+	skipTaskExecutionCmd.Flags().String("task-output", "", "Task output as JSON string")
+
+	rerunExecutionCmd.Flags().String("task-id", "", "Task ID to rerun from")
+	rerunExecutionCmd.Flags().String("correlation-id", "", "Correlation ID for the rerun")
+	rerunExecutionCmd.Flags().String("task-input", "", "Task input as JSON string")
+	rerunExecutionCmd.Flags().String("workflow-input", "", "Workflow input as JSON string")
+
+	jumpExecutionCmd.Flags().String("task-input", "", "Task input as JSON string")
+
+	updateStateExecutionCmd.Flags().String("request-id", "", "Request ID (auto-generated if not provided)")
+	updateStateExecutionCmd.Flags().String("wait-until-task-ref", "", "Wait until this task reference completes")
+	updateStateExecutionCmd.Flags().Int32("wait-for-seconds", 10, "Wait for seconds")
+	updateStateExecutionCmd.Flags().String("variables", "", "Variables to update as JSON string")
+	updateStateExecutionCmd.Flags().String("task-updates", "", "Task updates as JSON string")
+
 	executionCmd.AddCommand(
 		searchExecutionCmd,
 		statusExecutionCmd,
@@ -467,6 +760,12 @@ func init() {
 		pauseExecutionCmd,
 		resumeExecutionCmd,
 		deleteExecutionCmd,
+		restartExecutionCmd,
+		retryExecutionCmd,
+		skipTaskExecutionCmd,
+		rerunExecutionCmd,
+		jumpExecutionCmd,
+		updateStateExecutionCmd,
 	)
 
 	// Add execution command to root
