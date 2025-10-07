@@ -110,10 +110,16 @@ jobs:
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+    - name: Checkout Homebrew tap
+      if: "!contains(steps.get_version.outputs.VERSION, '-')"
+      uses: actions/checkout@v4
+      with:
+        repository: conductor-oss/homebrew-conductor-tools
+        token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        path: homebrew-tap
+
     - name: Update Homebrew formula
       if: "!contains(steps.get_version.outputs.VERSION, '-')"
-      env:
-        HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       run: |
         VERSION="${{ steps.get_version.outputs.VERSION }}"
         BREW_VERSION="${VERSION#v}"
@@ -124,9 +130,7 @@ jobs:
         SHA256_LINUX_AMD64=$(shasum -a 256 dist/orkes_linux_amd64 | awk '{print $1}')
         SHA256_LINUX_ARM64=$(shasum -a 256 dist/orkes_linux_arm64 | awk '{print $1}')
 
-        # Clone homebrew tap
-        git clone https://github.com/conductor-oss/homebrew-conductor-tools.git /tmp/homebrew-tap
-        cd /tmp/homebrew-tap
+        cd homebrew-tap
 
         # Create Formula directory if it doesn't exist
         mkdir -p Formula
