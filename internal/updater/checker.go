@@ -87,33 +87,36 @@ func CheckForUpdate(ctx context.Context, currentVersion string) (*UpdateInfo, er
 	}, nil
 }
 
-// CheckInBackground performs a background check and updates the state file
-func CheckInBackground(ctx context.Context, currentVersion string) {
-	go func() {
-		state, err := LoadState()
-		if err != nil {
-			// Silently fail - don't block CLI
-			return
-		}
+// CheckAndUpdateState performs a check if needed and updates the state file
+// This runs synchronously but with a timeout to avoid blocking the CLI
+func CheckAndUpdateState(ctx context.Context, currentVersion string) {
+	state, err := LoadState()
+	if err != nil {
+		// Silently fail - don't block CLI
+		return
+	}
 
-		if !state.ShouldCheck() {
-			return
-		}
+	if !state.ShouldCheck() {
+		return
+	}
 
-		updateInfo, err := CheckForUpdate(ctx, currentVersion)
-		if err != nil {
-			// Silently fail - don't block CLI or spam errors
-			// Just update the timestamp so we don't retry immediately
-			state.LastCheck = time.Now()
-			_ = state.Save()
-			return
-		}
+	// Use a timeout context to ensure we don't block for too long
+	checkCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 
-		// Update state
+	updateInfo, err := CheckForUpdate(checkCtx, currentVersion)
+	if err != nil {
+		// Silently fail - don't block CLI or spam errors
+		// Just update the timestamp so we don't retry immediately
 		state.LastCheck = time.Now()
-		state.LatestVersion = updateInfo.LatestVersion
 		_ = state.Save()
-	}()
+		return
+	}
+
+	// Update state
+	state.LastCheck = time.Now()
+	state.LatestVersion = updateInfo.LatestVersion
+	_ = state.Save()
 }
 
 // ShouldNotifyUpdate checks if we should notify the user about an update
