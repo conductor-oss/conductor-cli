@@ -127,6 +127,9 @@ func create(cmd *cobra.Command, args []string) error {
 	file, _ := cmd.Flags().GetString("file")
 	workflowsToStart, _ := cmd.Flags().GetString("workflows-to-start")
 	receiverWorkflows, _ := cmd.Flags().GetString("receiver-workflows")
+	sourcePlatform, _ := cmd.Flags().GetString("source-platform")
+	verifier, _ := cmd.Flags().GetString("verifier")
+	headers, _ := cmd.Flags().GetString("headers")
 
 	var webhookConfig model.WebhookConfig
 	var data []byte
@@ -158,6 +161,18 @@ func create(cmd *cobra.Command, args []string) error {
 		// Build from flags
 		webhookConfig = model.WebhookConfig{
 			Name: name,
+		}
+
+		if sourcePlatform != "" {
+			webhookConfig.SourcePlatform = sourcePlatform
+		}
+
+		if verifier != "" {
+			webhookConfig.Verifier = verifier
+		}
+
+		if headers != "" {
+			webhookConfig.Headers = parseHeaderMap(headers)
 		}
 
 		if workflowsToStart != "" {
@@ -246,6 +261,23 @@ func parseWorkflowMap(input string) map[string]int32 {
 	return result
 }
 
+// parseHeaderMap parses a string like "key1:value1,key2:value2" into a map
+func parseHeaderMap(input string) map[string]string {
+	result := make(map[string]string)
+	if input == "" {
+		return result
+	}
+
+	pairs := strings.Split(input, ",")
+	for _, pair := range pairs {
+		parts := strings.SplitN(strings.TrimSpace(pair), ":", 2)
+		if len(parts) == 2 {
+			result[parts[0]] = parts[1]
+		}
+	}
+	return result
+}
+
 func init() {
 	rootCmd.AddCommand(webhookCmd)
 
@@ -255,6 +287,9 @@ func init() {
 	createWebHookMetadataCmd.Flags().String("file", "", "JSON file containing webhook configuration")
 	createWebHookMetadataCmd.Flags().String("workflows-to-start", "", "Workflows to start (format: workflow1:version1,workflow2:version2)")
 	createWebHookMetadataCmd.Flags().String("receiver-workflows", "", "Receiver workflows (format: workflow1:version1,workflow2:version2)")
+	createWebHookMetadataCmd.Flags().String("source-platform", "", "Source platform (e.g., Custom, GitHub, Slack)")
+	createWebHookMetadataCmd.Flags().String("verifier", "", "Verifier type (e.g., HEADER_BASED)")
+	createWebHookMetadataCmd.Flags().String("headers", "", "Headers as key:value pairs (format: key1:value1,key2:value2)")
 
 	updateWebHookMetadataCmd.Flags().String("file", "", "JSON file containing webhook configuration (required)")
 	updateWebHookMetadataCmd.MarkFlagRequired("file")
