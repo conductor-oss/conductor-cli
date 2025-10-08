@@ -252,6 +252,12 @@ func TestHasUpdate(t *testing.T) {
 			currentVersion: "dev",
 			expected:       false,
 		},
+		{
+			name:           "main version never shows update",
+			latestVersion:  "v0.0.10",
+			currentVersion: "main",
+			expected:       false,
+		},
 	}
 
 	for _, tt := range tests {
