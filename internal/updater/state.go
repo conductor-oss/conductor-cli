@@ -112,21 +112,77 @@ func (s *UpdateState) HasUpdate(currentVersion string) bool {
 	return CompareVersions(s.LatestVersion, currentVersion) > 0
 }
 
-// CompareVersions compares two version strings (simple semver comparison)
+// CompareVersions compares two version strings (semver comparison)
 // Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
 func CompareVersions(v1, v2 string) int {
 	// Remove 'v' prefix if present
 	v1 = trimPrefix(v1, "v")
 	v2 = trimPrefix(v2, "v")
 
-	// Simple comparison for now (can be enhanced with proper semver library)
 	if v1 == v2 {
 		return 0
 	}
-	if v1 > v2 {
-		return 1
+
+	// Split by '.' and '-' for prerelease versions
+	parts1 := splitVersion(v1)
+	parts2 := splitVersion(v2)
+
+	// Compare each numeric part
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
 	}
-	return -1
+
+	for i := 0; i < maxLen; i++ {
+		var p1, p2 int
+
+		if i < len(parts1) {
+			p1 = parts1[i]
+		}
+		if i < len(parts2) {
+			p2 = parts2[i]
+		}
+
+		if p1 > p2 {
+			return 1
+		}
+		if p1 < p2 {
+			return -1
+		}
+	}
+
+	return 0
+}
+
+func splitVersion(v string) []int {
+	// Split by '-' to handle prerelease (e.g., "1.2.3-beta")
+	mainPart := v
+	if idx := indexOf(v, "-"); idx >= 0 {
+		mainPart = v[:idx]
+	}
+
+	// Split by '.'
+	parts := []int{}
+	current := 0
+	hasNum := false
+
+	for i := 0; i < len(mainPart); i++ {
+		if mainPart[i] >= '0' && mainPart[i] <= '9' {
+			current = current*10 + int(mainPart[i]-'0')
+			hasNum = true
+		} else if mainPart[i] == '.' {
+			if hasNum {
+				parts = append(parts, current)
+			}
+			current = 0
+			hasNum = false
+		}
+	}
+	if hasNum {
+		parts = append(parts, current)
+	}
+
+	return parts
 }
 
 func trimPrefix(s, prefix string) string {
@@ -134,4 +190,13 @@ func trimPrefix(s, prefix string) string {
 		return s[1:]
 	}
 	return s
+}
+
+func indexOf(s, ch string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i:i+1] == ch {
+			return i
+		}
+	}
+	return -1
 }
