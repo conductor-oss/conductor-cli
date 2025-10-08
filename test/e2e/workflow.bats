@@ -21,13 +21,13 @@ get_workflow_id() {
 }
 
 @test "1. Create workflow definition" {
-    run ./orkes workflow create "$WORKFLOW_FILE" --force
+    run bash -c "./orkes workflow create '$WORKFLOW_FILE' --force 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 }
 
 @test "2. Get workflow definition" {
-    run ./orkes workflow get "$WORKFLOW_NAME"
+    run bash -c "./orkes workflow get '$WORKFLOW_NAME' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"$WORKFLOW_NAME"* ]]
@@ -35,7 +35,7 @@ get_workflow_id() {
 }
 
 @test "3. Start workflow execution" {
-    run ./orkes execution start --workflow "$WORKFLOW_NAME"
+    run bash -c "./orkes execution start --workflow '$WORKFLOW_NAME' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -51,7 +51,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run ./orkes execution status "$WORKFLOW_ID"
+    run bash -c "./orkes execution status '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == "RUNNING" ]]
@@ -62,7 +62,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run ./orkes execution terminate "$WORKFLOW_ID"
+    run bash -c "./orkes execution terminate '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     echo "Terminated workflow UUID: $WORKFLOW_ID"
@@ -76,7 +76,7 @@ get_workflow_id() {
     # Wait a moment for termination to process
     sleep 2
 
-    run ./orkes execution status "$WORKFLOW_ID"
+    run bash -c "./orkes execution status '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == "TERMINATED" ]]
@@ -87,7 +87,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run ./orkes execution delete "$WORKFLOW_ID"
+    run bash -c "./orkes execution delete '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     echo "Deleted workflow UUID: $WORKFLOW_ID"
@@ -101,14 +101,14 @@ get_workflow_id() {
     # Wait a moment for deletion to process
     sleep 2
 
-    run ./orkes execution status "$WORKFLOW_ID"
+    run bash -c "./orkes execution status '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     # Should fail since the execution was deleted
     [ "$status" -ne 0 ]
 }
 
 @test "9. Cleanup - delete workflow definition" {
-    run ./orkes workflow delete "$WORKFLOW_NAME" 1
+    run bash -c "./orkes workflow delete '$WORKFLOW_NAME' 1 2>/dev/null"
     echo "Output: $output"
     # Clean up the temp file
     rm -f /tmp/workflow_id.txt

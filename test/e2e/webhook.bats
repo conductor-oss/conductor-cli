@@ -20,12 +20,12 @@ get_webhook_id() {
 }
 
 @test "1. Create webhook using command flags" {
-    run ./orkes webhook create \
+    run bash -c "./orkes webhook create \
         --name custom_webhook_1 \
         --source-platform Custom \
         --verifier HEADER_BASED \
-        --headers "Authorization:BB12346789" \
-        --receiver-workflows hello_world:1
+        --headers 'Authorization:BB12346789' \
+        --receiver-workflows hello_world:1 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -43,7 +43,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run ./orkes webhook get "$WEBHOOK_ID"
+    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -57,7 +57,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run ./orkes webhook list
+    run bash -c "./orkes webhook list 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -70,7 +70,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run ./orkes webhook list --json
+    run bash -c "./orkes webhook list --json 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -98,7 +98,7 @@ get_webhook_id() {
 }
 EOF
 
-    run ./orkes webhook update "$WEBHOOK_ID" --file /tmp/webhook_update.json
+    run bash -c "./orkes webhook update '$WEBHOOK_ID' --file /tmp/webhook_update.json 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -110,7 +110,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run ./orkes webhook get "$WEBHOOK_ID"
+    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -124,7 +124,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run ./orkes webhook delete "$WEBHOOK_ID"
+    run bash -c "./orkes webhook delete '$WEBHOOK_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -137,7 +137,7 @@ EOF
     [ -n "$WEBHOOK_ID" ]
 
     # Getting deleted webhook should fail
-    run ./orkes webhook get "$WEBHOOK_ID"
+    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -ne 0 ]
 }
