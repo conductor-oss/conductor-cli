@@ -109,6 +109,10 @@ func (s *UpdateState) HasUpdate(currentVersion string) bool {
 	if s.LatestVersion == "" {
 		return false
 	}
+	// Never show update notification for dev builds
+	if currentVersion == "dev" {
+		return false
+	}
 	return CompareVersions(s.LatestVersion, currentVersion) > 0
 }
 
