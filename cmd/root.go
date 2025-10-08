@@ -51,10 +51,10 @@ var rootCmd = &cobra.Command{
 			log.SetLevel(log.DebugLevel)
 		}
 
-		// Check for updates in background (non-blocking)
+		// Check for updates if 24h have passed (non-blocking with 3s timeout)
 		// Skip update check for the update command itself
 		if cmd.Name() != "update" {
-			updater.CheckInBackground(cmd.Context(), Version)
+			updater.CheckAndUpdateState(cmd.Context(), Version)
 
 			// Show notification if update is available
 			if shouldNotify, latestVersion := updater.ShouldNotifyUpdate(Version); shouldNotify {
