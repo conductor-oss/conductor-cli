@@ -7,6 +7,7 @@ import (
 	sdklog "github.com/conductor-sdk/conductor-go/sdk/log"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	"github.com/orkes-io/conductor-cli/internal"
+	"github.com/orkes-io/conductor-cli/internal/updater"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -15,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -48,6 +50,19 @@ var rootCmd = &cobra.Command{
 		if verbose {
 			log.SetLevel(log.DebugLevel)
 		}
+
+		// Check for updates in background (non-blocking)
+		// Skip update check for the update command itself
+		if cmd.Name() != "update" {
+			updater.CheckInBackground(cmd.Context(), Version)
+
+			// Show notification if update is available
+			if shouldNotify, latestVersion := updater.ShouldNotifyUpdate(Version); shouldNotify {
+				fmt.Fprintf(os.Stderr, "\n⚠ A new version is available: %s (current: %s)\n", latestVersion, Version)
+				fmt.Fprintf(os.Stderr, "Run 'orkes update' to download it or update with your package manager.\n\n")
+			}
+		}
+
 		// Get configuration values from Viper (which handles flags, env vars, and config file)
 		url = viper.GetString("server")
 		key = viper.GetString("auth-key")
@@ -115,9 +130,11 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		viper.AddConfigPath(home)
+		// Use config directory structure: ~/.conductor-cli/config.yaml
+		configDir := filepath.Join(home, ".conductor-cli")
+		viper.AddConfigPath(configDir)
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".conductor-cli")
+		viper.SetConfigName("config")
 	}
 
 	// Environment variable mapping

@@ -52,7 +52,7 @@ var (
 	updateWebHookMetadataCmd = &cobra.Command{
 		Use:          "update <webhook_id>",
 		Short:        "Update Webhook",
-		RunE:         update,
+		RunE:         updateWebhook,
 		SilenceUsage: true,
 		Example:      "webhook update <webhook_id> --file webhook.json",
 	}
@@ -195,7 +195,7 @@ func create(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func update(cmd *cobra.Command, args []string) error {
+func updateWebhook(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return cmd.Usage()
 	}
