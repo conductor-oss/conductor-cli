@@ -21,8 +21,8 @@ var (
 	// Execution command group
 	executionCmd = &cobra.Command{
 		Use:   "execution",
-		Short: "Workflow execution management",
-		Long:  "Commands for managing workflow executions",
+		Short: "Workflow and Task execution",
+		Long:  "Commands for managing workflow and task execution",
 	}
 
 	// Execution subcommands
@@ -145,7 +145,6 @@ var (
 		SilenceUsage: true,
 		Example:      "execution update-state [workflow_id] --variables '{\"key\":\"value\"}'",
 	}
-
 )
 
 // parseTimeToEpochMillis parses human-readable time formats to epoch milliseconds
@@ -462,7 +461,7 @@ func deleteWorkflowExecution(cmd *cobra.Command, args []string) error {
 	}
 
 	archive, _ := cmd.Flags().GetBool("archive")
-	
+
 	workflowClient := internal.GetWorkflowClient()
 	for i := 0; i < len(args); i++ {
 		workflowId := args[i]

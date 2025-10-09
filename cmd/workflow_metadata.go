@@ -25,7 +25,7 @@ import (
 
 var workflowCmd = &cobra.Command{
 	Use:   "workflow",
-	Short: "Workflow Management",
+	Short: "Workflow definition management",
 }
 
 var (
@@ -181,12 +181,12 @@ func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("error checking stdin: %v", err)
 		}
-		
+
 		// If running interactively (no pipe/redirect), show usage
 		if (stat.Mode() & os.ModeCharDevice) != 0 {
 			return cmd.Usage()
 		}
-		
+
 		data = read()
 		if len(data) == 0 {
 			return fmt.Errorf("no workflow data received from stdin")
@@ -232,12 +232,12 @@ func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("error checking stdin: %v", err)
 		}
-		
+
 		// If running interactively (no pipe/redirect), show usage
 		if (stat.Mode() & os.ModeCharDevice) != 0 {
 			return cmd.Usage()
 		}
-		
+
 		data = read()
 		if len(data) == 0 {
 			return fmt.Errorf("no workflow data received from stdin")
@@ -282,12 +282,12 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("error checking stdin: %v", err)
 		}
-		
+
 		// If running interactively (no pipe/redirect), show usage
 		if (stat.Mode() & os.ModeCharDevice) != 0 {
 			return cmd.Usage()
 		}
-		
+
 		workflows := readLines()
 		if len(workflows) == 0 {
 			return fmt.Errorf("no workflow data received from stdin")
@@ -335,12 +335,12 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 // parseJSONError provides helpful error messages for JSON parsing failures
 func parseJSONError(err error, jsonContent string, contextName string) error {
 	errStr := err.Error()
-	
+
 	// Common JSON syntax error patterns
 	if strings.Contains(errStr, "invalid character") && strings.Contains(errStr, "in string literal") {
 		// Find the approximate line number by counting newlines
 		lines := strings.Split(jsonContent, "\n")
-		
+
 		// Look for unterminated strings (missing quotes)
 		for i, line := range lines {
 			// Simple heuristic: look for lines with odd number of quotes
@@ -349,18 +349,18 @@ func parseJSONError(err error, jsonContent string, contextName string) error {
 				return fmt.Errorf("JSON syntax error in %s: unterminated string on line %d\nLine content: %s\nHint: Check for missing closing quote (\") on this line", contextName, i+1, strings.TrimSpace(line))
 			}
 		}
-		
+
 		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for unterminated strings (missing quotes)", contextName, errStr)
 	}
-	
+
 	if strings.Contains(errStr, "unexpected end of JSON input") {
 		return fmt.Errorf("JSON syntax error in %s: unexpected end of file\nHint: Check for missing closing braces } or brackets ]", contextName)
 	}
-	
+
 	if strings.Contains(errStr, "invalid character") {
 		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for invalid characters, missing commas, or malformed values", contextName, errStr)
 	}
-	
+
 	// Fallback for other JSON errors
 	return fmt.Errorf("Invalid %s format: %s", contextName, errStr)
 }
@@ -368,7 +368,7 @@ func parseJSONError(err error, jsonContent string, contextName string) error {
 // parseAPIError extracts useful error information from API responses
 func parseAPIError(err error, defaultMsg string) error {
 	errStr := err.Error()
-	
+
 	// Try to extract JSON from error message
 	// Error format: "error: {...}, body: {...}"
 	var jsonStr string
@@ -379,13 +379,13 @@ func parseAPIError(err error, defaultMsg string) error {
 			jsonStr = parts[1]
 		}
 	} else if strings.Contains(errStr, "error: {") {
-		// Extract the error part  
+		// Extract the error part
 		parts := strings.Split(errStr, "error: ")
 		if len(parts) > 1 {
 			jsonStr = strings.Split(parts[1], ", body:")[0]
 		}
 	}
-	
+
 	if jsonStr != "" {
 		// Try to parse the JSON with validation errors
 		var errorResponse struct {
@@ -396,11 +396,11 @@ func parseAPIError(err error, defaultMsg string) error {
 				Message string `json:"message"`
 			} `json:"validationErrors"`
 		}
-		
+
 		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil {
 			if errorResponse.Message != "" {
 				message := fmt.Sprintf("%s: %s", defaultMsg, errorResponse.Message)
-				
+
 				// Add validation error details if available
 				if len(errorResponse.ValidationErrors) > 0 {
 					message += "\nValidation errors:"
@@ -412,16 +412,16 @@ func parseAPIError(err error, defaultMsg string) error {
 						}
 					}
 				}
-				
+
 				if errorResponse.Status > 0 {
 					message += fmt.Sprintf(" (status: %d)", errorResponse.Status)
 				}
-				
+
 				return fmt.Errorf(message)
 			}
 		}
 	}
-	
+
 	// Fallback to original error if parsing fails
 	return fmt.Errorf("%s: %v", defaultMsg, err)
 }

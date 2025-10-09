@@ -256,7 +256,7 @@ func init() {
 	sdklog.SetLogger(sdklog.NewNop())
 
 	// Configuration file flag
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.conductor-cli.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.conductor-cli/config.yaml)")
 
 	// Server and authentication flags
 	rootCmd.PersistentFlags().String("server", "", "Conductor server URL (can also be set via CONDUCTOR_SERVER_URL)")
