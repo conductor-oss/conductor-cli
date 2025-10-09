@@ -139,14 +139,7 @@ func getAssetName() string {
 	osName := runtime.GOOS
 	archName := runtime.GOARCH
 
-	// Map Go arch names to common naming conventions
-	switch archName {
-	case "amd64":
-		archName = "x86_64"
-	case "arm64":
-		archName = "arm64"
-	}
-
+	// GitHub releases use Go's arch names (amd64, arm64) directly
 	assetName := fmt.Sprintf("orkes_%s_%s", osName, archName)
 
 	if runtime.GOOS == "windows" {
