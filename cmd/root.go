@@ -31,15 +31,14 @@ var (
 var NAME = "orkes"
 
 var (
-	cfgFile    string
-	profile    string
-	saveConfig string
-	url        string
-	key        string
-	secret     string
-	token      string
-	verbose    bool
-	yes        bool
+	cfgFile string
+	profile string
+	url     string
+	key     string
+	secret  string
+	token   string
+	verbose bool
+	yes     bool
 )
 var rootCmd = &cobra.Command{
 	Use:     NAME,
@@ -93,26 +92,6 @@ var rootCmd = &cobra.Command{
 		}
 
 		internal.SetAPIClient(apiClient)
-
-		// Handle --save-config flag
-		if saveConfig != "" || (cmd.Flag("save-config").Changed && saveConfig == "") {
-			// Use saveConfig value as profile name if provided, otherwise use --profile value
-			profileName := saveConfig
-			if profileName == "" {
-				profileName = profile
-			}
-
-			if err := saveConfigFile(profileName); err != nil {
-				return fmt.Errorf("failed to save config: %w", err)
-			}
-
-			configFileName := "config.yaml"
-			if profileName != "" {
-				configFileName = fmt.Sprintf("config-%s.yaml", profileName)
-			}
-
-			fmt.Fprintf(os.Stderr, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
-		}
 
 		return nil
 	},
@@ -216,10 +195,20 @@ func initConfig() {
 			configName := fmt.Sprintf("config-%s", activeProfile)
 			configPath := filepath.Join(configDir, configName+".yaml")
 
-			// Check if profile config exists
-			if _, err := os.Stat(configPath); os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "Error: Profile '%s' doesn't exist (expected file: %s)\n", activeProfile, configPath)
-				os.Exit(1)
+			// Check if profile config exists (skip check if we're saving a new config)
+			isSavingConfig := false
+			for i, arg := range os.Args {
+				if arg == "config" && i+1 < len(os.Args) && os.Args[i+1] == "save" {
+					isSavingConfig = true
+					break
+				}
+			}
+
+			if !isSavingConfig {
+				if _, err := os.Stat(configPath); os.IsNotExist(err) {
+					fmt.Fprintf(os.Stderr, "Error: Profile '%s' doesn't exist (expected file: %s)\n", activeProfile, configPath)
+					os.Exit(1)
+				}
 			}
 
 			viper.SetConfigName(configName)
@@ -266,7 +255,6 @@ func init() {
 
 	// Profile and config management flags
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a specific profile (loads config-<profile>.yaml, can also be set via ORKES_PROFILE)")
-	rootCmd.PersistentFlags().StringVar(&saveConfig, "save-config", "", "save current flags to config file (optionally specify profile name)")
 
 	// Other flags
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print verbose logs")
