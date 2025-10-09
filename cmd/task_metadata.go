@@ -13,7 +13,7 @@ import (
 
 var taskCmd = &cobra.Command{
 	Use:   "task",
-	Short: "Task Management",
+	Short: "Task definition management",
 }
 
 var (

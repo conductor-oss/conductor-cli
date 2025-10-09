@@ -18,7 +18,7 @@ import (
 
 var schedulerCmd = &cobra.Command{
 	Use:   "schedule",
-	Short: "Schedule Management",
+	Short: "Schedule management",
 }
 
 var (

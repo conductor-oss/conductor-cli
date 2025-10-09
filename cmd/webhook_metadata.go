@@ -14,7 +14,7 @@ import (
 
 var webhookCmd = &cobra.Command{
 	Use:   "webhook",
-	Short: "Webhooks Management",
+	Short: "Webhook management",
 }
 
 var (
