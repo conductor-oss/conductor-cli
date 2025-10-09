@@ -205,14 +205,20 @@ func initConfig() {
 		viper.AddConfigPath(configDir)
 		viper.SetConfigType("yaml")
 
-		// Use profile-specific config if --profile is set
-		if profile != "" {
-			configName := fmt.Sprintf("config-%s", profile)
+		// Determine which profile to use: --profile flag takes precedence over ORKES_PROFILE env var
+		activeProfile := profile
+		if activeProfile == "" {
+			activeProfile = os.Getenv("ORKES_PROFILE")
+		}
+
+		// Use profile-specific config if profile is set
+		if activeProfile != "" {
+			configName := fmt.Sprintf("config-%s", activeProfile)
 			configPath := filepath.Join(configDir, configName+".yaml")
 
 			// Check if profile config exists
 			if _, err := os.Stat(configPath); os.IsNotExist(err) {
-				fmt.Fprintf(os.Stderr, "Error: Profile '%s' doesn't exist (expected file: %s)\n", profile, configPath)
+				fmt.Fprintf(os.Stderr, "Error: Profile '%s' doesn't exist (expected file: %s)\n", activeProfile, configPath)
 				os.Exit(1)
 			}
 
@@ -259,7 +265,7 @@ func init() {
 	rootCmd.PersistentFlags().String("auth-token", "", "Auth token for authentication (can also be set via CONDUCTOR_AUTH_TOKEN)")
 
 	// Profile and config management flags
-	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a specific profile (loads config-<profile>.yaml)")
+	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a specific profile (loads config-<profile>.yaml, can also be set via ORKES_PROFILE)")
 	rootCmd.PersistentFlags().StringVar(&saveConfig, "save-config", "", "save current flags to config file (optionally specify profile name)")
 
 	// Other flags
