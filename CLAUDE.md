@@ -86,6 +86,19 @@ Manage multiple environments (dev, staging, prod) using profiles.
 | `execution task-poll <type>` | Poll for tasks | task type | `orkes execution task-poll my_task --count 5` |
 | `execution task-update` | Update task by ref name | workflow-id, task-ref-name, status | `orkes execution task-update --workflow-id abc --task-ref-name task1 --status COMPLETED` |
 
+### Config Commands
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `config save` | Save current configuration | None | `--profile` | `orkes --server http://localhost:8080/api --auth-key key --profile production config save` |
+| `config list` | List all configuration profiles | None | None | `orkes config list` |
+| `config delete [profile]` | Delete configuration file | None | `--profile`, `-y` | `orkes config delete production` or `orkes config delete --profile production -y` |
+
+**Notes:**
+- `config save`: Use `--profile <name>` to save to a named profile (e.g., `config-production.yaml`). Without it, saves to default `config.yaml`.
+- `config list`: Shows all profiles. Default config shown as "default", named profiles show as profile name only.
+- `config delete`: Profile can be specified as positional arg or via `--profile` flag. Use `-y` to skip confirmation prompt.
+
 ### Webhook Commands
 
 | Command | Description | Required Args | Example |

@@ -163,17 +163,29 @@ Profiles allow you to manage multiple Conductor environments (e.g., development,
 
 **Creating a Profile:**
 
-Save your current flags to a named profile:
+Save your current flags to a named profile using the `config save` command:
 
 ```bash
 # Save to default profile (~/.conductor-cli/config.yaml)
-orkes --server https://dev.example.com --auth-key key123 --save-config workflow list
+orkes --server https://dev.example.com --auth-key key123 config save
 
 # Save to named profile (~/.conductor-cli/config-production.yaml)
-orkes --server https://prod.example.com --auth-token token --save-config=production workflow list
+orkes --server https://prod.example.com --auth-token token --profile production config save
+```
 
-# Create multiple profiles
-orkes --server https://staging.example.com --auth-key key --save-config=staging workflow list
+**Deleting a Profile:**
+
+Delete a configuration file using the `config delete` command:
+
+```bash
+# Delete default config (with confirmation prompt)
+orkes config delete
+
+# Delete named profile (with confirmation prompt)
+orkes config delete production
+
+# Delete without confirmation
+orkes config delete production -y
 ```
 
 **Using a Profile:**
@@ -210,6 +222,58 @@ If you reference a profile that doesn't exist, you'll get a clear error:
 orkes --profile nonexistent workflow list
 # Error: Profile 'nonexistent' doesn't exist (expected file: ~/.conductor-cli/config-nonexistent.yaml)
 ```
+
+## Config Management Commands
+
+The CLI provides dedicated commands for managing configuration files:
+
+### Save Configuration
+
+```bash
+# Save to default config file
+orkes --server http://localhost:8080/api --auth-key key123 config save
+
+# Save to a named profile (using --profile flag)
+orkes --server https://prod.example.com --auth-token token --profile production config save
+
+# Flags can be placed before or after the command
+orkes config save --server http://localhost:8080/api --auth-key key123 --profile staging
+```
+
+### List Configurations
+
+```bash
+# List all configuration profiles
+orkes config list
+```
+
+This shows:
+- `default` - for the default `config.yaml` file
+- Profile names (e.g., `production`, `staging`) - for named profiles like `config-production.yaml`
+
+### Delete Configuration
+
+```bash
+# Delete default config (with confirmation prompt)
+orkes config delete
+
+# Delete named profile using positional argument
+orkes config delete production
+
+# Delete named profile using --profile flag
+orkes config delete --profile production
+
+# Delete without confirmation using -y flag
+orkes config delete production -y
+orkes config delete --profile staging -y
+```
+
+**Notes:**
+- The `--profile` flag specifies which profile to save/delete
+- Without `--profile`, operations affect the default `config.yaml`
+- `config list` shows all available profiles in `~/.conductor-cli/` directory
+- Delete operations require confirmation unless `-y` flag is used
+- Both positional argument and `--profile` flag work for delete command
 
 ## Workflow Metadata Management
 
