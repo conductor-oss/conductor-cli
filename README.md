@@ -130,7 +130,7 @@ export CONDUCTOR_AUTH_TOKEN=your-auth-token
 
 ### Configuration File
 
-Create a `.conductor-cli.yaml` file in your home directory (`$HOME/.conductor-cli.yaml`).
+Configuration files are stored in `~/.conductor-cli/` directory.
 
 **Authentication Options:**
 
@@ -155,6 +155,60 @@ You can also specify a custom config file location:
 
 ```bash
 orkes --config /path/to/my-config.yaml workflow list
+```
+
+### Profiles
+
+Profiles allow you to manage multiple Conductor environments (e.g., development, staging, production) easily.
+
+**Creating a Profile:**
+
+Save your current flags to a named profile:
+
+```bash
+# Save to default profile (~/.conductor-cli/config.yaml)
+orkes --server https://dev.example.com --auth-key key123 --save-config workflow list
+
+# Save to named profile (~/.conductor-cli/config-production.yaml)
+orkes --server https://prod.example.com --auth-token token --save-config=production workflow list
+
+# Create multiple profiles
+orkes --server https://staging.example.com --auth-key key --save-config=staging workflow list
+```
+
+**Using a Profile:**
+
+Load configuration from a specific profile:
+
+```bash
+# Using --profile flag
+orkes --profile production workflow list
+
+# Using ORKES_PROFILE environment variable
+export ORKES_PROFILE=production
+orkes workflow list
+
+# Flag takes precedence over environment variable
+ORKES_PROFILE=staging orkes --profile production workflow list  # Uses production
+```
+
+**Profile File Structure:**
+
+```
+~/.conductor-cli/
+├── config.yaml              # Default profile
+├── config-production.yaml   # Production profile
+├── config-staging.yaml      # Staging profile
+└── config-dev.yaml          # Development profile
+```
+
+**Profile Error Handling:**
+
+If you reference a profile that doesn't exist, you'll get a clear error:
+
+```bash
+orkes --profile nonexistent workflow list
+# Error: Profile 'nonexistent' doesn't exist (expected file: ~/.conductor-cli/config-nonexistent.yaml)
 ```
 
 ## Workflow Metadata Management
