@@ -232,3 +232,54 @@ orkes workflow get "<workflow name with spaces>"
 # Register a workflow stored in the file
 orkes workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
 ```
+
+## Exit Codes
+
+The CLI uses standard exit codes for error handling:
+
+| Exit Code | Description |
+|-----------|-------------|
+| `0` | Command completed successfully |
+| `1` | General error (connection failed, authentication error, resource not found, etc.) |
+
+**Example usage in scripts:**
+```bash
+if orkes execution start --workflow my_workflow; then
+    echo "Workflow started successfully"
+else
+    echo "Failed to start workflow" >&2
+    exit 1
+fi
+```
+
+## Error Handling
+
+Common errors and solutions:
+
+### Connection Errors
+```
+Error: Get "https://...": dial tcp: no such host
+```
+**Solution:** Verify your `--server` URL or `CONDUCTOR_SERVER_URL` environment variable
+
+### Authentication Errors
+```
+Error: 401 Unauthorized
+```
+**Solution:** Check your authentication credentials (`--auth-token` or `--auth-key`/`--auth-secret`)
+
+### Resource Not Found
+```
+Error: 404 Not Found
+```
+**Solution:** Verify the resource name or ID exists on the server
+
+### Profile Not Found
+```
+Error: Profile 'prod' doesn't exist (expected file: ~/.conductor-cli/config-prod.yaml)
+```
+**Solution:** Create the profile using `--save-config=prod` or verify the profile name
+
+## For AI Assistants & LLMs
+
+For a concise, LLM-optimized reference with command tables, exit codes, and canonical examples, see **[CLAUDE.md](./CLAUDE.md)**.
