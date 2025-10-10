@@ -83,6 +83,42 @@ mv orkes_* /usr/local/bin/orkes
 orkes --version
 ```
 
+### Shell Completion
+
+Enable tab completion for commands, flags, and arguments:
+
+**Zsh (macOS default):**
+```bash
+# One-time setup
+orkes completion zsh > $(brew --prefix)/share/zsh/site-functions/_orkes
+
+# Restart your shell or run:
+source ~/.zshrc
+```
+
+**Bash:**
+```bash
+# Linux
+orkes completion bash > /etc/bash_completion.d/orkes
+
+# macOS
+orkes completion bash > $(brew --prefix)/etc/bash_completion.d/orkes
+
+# Then restart your shell
+```
+
+**Fish:**
+```bash
+orkes completion fish > ~/.config/fish/completions/orkes.fish
+```
+
+**PowerShell:**
+```powershell
+orkes completion powershell | Out-String | Invoke-Expression
+```
+
+After installing, you'll get tab completion when typing `orkes <TAB>`.
+
 ## Configuration
 
 The CLI can be configured using command-line flags, environment variables, or a configuration file. Configuration is handled with the following precedence (highest to lowest):
