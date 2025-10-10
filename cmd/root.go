@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -74,6 +75,12 @@ var rootCmd = &cobra.Command{
 		// Set default URL if not provided
 		if url == "" {
 			url = "http://localhost:8080/api"
+		}
+
+		// Ensure URL has /api suffix for SDK
+		url = strings.TrimSuffix(url, "/")
+		if !strings.HasSuffix(url, "/api") {
+			url = url + "/api"
 		}
 
 		log.Debug("Using Server ", url)

@@ -182,3 +182,41 @@ teardown() {
     # Clean up
     rm -f ~/.conductor-cli/config-e2e-default-check.yaml
 }
+
+@test "13. Server URL without /api suffix is accepted" {
+    # Test URL without /api
+    run bash -c "./orkes --server http://example.com --auth-key key --profile e2e-noapi config save 2>/dev/null"
+    [ "$status" -eq 0 ]
+
+    # Verify config was saved with user's input (not normalized)
+    [ -f ~/.conductor-cli/config-e2e-noapi.yaml ]
+    grep -q "server: http://example.com" ~/.conductor-cli/config-e2e-noapi.yaml
+
+    # Clean up
+    rm -f ~/.conductor-cli/config-e2e-noapi.yaml
+}
+
+@test "14. Server URL with /api suffix is accepted" {
+    # Test URL with /api
+    run bash -c "./orkes --server http://example.com/api --auth-key key --profile e2e-withapi config save 2>/dev/null"
+    [ "$status" -eq 0 ]
+
+    # Verify config was saved
+    [ -f ~/.conductor-cli/config-e2e-withapi.yaml ]
+
+    # Clean up
+    rm -f ~/.conductor-cli/config-e2e-withapi.yaml
+}
+
+@test "15. Server URL with trailing slash is handled" {
+    # Test URL with trailing slash
+    run bash -c "./orkes --server http://example.com/ --auth-key key --profile e2e-slash config save 2>/dev/null"
+    [ "$status" -eq 0 ]
+
+    # Verify config was saved with trailing slash (user's input preserved)
+    [ -f ~/.conductor-cli/config-e2e-slash.yaml ]
+    grep -q "server: http://example.com/" ~/.conductor-cli/config-e2e-slash.yaml
+
+    # Clean up
+    rm -f ~/.conductor-cli/config-e2e-slash.yaml
+}

@@ -274,6 +274,7 @@ orkes config delete --profile staging -y
 - `config list` shows all available profiles in `~/.conductor-cli/` directory
 - Delete operations require confirmation unless `-y` flag is used
 - Both positional argument and `--profile` flag work for delete command
+- Server URLs can be provided with or without `/api` suffix (e.g., `http://localhost:8080` or `http://localhost:8080/api`).
 
 ## Workflow Metadata Management
 
