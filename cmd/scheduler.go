@@ -70,23 +70,36 @@ var (
 	createSchedulerCmd = &cobra.Command{
 		Use:          "create",
 		Short:        "Create a new schedule",
+		Long:         "Create a schedule from a JSON file, stdin, or using flags",
 		RunE:         createSchedule,
 		SilenceUsage: true,
-		Example: `
-create [json_file]
-create [json_stream]
-create -n [name] -c [cron_expression] -w [workflow_to_start] -i [input_json_for_workflow]`,
+		Example: `  # Create from JSON file
+  orkes schedule create schedule.json
+
+  # Create using flags
+  orkes schedule create -n my_schedule -c "0 0 * ? * *" -w hello_world
+
+  # With input
+  orkes schedule create -n daily_task -c "0 0 * ? * *" -w my_workflow -i '{"key":"value"}'
+
+  # Create paused schedule
+  orkes schedule create -n my_schedule -c "0 0 * ? * *" -w hello_world -p`,
 	}
 
 	updateSchedulerCmd = &cobra.Command{
 		Use:          "update",
 		Short:        "Update existing schedule",
+		Long:         "Update a schedule from a JSON file, stdin, or using flags",
 		RunE:         updateSchedule,
 		SilenceUsage: true,
-		Example: `
-update [json_file]
-update [json_stream]
-update -n [name] -c [cron_expression] -w [workflow_to_start] -i [input_json_for_workflow]`,
+		Example: `  # Update from JSON file
+  orkes schedule update schedule.json
+
+  # Update using flags
+  orkes schedule update -n my_schedule -c "0 0 12 ? * *" -w hello_world
+
+  # Update with new input
+  orkes schedule update -n my_schedule -c "0 0 * ? * *" -w my_workflow -i '{"updated":"data"}'`,
 	}
 )
 
@@ -252,23 +265,37 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 	schedulerClient := internal.GetSchedulerClient()
 	var request model.SaveScheduleRequest
 	var err error
+
+	// Check if using flags or file/stdin
+	name, _ := cmd.Flags().GetString("name")
 	cron, _ := cmd.Flags().GetString("cron")
-	if cron != "" {
-		name, _ := cmd.Flags().GetString("name")
-		workflow, _ := cmd.Flags().GetString("workflow")
+	workflow, _ := cmd.Flags().GetString("workflow")
+
+	// If flags are provided, use flag-based creation
+	if name != "" || cron != "" || workflow != "" {
+		// Validate required flags
+		if name == "" {
+			return errors.New("--name is required")
+		}
+		if cron == "" {
+			return errors.New("--cron is required")
+		}
+		if workflow == "" {
+			return errors.New("--workflow is required")
+		}
+
 		version, _ := cmd.Flags().GetInt32("version")
 		inputJson, _ := cmd.Flags().GetString("input")
 		paused, _ := cmd.Flags().GetBool("paused")
-		if workflow == "" {
-			return errors.New("missing workflow name")
-		}
 
 		var input map[string]interface{}
-		err = json.Unmarshal([]byte(inputJson), &input)
-		if err != nil {
-			log.Error("input string MUST be valid JSON")
-			return err
+		if inputJson != "" {
+			err = json.Unmarshal([]byte(inputJson), &input)
+			if err != nil {
+				return fmt.Errorf("input string must be valid JSON: %w", err)
+			}
 		}
+
 		workflowRequest := model.StartWorkflowRequest{
 			Name:    workflow,
 			Version: version,
@@ -281,6 +308,7 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 			Paused:               paused,
 		}
 	} else {
+		// File or stdin based creation
 		var bytes []byte
 
 		if len(args) == 1 {
@@ -290,11 +318,25 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 				return err
 			}
 		} else {
+			// Check if stdin has data available
+			stat, err := os.Stdin.Stat()
+			if err != nil {
+				return fmt.Errorf("error checking stdin: %v", err)
+			}
+
+			// If running interactively (no pipe/redirect), show usage
+			if (stat.Mode() & os.ModeCharDevice) != 0 {
+				return cmd.Usage()
+			}
+
 			bytes = read()
+			if len(bytes) == 0 {
+				return fmt.Errorf("no schedule data received from stdin")
+			}
 		}
 		err = json.Unmarshal(bytes, &request)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse schedule JSON: %w", err)
 		}
 	}
 	var exists bool
@@ -334,19 +376,19 @@ func init() {
 	listSchedulerCmd.Flags().BoolP("cron", "c", false, "Print cron expression")
 	listSchedulerCmd.Flags().BoolP("pretty", "p", false, "Print formatted json")
 
-	createSchedulerCmd.Flags().StringP("workflow", "w", "", "Workflow to start")
-	createSchedulerCmd.Flags().StringP("cron", "c", "", "Cron Schedule")
-	createSchedulerCmd.Flags().StringP("name", "n", "", "Name of the schedule")
-	createSchedulerCmd.Flags().StringP("input", "i", "{}", "Workflow Input")
-	createSchedulerCmd.Flags().BoolP("paused", "p", false, "Pause schedule when created")
-	createSchedulerCmd.Flags().Int32P("version", "v", 0, "Workflow Version")
+	createSchedulerCmd.Flags().StringP("name", "n", "", "Name of the schedule (required)")
+	createSchedulerCmd.Flags().StringP("cron", "c", "", "Cron expression (required)")
+	createSchedulerCmd.Flags().StringP("workflow", "w", "", "Workflow to start (required)")
+	createSchedulerCmd.Flags().StringP("input", "i", "", "Workflow input as JSON string")
+	createSchedulerCmd.Flags().BoolP("paused", "p", false, "Create schedule in paused state")
+	createSchedulerCmd.Flags().Int32("version", 0, "Workflow version (0 for latest)")
 
-	updateSchedulerCmd.Flags().StringP("workflow", "w", "", "Workflow to start")
-	updateSchedulerCmd.Flags().StringP("cron", "c", "", "Cron Schedule")
-	updateSchedulerCmd.Flags().StringP("name", "n", "", "Name of the schedule")
-	updateSchedulerCmd.Flags().StringP("input", "i", "{}", "Workflow Input")
-	updateSchedulerCmd.Flags().BoolP("paused", "p", false, "Pause schedule when created")
-	updateSchedulerCmd.Flags().Int32P("version", "v", 0, "Workflow Version")
+	updateSchedulerCmd.Flags().StringP("name", "n", "", "Name of the schedule (required)")
+	updateSchedulerCmd.Flags().StringP("cron", "c", "", "Cron expression (required)")
+	updateSchedulerCmd.Flags().StringP("workflow", "w", "", "Workflow to start (required)")
+	updateSchedulerCmd.Flags().StringP("input", "i", "", "Workflow input as JSON string")
+	updateSchedulerCmd.Flags().BoolP("paused", "p", false, "Pause schedule")
+	updateSchedulerCmd.Flags().Int32("version", 0, "Workflow version (0 for latest)")
 
 	searchSchedulerCmd.Flags().Int32P("count", "c", 10, "No of workflows to return (max 1000)")
 	searchSchedulerCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
