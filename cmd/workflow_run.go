@@ -466,6 +466,12 @@ func deleteWorkflowExecution(cmd *cobra.Command, args []string) error {
 	for i := 0; i < len(args); i++ {
 		workflowId := args[i]
 
+		// Confirm deletion
+		if !confirmDeletion("workflow execution", workflowId) {
+			fmt.Printf("Skipping deletion of workflow execution '%s'\n", workflowId)
+			continue
+		}
+
 		options := &client.WorkflowResourceApiDeleteOpts{
 			ArchiveWorkflow: optional.NewBool(archive),
 		}
