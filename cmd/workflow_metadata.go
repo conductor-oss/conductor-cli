@@ -57,6 +57,7 @@ var (
 	updateWorkflowMetadataCmd = &cobra.Command{
 		Use:          "update <workflow_definition.json>",
 		Short:        "Update Workflow",
+		Long:         "Update an existing workflow from a JSON or JavaScript file.\n\nJavaScript format (--js flag) is experimental and subject to change.",
 		RunE:         updateWorkflowMetadata,
 		SilenceUsage: true,
 		GroupID:      "metadata",
@@ -65,6 +66,7 @@ var (
 	createWorkflowMetadataCmd = &cobra.Command{
 		Use:          "create <workflow_definition.json>",
 		Short:        "Create Workflow",
+		Long:         "Create a workflow from a JSON or JavaScript file.\n\nJavaScript format (--js flag) is experimental and subject to change.",
 		RunE:         createWorkflowMetadata,
 		SilenceUsage: true,
 		GroupID:      "metadata",
@@ -489,17 +491,17 @@ func readLines() []string {
 var script = `
 const wf = workflow();
 wf.tasks.forEach(t => {
+    if(t.inputParameters == null) t.inputParameters = {};
     if(t.function != null) {
         t.type = "INLINE";
         t.inputParameters["expression"] = t.function.toString() + "\n" + t.function.name + "();";
         t.inputParameters["evaluatorType"] = "graaljs";
     } else if (t.type == "WAIT") {
-		if(t.name == null) t.name = "WAIT";
-		if(t.duration != null) {
-			if(t.inputParameters == null) t.inputParameters = {};
-			t.inputParameters["duration"] = t.duration;
-		}
-	}
+        if(t.name == null) t.name = "WAIT";
+        if(t.duration != null) {
+            t.inputParameters["duration"] = t.duration;
+        }
+    }
     if(t.taskReferenceName == null) {
         t.taskReferenceName = t.name;
     }
