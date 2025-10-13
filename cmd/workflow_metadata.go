@@ -323,10 +323,19 @@ func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+
+		// Confirm deletion
+		resourceName := fmt.Sprintf("%s version %d", name, version)
+		if !confirmDeletion("workflow", resourceName) {
+			fmt.Println("Deletion cancelled")
+			return nil
+		}
+
 		_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
 		if err != nil {
 			return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
 		}
+		fmt.Printf("Workflow '%s' version %d deleted successfully\n", name, version)
 		return nil
 	}
 
