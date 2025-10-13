@@ -124,7 +124,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook delete '$WEBHOOK_ID' 2>/dev/null"
+    run bash -c "./orkes webhook delete '$WEBHOOK_ID' -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 

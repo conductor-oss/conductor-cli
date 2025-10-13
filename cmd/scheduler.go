@@ -168,10 +168,19 @@ func deleteSchedule(cmd *cobra.Command, args []string) error {
 	}
 
 	for i := 0; i < len(args); i++ {
-		_, _, err := schedulerClient.DeleteSchedule(context.Background(), args[i])
+		name := args[i]
+
+		// Confirm deletion
+		if !confirmDeletion("schedule", name) {
+			fmt.Printf("Skipping deletion of schedule '%s'\n", name)
+			continue
+		}
+
+		_, _, err := schedulerClient.DeleteSchedule(context.Background(), name)
 		if err != nil {
 			return err
 		}
+		fmt.Printf("Schedule '%s' deleted successfully\n", name)
 	}
 	return nil
 }

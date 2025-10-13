@@ -11,16 +11,16 @@ setup() {
     fi
 
     # Clean up any existing test schedules
-    ./orkes schedule delete e2e-test-schedule 2>/dev/null || true
-    ./orkes schedule delete e2e-test-schedule-2 2>/dev/null || true
-    ./orkes schedule delete e2e-test-paused 2>/dev/null || true
+    ./orkes schedule delete e2e-test-schedule -y 2>/dev/null || true
+    ./orkes schedule delete e2e-test-schedule-2 -y 2>/dev/null || true
+    ./orkes schedule delete e2e-test-paused -y 2>/dev/null || true
 }
 
 teardown() {
     # Clean up test schedules after each test
-    ./orkes schedule delete e2e-test-schedule 2>/dev/null || true
-    ./orkes schedule delete e2e-test-schedule-2 2>/dev/null || true
-    ./orkes schedule delete e2e-test-paused 2>/dev/null || true
+    ./orkes schedule delete e2e-test-schedule -y 2>/dev/null || true
+    ./orkes schedule delete e2e-test-schedule-2 -y 2>/dev/null || true
+    ./orkes schedule delete e2e-test-paused -y 2>/dev/null || true
 }
 
 @test "1. Create schedule with flags" {
@@ -96,10 +96,11 @@ teardown() {
     run bash -c "./orkes schedule get e2e-test-schedule 2>/dev/null"
     [ "$status" -eq 0 ]
 
-    # Delete it
-    run bash -c "./orkes schedule delete e2e-test-schedule 2>&1"
+    # Delete it with -y flag
+    run bash -c "./orkes schedule delete e2e-test-schedule -y 2>&1"
     echo "Delete output: $output"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"deleted successfully"* ]]
 
     # Verify it's gone
     run bash -c "./orkes schedule get e2e-test-schedule 2>&1"
@@ -235,4 +236,28 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"e2e-test-schedule"* ]]
     [[ "$output" == *"e2e-test-schedule-2"* ]]
+}
+
+@test "21. Delete without -y flag prompts for confirmation" {
+    # Create schedule
+    ./orkes schedule create -n e2e-test-schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+
+    # Try to delete without -y flag (should prompt and timeout in test)
+    run bash -c "echo 'n' | timeout 2 ./orkes schedule delete e2e-test-schedule 2>&1"
+    echo "Output: $output"
+    # Should contain confirmation prompt
+    [[ "$output" == *"Are you sure"* ]]
+}
+
+@test "22. Delete with -y flag skips confirmation" {
+    # Create schedule
+    ./orkes schedule create -n e2e-test-schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+
+    # Delete with -y flag (no prompt)
+    run bash -c "./orkes schedule delete e2e-test-schedule -y 2>&1"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    # Should NOT contain confirmation prompt
+    [[ "$output" != *"Are you sure"* ]]
+    [[ "$output" == *"deleted successfully"* ]]
 }

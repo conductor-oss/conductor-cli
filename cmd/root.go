@@ -41,6 +41,20 @@ var (
 	verbose bool
 	yes     bool
 )
+
+// confirmDeletion prompts user for confirmation unless --yes flag is set
+// Returns true if user confirms or --yes is set, false otherwise
+func confirmDeletion(resourceType, resourceName string) bool {
+	if yes {
+		return true
+	}
+
+	fmt.Printf("Are you sure you want to delete %s '%s'? (y/N): ", resourceType, resourceName)
+	var response string
+	fmt.Scanln(&response)
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y" || response == "yes"
+}
 var rootCmd = &cobra.Command{
 	Use:     NAME,
 	Short:   "orkes",

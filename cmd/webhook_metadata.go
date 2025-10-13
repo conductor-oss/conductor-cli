@@ -96,6 +96,12 @@ func delete(cmd *cobra.Command, args []string) error {
 		return cmd.Usage()
 	}
 
+	// Confirm deletion
+	if !confirmDeletion("webhook", id) {
+		fmt.Println("Deletion cancelled")
+		return nil
+	}
+
 	webhookClient := internal.GetWebhooksConfigClient()
 	_, err := webhookClient.DeleteWebhook(context.Background(), id)
 	if err != nil {

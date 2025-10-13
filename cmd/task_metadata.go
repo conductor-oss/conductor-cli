@@ -204,10 +204,18 @@ func deleteTaskMetadata(cmd *cobra.Command, args []string) error {
 	}
 	for i := 0; i < len(args); i++ {
 		name := args[i]
+
+		// Confirm deletion
+		if !confirmDeletion("task", name) {
+			fmt.Printf("Skipping deletion of task '%s'\n", name)
+			continue
+		}
+
 		_, err := metadataClient.UnregisterTaskDef(context.Background(), name)
 		if err != nil {
 			return err
 		}
+		fmt.Printf("Task '%s' deleted successfully\n", name)
 	}
 
 	return nil
