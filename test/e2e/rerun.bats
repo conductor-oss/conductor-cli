@@ -109,14 +109,16 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/rerun_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes execution delete '$WORKFLOW_ID' 2>/dev/null"
+    run bash -c "./orkes execution delete '$WORKFLOW_ID' -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"deleted successfully"* ]]
     echo "Deleted workflow UUID: $WORKFLOW_ID"
 }
 
 @test "8. Cleanup - Delete workflow definition" {
-    run bash -c "./orkes workflow delete '$WORKFLOW_NAME' 1 2>/dev/null"
+    run bash -c "./orkes workflow delete '$WORKFLOW_NAME' 1 -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
+    [[ "$output" == *"deleted successfully"* ]]
 }
