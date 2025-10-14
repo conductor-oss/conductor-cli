@@ -121,15 +121,40 @@ After installing, you'll get tab completion when typing `orkes <TAB>`.
 
 ## Configuration
 
-The CLI can be configured using command-line flags, environment variables, or a configuration file. Configuration is handled with the following precedence (highest to lowest):
+The CLI connects to your Conductor server and can optionally persist configuration using the `config save` command.
 
-1. Command-line flags
-2. Environment variables
-3. Configuration file
+### Server Types
 
-### Command-line Flags
+The CLI supports two types of Conductor servers:
 
-**Authentication Options:**
+- **OSS Conductor** (default): Open-source Conductor - requires only server URL, no authentication
+- **Enterprise (Orkes Conductor)**: Requires server URL and authentication credentials
+
+Use the `--server-type` flag to specify your server type (defaults to `OSS`):
+
+```bash
+# OSS Conductor (default)
+orkes --server http://localhost:8080/api --server-type OSS workflow list
+
+# Enterprise/Orkes Conductor
+orkes --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise workflow list
+```
+
+### Saving Your Configuration
+
+The `config save` command allows you to persist your server URL and credentials (for Enterprise) so you don't have to provide them with every command. This creates a configuration file in `~/.conductor-cli/`.
+
+**For OSS Conductor:**
+
+```bash
+# Save OSS configuration (no authentication required)
+orkes --server http://localhost:8080/api --server-type OSS config save
+
+# Since OSS is the default, you can omit --server-type
+orkes --server http://localhost:8080/api config save
+```
+
+**For Enterprise/Orkes Conductor:**
 
 You must use **one** of the following authentication methods:
 
@@ -137,96 +162,54 @@ You must use **one** of the following authentication methods:
 2. **Auth Token**: Use `--auth-token` flag (you can copy this token from the Conductor UI)
 
 ```bash
-# Option 1: API Key + Secret
-orkes --server http://localhost:8080/api --auth-key your-api-key --auth-secret your-api-secret workflow list
+# Save Enterprise configuration with auth token
+orkes --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise config save
 
-# Option 2: Auth Token (copy from UI)
-orkes --server http://localhost:8080/api --auth-token your-auth-token workflow list
+# Save with API key + secret
+orkes --server https://developer.orkescloud.com --auth-key your-key --auth-secret your-secret --server-type Enterprise config save
 
-# Using config file
-orkes --config /path/to/config.yaml workflow list
+# Flags can be placed before or after the command
+orkes config save --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise
 ```
 
-### Environment Variables
-
-**Authentication Options:**
-
-Use **one** of the following authentication methods:
+Once saved, you can run commands without providing flags:
 
 ```bash
-# Option 1: API Key + Secret
-export CONDUCTOR_SERVER_URL=http://localhost:8080/api
-export CONDUCTOR_AUTH_KEY=your-api-key
-export CONDUCTOR_AUTH_SECRET=your-api-secret
-
-# Option 2: Auth Token (copy from UI)
-export CONDUCTOR_SERVER_URL=http://localhost:8080/api
-export CONDUCTOR_AUTH_TOKEN=your-auth-token
+# After saving config, simply run:
+orkes workflow list
 ```
 
-### Configuration File
-
-Configuration files are stored in `~/.conductor-cli/` directory.
-
-**Authentication Options:**
-
-Use **one** of the following authentication methods:
-
-```yaml
-# Option 1: API Key + Secret
-server: http://localhost:8080/api
-auth-key: your-api-key
-auth-secret: your-api-secret
-verbose: false
-```
-
-```yaml
-# Option 2: Auth Token (copy from UI)
-server: http://localhost:8080/api
-auth-token: your-auth-token
-verbose: false
-```
-
-You can also specify a custom config file location:
+**Additional Configuration Options:**
 
 ```bash
-orkes --config /path/to/my-config.yaml workflow list
+# Save with verbose logging enabled
+orkes --server http://localhost:8080/api --verbose config save
 ```
 
-### Profiles
+**Note:** Server URLs can be provided with or without `/api` suffix (e.g., `http://localhost:8080` or `http://localhost:8080/api`).
 
-Profiles allow you to manage multiple Conductor environments (e.g., development, staging, production) easily.
+### Using Profiles for Multiple Environments
 
-**Creating a Profile:**
+Profiles allow you to manage multiple Conductor environments (e.g., development, staging, production) and easily switch between them.
 
-Save your current flags to a named profile using the `config save` command:
+**Creating Profiles:**
+
+Use the `--profile` flag with `config save` to create named profiles:
 
 ```bash
-# Save to default profile (~/.conductor-cli/config.yaml)
-orkes --server https://dev.example.com --auth-key key123 config save
+# Save local OSS development environment
+orkes --server http://localhost:8080/api --server-type OSS --profile dev config save
 
-# Save to named profile (~/.conductor-cli/config-production.yaml)
-orkes --server https://prod.example.com --auth-token token --profile production config save
+# Save Enterprise staging environment
+orkes --server https://staging.example.com --auth-token staging-token --server-type Enterprise --profile staging config save
+
+# Save Enterprise production environment
+orkes --server https://prod.example.com --auth-token prod-token --server-type Enterprise --profile production config save
 ```
 
-**Deleting a Profile:**
+**Using Profiles:**
 
-Delete a configuration file using the `config delete` command:
-
-```bash
-# Delete default config (with confirmation prompt)
-orkes config delete
-
-# Delete named profile (with confirmation prompt)
-orkes config delete production
-
-# Delete without confirmation
-orkes config delete production -y
-```
-
-**Using a Profile:**
-
-Load configuration from a specific profile:
+Switch between environments by specifying the profile:
 
 ```bash
 # Using --profile flag
@@ -250,33 +233,7 @@ ORKES_PROFILE=staging orkes --profile production workflow list  # Uses productio
 └── config-dev.yaml          # Development profile
 ```
 
-**Profile Error Handling:**
-
-If you reference a profile that doesn't exist, you'll get a clear error:
-
-```bash
-orkes --profile nonexistent workflow list
-# Error: Profile 'nonexistent' doesn't exist (expected file: ~/.conductor-cli/config-nonexistent.yaml)
-```
-
-## Config Management Commands
-
-The CLI provides dedicated commands for managing configuration files:
-
-### Save Configuration
-
-```bash
-# Save to default config file
-orkes --server http://localhost:8080/api --auth-key key123 config save
-
-# Save to a named profile (using --profile flag)
-orkes --server https://prod.example.com --auth-token token --profile production config save
-
-# Flags can be placed before or after the command
-orkes config save --server http://localhost:8080/api --auth-key key123 --profile staging
-```
-
-### List Configurations
+**Listing Profiles:**
 
 ```bash
 # List all configuration profiles
@@ -287,30 +244,110 @@ This shows:
 - `default` - for the default `config.yaml` file
 - Profile names (e.g., `production`, `staging`) - for named profiles like `config-production.yaml`
 
-### Delete Configuration
+**Deleting Profiles:**
 
 ```bash
 # Delete default config (with confirmation prompt)
 orkes config delete
 
-# Delete named profile using positional argument
+# Delete named profile
 orkes config delete production
-
-# Delete named profile using --profile flag
-orkes config delete --profile production
 
 # Delete without confirmation using -y flag
 orkes config delete production -y
-orkes config delete --profile staging -y
+```
+
+**Profile Error Handling:**
+
+If you reference a profile that doesn't exist, you'll get a clear error:
+
+```bash
+orkes --profile nonexistent workflow list
+# Error: Profile 'nonexistent' doesn't exist (expected file: ~/.conductor-cli/config-nonexistent.yaml)
+```
+
+### Configuration Precedence
+
+The CLI can be configured using command-line flags, environment variables, or a configuration file. Configuration is handled with the following precedence (highest to lowest):
+
+1. Command-line flags
+2. Environment variables
+3. Configuration file
+
+### Command-line Flags
+
+You can override saved configuration by providing flags directly:
+
+```bash
+# Override server URL for a single command
+orkes --server http://different-server:8080/api workflow list
+
+# Use different auth token temporarily
+orkes --auth-token temporary-token workflow list
+
+# Combine multiple overrides
+orkes --server http://localhost:8080/api --auth-token token --server-type Enterprise workflow list
+```
+
+### Environment Variables
+
+Set these environment variables to configure the CLI without flags:
+
+```bash
+# Server and authentication
+export CONDUCTOR_SERVER_URL=http://localhost:8080/api
+export CONDUCTOR_AUTH_TOKEN=your-auth-token
+
+# Or using API key + secret
+export CONDUCTOR_SERVER_URL=http://localhost:8080/api
+export CONDUCTOR_AUTH_KEY=your-api-key
+export CONDUCTOR_AUTH_SECRET=your-api-secret
+
+# Server type (OSS or Enterprise)
+export CONDUCTOR_SERVER_TYPE=Enterprise
+
+# Profile selection
+export ORKES_PROFILE=production
+```
+
+### Configuration File Format
+
+Configuration files use YAML format and are stored in `~/.conductor-cli/`:
+
+```yaml
+# Example config.yaml for OSS Conductor (no authentication)
+server: http://localhost:8080/api
+server-type: OSS
+verbose: false
+```
+
+```yaml
+# Example config.yaml for Enterprise with auth token
+server: https://developer.orkescloud.com/api
+auth-token: your-auth-token
+server-type: Enterprise
+verbose: false
+```
+
+```yaml
+# Example config.yaml for Enterprise with API key + secret
+server: https://developer.orkescloud.com/api
+auth-key: your-api-key
+auth-secret: your-api-secret
+server-type: Enterprise
+verbose: false
 ```
 
 **Notes:**
-- The `--profile` flag specifies which profile to save/delete
-- Without `--profile`, operations affect the default `config.yaml`
-- `config list` shows all available profiles in `~/.conductor-cli/` directory
-- Delete operations require confirmation unless `-y` flag is used
-- Both positional argument and `--profile` flag work for delete command
-- Server URLs can be provided with or without `/api` suffix (e.g., `http://localhost:8080` or `http://localhost:8080/api`).
+- `server-type` defaults to `OSS` if not specified
+- OSS Conductor doesn't require `auth-token`, `auth-key`, or `auth-secret`
+- Enterprise requires one authentication method (`auth-token` OR `auth-key`+`auth-secret`)
+
+You can also specify a custom config file location:
+
+```bash
+orkes --config /path/to/my-config.yaml workflow list
+```
 
 ## Workflow Metadata Management
 
