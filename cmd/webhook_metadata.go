@@ -59,6 +59,9 @@ var (
 )
 
 func list(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	webhookClient := internal.GetWebhooksConfigClient()
 	tasks, _, err := webhookClient.GetAllWebhook(context.Background())
@@ -79,6 +82,10 @@ func list(cmd *cobra.Command, args []string) error {
 }
 
 func delete(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
+
 	var id string
 
 	// Check if reading from stdin (pipe)
@@ -113,6 +120,10 @@ func delete(cmd *cobra.Command, args []string) error {
 }
 
 func get(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
+
 	if len(args) == 0 {
 		return cmd.Usage()
 	}
@@ -129,6 +140,10 @@ func get(cmd *cobra.Command, args []string) error {
 }
 
 func create(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
+
 	name, _ := cmd.Flags().GetString("name")
 	file, _ := cmd.Flags().GetString("file")
 	workflowsToStart, _ := cmd.Flags().GetString("workflows-to-start")
@@ -202,6 +217,10 @@ func create(cmd *cobra.Command, args []string) error {
 }
 
 func updateWebhook(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
+
 	if len(args) == 0 {
 		return cmd.Usage()
 	}
