@@ -371,12 +371,11 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 	}
 	var exists bool
 	//Let's check if there is an existing schedule
-	_, res, err := schedulerClient.GetSchedule(context.Background(), request.Name)
+	_, _, err = schedulerClient.GetSchedule(context.Background(), request.Name)
 	if err != nil {
-		if res.StatusCode == 404 {
+		var swaggerErr client.GenericSwaggerError
+		if errors.As(err, &swaggerErr) && swaggerErr.StatusCode() == 404 {
 			exists = false
-		} else {
-			return err
 		}
 	} else {
 		exists = true

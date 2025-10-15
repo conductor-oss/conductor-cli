@@ -41,8 +41,9 @@ jobs:
         CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
         CONDUCTOR_AUTH_KEY: ${{ secrets.CONDUCTOR_AUTH_KEY }}
         CONDUCTOR_AUTH_SECRET: ${{ secrets.CONDUCTOR_AUTH_SECRET }}
+        CONDUCTOR_SERVER_TYPE: Enterprise
       run: |
-        bats test/e2e/workflow.bats --show-output-of-passing-tests
+        bats test/e2e/*.bats --show-output-of-passing-tests
 
     - name: Upload test artifacts
       if: always()
