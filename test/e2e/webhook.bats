@@ -25,7 +25,7 @@ get_webhook_id() {
         --source-platform Custom \
         --verifier HEADER_BASED \
         --headers 'Authorization:BB12346789' \
-        --receiver-workflows hello_world:1 2>/dev/null"
+        --receiver-workflows hello_world:1 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -43,7 +43,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>/dev/null"
+    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -57,7 +57,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook list 2>/dev/null"
+    run bash -c "./orkes webhook list 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -70,7 +70,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook list --json 2>/dev/null"
+    run bash -c "./orkes webhook list --json 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -98,7 +98,7 @@ get_webhook_id() {
 }
 EOF
 
-    run bash -c "./orkes webhook update '$WEBHOOK_ID' --file /tmp/webhook_update.json 2>/dev/null"
+    run bash -c "./orkes webhook update '$WEBHOOK_ID' --file /tmp/webhook_update.json 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -110,7 +110,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>/dev/null"
+    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -124,7 +124,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook delete '$WEBHOOK_ID' -y 2>/dev/null"
+    run bash -c "./orkes webhook delete '$WEBHOOK_ID' -y 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
