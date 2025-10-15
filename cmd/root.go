@@ -32,14 +32,15 @@ var (
 var NAME = "orkes"
 
 var (
-	cfgFile string
-	profile string
-	url     string
-	key     string
-	secret  string
-	token   string
-	verbose bool
-	yes     bool
+	cfgFile    string
+	profile    string
+	url        string
+	key        string
+	secret     string
+	token      string
+	verbose    bool
+	yes        bool
+	serverType string
 )
 
 // confirmDeletion prompts user for confirmation unless --yes flag is set
@@ -54,6 +55,11 @@ func confirmDeletion(resourceType, resourceName string) bool {
 	fmt.Scanln(&response)
 	response = strings.ToLower(strings.TrimSpace(response))
 	return response == "y" || response == "yes"
+}
+
+// isEnterpriseServer checks if the configured server type is Enterprise
+func isEnterpriseServer() bool {
+	return strings.ToUpper(serverType) == "ENTERPRISE"
 }
 var rootCmd = &cobra.Command{
 	Use:     NAME,
@@ -85,6 +91,12 @@ var rootCmd = &cobra.Command{
 		key = viper.GetString("auth-key")
 		secret = viper.GetString("auth-secret")
 		token = viper.GetString("auth-token")
+		serverType = viper.GetString("server-type")
+
+		// Set default server type if not provided
+		if serverType == "" {
+			serverType = "OSS"
+		}
 
 		// Set default URL if not provided
 		if url == "" {
@@ -153,6 +165,9 @@ func saveConfigFile(profileName string) error {
 	}
 	if authToken := viper.GetString("auth-token"); authToken != "" {
 		configData["auth-token"] = authToken
+	}
+	if srvType := viper.GetString("server-type"); srvType != "" && srvType != "OSS" {
+		configData["server-type"] = srvType
 	}
 
 	// Marshal to YAML
@@ -247,6 +262,7 @@ func initConfig() {
 	viper.BindEnv("auth-key", "CONDUCTOR_AUTH_KEY")
 	viper.BindEnv("auth-secret", "CONDUCTOR_AUTH_SECRET")
 	viper.BindEnv("auth-token", "CONDUCTOR_AUTH_TOKEN")
+	viper.BindEnv("server-type", "CONDUCTOR_SERVER_TYPE")
 
 	if err := viper.ReadInConfig(); err == nil {
 		if viper.GetBool("verbose") {
@@ -273,6 +289,7 @@ func init() {
 	rootCmd.PersistentFlags().String("auth-key", "", "API key for authentication (can also be set via CONDUCTOR_AUTH_KEY)")
 	rootCmd.PersistentFlags().String("auth-secret", "", "API secret for authentication (can also be set via CONDUCTOR_AUTH_SECRET)")
 	rootCmd.PersistentFlags().String("auth-token", "", "Auth token for authentication (can also be set via CONDUCTOR_AUTH_TOKEN)")
+	rootCmd.PersistentFlags().String("server-type", "OSS", "Server type: OSS or Enterprise (can also be set via CONDUCTOR_SERVER_TYPE)")
 
 	// Profile and config management flags
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a specific profile (loads config-<profile>.yaml, can also be set via ORKES_PROFILE)")
@@ -286,6 +303,7 @@ func init() {
 	viper.BindPFlag("auth-key", rootCmd.PersistentFlags().Lookup("auth-key"))
 	viper.BindPFlag("auth-secret", rootCmd.PersistentFlags().Lookup("auth-secret"))
 	viper.BindPFlag("auth-token", rootCmd.PersistentFlags().Lookup("auth-token"))
+	viper.BindPFlag("server-type", rootCmd.PersistentFlags().Lookup("server-type"))
 	viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 
 	// Mark mutually exclusive flags

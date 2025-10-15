@@ -104,6 +104,9 @@ var (
 )
 
 func listSchedules(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	var workflowName optional.String
@@ -143,6 +146,9 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 }
 
 func getSchedule(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	if len(args) == 0 {
@@ -161,6 +167,9 @@ func getSchedule(cmd *cobra.Command, args []string) error {
 }
 
 func deleteSchedule(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	if len(args) == 0 {
@@ -186,6 +195,9 @@ func deleteSchedule(cmd *cobra.Command, args []string) error {
 }
 
 func pauseSchedule(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	if len(args) == 0 {
@@ -202,6 +214,9 @@ func pauseSchedule(cmd *cobra.Command, args []string) error {
 }
 
 func resumeSchedule(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	if len(args) == 0 {
@@ -218,6 +233,9 @@ func resumeSchedule(cmd *cobra.Command, args []string) error {
 }
 
 func searchScheduledExecutions(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	if len(args) == 0 {
@@ -270,6 +288,9 @@ func updateSchedule(cmd *cobra.Command, args []string) error {
 	return createOrUpdateSchedule(true, cmd, args)
 }
 func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
 
 	schedulerClient := internal.GetSchedulerClient()
 	var request model.SaveScheduleRequest
