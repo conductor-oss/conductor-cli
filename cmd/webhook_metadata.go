@@ -235,22 +235,25 @@ func updateWebhook(cmd *cobra.Command, args []string) error {
 	var data []byte
 	var err error
 
-	// Check if reading from stdin (pipe)
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		// Reading from pipe
-		data, err = os.ReadFile("/dev/stdin")
-		if err != nil {
-			return fmt.Errorf("error reading from stdin: %v", err)
-		}
-	} else if file != "" {
+	// Check file flag first
+	if file != "" {
 		// Read from file
 		data, err = os.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("error reading file: %v", err)
 		}
 	} else {
-		return fmt.Errorf("--file is required or pipe JSON to stdin")
+		// Check if reading from stdin (pipe)
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Reading from pipe
+			data, err = os.ReadFile("/dev/stdin")
+			if err != nil {
+				return fmt.Errorf("error reading from stdin: %v", err)
+			}
+		} else {
+			return fmt.Errorf("--file is required or pipe JSON to stdin")
+		}
 	}
 
 	var webhookConfig model.WebhookConfig
