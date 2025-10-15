@@ -88,19 +88,22 @@ func delete(cmd *cobra.Command, args []string) error {
 
 	var id string
 
-	// Check if reading from stdin (pipe)
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		// Reading from pipe
-		data, err := os.ReadFile("/dev/stdin")
-		if err != nil {
-			return fmt.Errorf("error reading from stdin: %v", err)
-		}
-		id = strings.TrimSpace(string(data))
-	} else if len(args) > 0 {
+	// Check args first
+	if len(args) > 0 {
 		id = args[0]
 	} else {
-		return cmd.Usage()
+		// Check if reading from stdin (pipe)
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// Reading from pipe
+			data, err := os.ReadFile("/dev/stdin")
+			if err != nil {
+				return fmt.Errorf("error reading from stdin: %v", err)
+			}
+			id = strings.TrimSpace(string(data))
+		} else {
+			return cmd.Usage()
+		}
 	}
 
 	// Confirm deletion
