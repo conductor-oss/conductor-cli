@@ -109,7 +109,7 @@ teardown() {
 
 @test "8. Create schedule without required flags shows help" {
     # Missing all flags - should show usage/help
-    run bash -c "./orkes schedule create 2>&1"
+    run bash -c "./orkes schedule create </dev/null 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"Usage:"* ]]
