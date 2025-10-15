@@ -9,7 +9,14 @@ setup() {
         echo "ERROR: orkes binary not found. Please build it first."
         exit 1
     fi
-    
+
+    # Unset environment variables that might interfere with config tests
+    unset CONDUCTOR_SERVER_URL
+    unset CONDUCTOR_AUTH_KEY
+    unset CONDUCTOR_AUTH_SECRET
+    unset CONDUCTOR_AUTH_TOKEN
+    unset CONDUCTOR_SERVER_TYPE
+
     # Clean up any existing test config files
     rm -f ~/.conductor-cli/config-e2e-test.yaml
     rm -f ~/.conductor-cli/config-e2e-test2.yaml
