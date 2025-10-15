@@ -156,19 +156,8 @@ func create(cmd *cobra.Command, args []string) error {
 	var data []byte
 	var err error
 
-	// Check if reading from stdin (pipe)
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		// Reading from pipe
-		data, err = os.ReadFile("/dev/stdin")
-		if err != nil {
-			return fmt.Errorf("error reading from stdin: %v", err)
-		}
-		err = json.Unmarshal(data, &webhookConfig)
-		if err != nil {
-			return fmt.Errorf("error parsing JSON from stdin: %v", err)
-		}
-	} else if file != "" {
+	// Check if using file or flags first
+	if file != "" {
 		// Read from file
 		data, err = os.ReadFile(file)
 		if err != nil {
@@ -178,7 +167,7 @@ func create(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("error parsing JSON: %v", err)
 		}
-	} else {
+	} else if name != "" || sourcePlatform != "" || verifier != "" {
 		// Build from flags
 		webhookConfig = model.WebhookConfig{
 			Name: name,
@@ -202,6 +191,21 @@ func create(cmd *cobra.Command, args []string) error {
 
 		if receiverWorkflows != "" {
 			webhookConfig.ReceiverWorkflowNamesToVersions = parseWorkflowMap(receiverWorkflows)
+		}
+	} else {
+		// Reading from stdin (pipe)
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			data, err = os.ReadFile("/dev/stdin")
+			if err != nil {
+				return fmt.Errorf("error reading from stdin: %v", err)
+			}
+			err = json.Unmarshal(data, &webhookConfig)
+			if err != nil {
+				return fmt.Errorf("error parsing JSON from stdin: %v", err)
+			}
+		} else {
+			return cmd.Usage()
 		}
 	}
 
