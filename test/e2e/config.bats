@@ -10,12 +10,6 @@ setup() {
         exit 1
     fi
 
-    # Unset environment variables that might interfere with config tests
-    unset CONDUCTOR_SERVER_URL
-    unset CONDUCTOR_AUTH_KEY
-    unset CONDUCTOR_AUTH_SECRET
-    unset CONDUCTOR_AUTH_TOKEN
-    unset CONDUCTOR_SERVER_TYPE
 
     # Clean up any existing test config files
     rm -f ~/.conductor-cli/config-e2e-test.yaml
@@ -124,9 +118,9 @@ teardown() {
 @test "8. Config file has correct permissions (0600)" {
     run bash -c "./orkes --server http://test.com --auth-key key --profile e2e-test config save 2>&1"
     [ "$status" -eq 0 ]
-    
+
     # Check file permissions (should be 0600 or -rw-------)
-    perms=$(stat -f "%OLp" ~/.conductor-cli/config-e2e-test.yaml 2>&1 || stat -c "%a" ~/.conductor-cli/config-e2e-test.yaml 2>&1)
+    perms=$(stat -f "%OLp" ~/.conductor-cli/config-e2e-test.yaml 2>/dev/null || stat -c "%a" ~/.conductor-cli/config-e2e-test.yaml 2>/dev/null)
     [ "$perms" = "600" ]
 }
 
