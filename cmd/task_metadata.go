@@ -115,6 +115,17 @@ func createTask(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+
 		bytes = read()
 	}
 	err = json.Unmarshal(bytes, &taskDefs)
@@ -146,6 +157,17 @@ func updateTask(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+
 		bytes = read()
 	}
 	err = json.Unmarshal(bytes, &taskDef)
