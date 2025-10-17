@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/antihax/optional v1.0.0
 	github.com/conductor-sdk/conductor-go v1.6.0
-	github.com/dop251/goja v0.0.0-20230402114112-623f9dda9079
+	github.com/dop251/goja v0.0.0-20251008123653-cf18d89f3cf6
 	github.com/dop251/goja_nodejs v0.0.0-20230322100729-2550c7b6c124
 	github.com/google/uuid v1.4.0
 	github.com/sirupsen/logrus v1.9.3
@@ -14,7 +14,7 @@ require (
 )
 
 require (
-	github.com/dlclark/regexp2 v1.7.0 // indirect
+	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
