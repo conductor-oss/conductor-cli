@@ -10,6 +10,7 @@ import (
 	"github.com/orkes-io/conductor-cli/internal/updater"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 	"io"
@@ -61,6 +62,7 @@ func confirmDeletion(resourceType, resourceName string) bool {
 func isEnterpriseServer() bool {
 	return strings.ToUpper(serverType) == "ENTERPRISE"
 }
+
 var rootCmd = &cobra.Command{
 	Use:     NAME,
 	Short:   "orkes",
@@ -280,6 +282,16 @@ func init() {
 
 	// Disable conductor-go SDK logging by using the noop logger
 	sdklog.SetLogger(sdklog.NewNop())
+
+	defaultHelpFunc := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		if cmd.HasParent() {
+			cmd.InheritedFlags().VisitAll(func(flag *pflag.Flag) {
+				flag.Hidden = true
+			})
+		}
+		defaultHelpFunc(cmd, args)
+	})
 
 	// Configuration file flag
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.conductor-cli/config.yaml)")

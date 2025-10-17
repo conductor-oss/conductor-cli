@@ -36,14 +36,12 @@ var (
 		Short:        "List workflows",
 		RunE:         listWorkflow,
 		SilenceUsage: true,
-		GroupID:      "metadata",
 	}
 	getWorkflowMetadataCmd = &cobra.Command{
 		Use:          "get <workflow_name> [version]",
 		Short:        "Get Workflow",
 		RunE:         getWorkflowMetadata,
 		SilenceUsage: true,
-		GroupID:      "metadata",
 	}
 
 	getAllWorkflowMetadataCmd = &cobra.Command{
@@ -51,7 +49,6 @@ var (
 		Short:        "Get All Workflows",
 		RunE:         getAllWorkflowMetadata,
 		SilenceUsage: true,
-		GroupID:      "metadata",
 	}
 
 	updateWorkflowMetadataCmd = &cobra.Command{
@@ -60,7 +57,6 @@ var (
 		Long:         "Update an existing workflow from a JSON or JavaScript file.\n\nJavaScript format (--js flag) is experimental and subject to change.",
 		RunE:         updateWorkflowMetadata,
 		SilenceUsage: true,
-		GroupID:      "metadata",
 	}
 
 	createWorkflowMetadataCmd = &cobra.Command{
@@ -69,14 +65,12 @@ var (
 		Long:         "Create a workflow from a JSON or JavaScript file.\n\nJavaScript format (--js flag) is experimental and subject to change.",
 		RunE:         createWorkflowMetadata,
 		SilenceUsage: true,
-		GroupID:      "metadata",
 	}
 	deleteWorkflowMetadataCmd = &cobra.Command{
 		Use:          "delete <workflow_name> <version>",
 		Short:        "Delete Workflow",
 		RunE:         deleteWorkflowMetadata,
 		SilenceUsage: true,
-		GroupID:      "metadata",
 	}
 )
 
@@ -540,10 +534,6 @@ func init() {
 	createWorkflowMetadataCmd.Flags().Bool("js", false, "Input is javascript file")
 	createWorkflowMetadataCmd.Flags().Bool("json", true, "Input is json file")
 	createWorkflowMetadataCmd.MarkFlagsMutuallyExclusive("js", "json")
-	workflowCmd.AddGroup(&cobra.Group{
-		ID:    "metadata",
-		Title: "Metadata Commands",
-	})
 	workflowCmd.AddCommand(
 		listWorkflowsMetadataCmd,
 		getWorkflowMetadataCmd,
