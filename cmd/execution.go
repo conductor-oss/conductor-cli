@@ -52,7 +52,8 @@ var (
 
 	startExecutionCmd = &cobra.Command{
 		Use:          "start",
-		Short:        "Start workflow execution",
+		Short:        "Start workflow execution asynchronously",
+		Long:         "Start workflow execution asynchronously and return the workflow ID immediately without waiting for completion.",
 		RunE:         startWorkflow,
 		SilenceUsage: true,
 		Example:      "execution start [flags]",
@@ -60,8 +61,9 @@ var (
 
 	executeExecutionCmd = &cobra.Command{
 		Use:          "execute",
-		Short:        "Execute workflow and get output",
-		RunE:         startWorkflow,
+		Short:        "Execute workflow synchronously",
+		Long:         "Execute workflow synchronously and wait for completion, returning the full workflow execution output.",
+		RunE:         executeWorkflow,
 		SilenceUsage: true,
 		Example:      "execution execute [flags]",
 	}
@@ -338,7 +340,6 @@ func terminateWorkflow(cmd *cobra.Command, args []string) error {
 }
 
 func startWorkflow(cmd *cobra.Command, args []string) error {
-
 	workflowName, _ := cmd.Flags().GetString("workflow")
 	version, _ := cmd.Flags().GetInt32("version")
 	input, _ := cmd.Flags().GetString("input")
@@ -377,42 +378,82 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 
 	opts := &client.WorkflowResourceApiStartWorkflowOpts{}
 	if version > 0 {
-		opts.Version = optional.NewInt32(int32(version))
+		opts.Version = optional.NewInt32(version)
 	}
 	if correlationId != "" {
 		opts.CorrelationId = optional.NewString(correlationId)
 	}
 
 	workflowClient := internal.GetWorkflowClient()
-	executeSync, notFound := cmd.Flags().GetBool("sync")
-	if notFound != nil && executeSync {
-		requestId, _ := uuid.NewRandom()
-		request := model.StartWorkflowRequest{
-			Name:          workflowName,
-			Version:       version,
-			CorrelationId: "",
-			Input:         inputMap,
-			Priority:      0,
-		}
-		waitUntil, _ := cmd.Flags().GetString("wait-until")
-		log.Debug("wait until ", waitUntil)
-		run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
-		if execErr != nil {
-			return execErr
-		}
-		data, jsonError := json.MarshalIndent(run, "", "   ")
-		if jsonError != nil {
-			return jsonError
-		}
-		fmt.Println(string(data))
-
-	} else {
-		workflowId, _, startErr := workflowClient.StartWorkflow(cmd.Context(), inputMap, workflowName, opts)
-		if startErr != nil {
-			return startErr
-		}
-		fmt.Println(workflowId)
+	workflowId, _, startErr := workflowClient.StartWorkflow(cmd.Context(), inputMap, workflowName, opts)
+	if startErr != nil {
+		return startErr
 	}
+	fmt.Println(workflowId)
+
+	return nil
+}
+
+func executeWorkflow(cmd *cobra.Command, args []string) error {
+	workflowName, _ := cmd.Flags().GetString("workflow")
+	version, _ := cmd.Flags().GetInt32("version")
+	input, _ := cmd.Flags().GetString("input")
+	inputFile, _ := cmd.Flags().GetString("file")
+	correlationId, _ := cmd.Flags().GetString("correlation")
+
+	if workflowName == "" {
+		if len(args) == 1 {
+			workflowName = args[0]
+		} else {
+			return cmd.Usage()
+		}
+	}
+
+	var inputJson []byte
+	var err error
+
+	if input != "" {
+		inputJson = []byte(input)
+	} else if inputFile != "" {
+		inputJson, err = os.ReadFile(inputFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	if inputJson == nil {
+		inputJson = []byte("{}")
+	}
+
+	var inputMap map[string]interface{}
+	err = json.Unmarshal(inputJson, &inputMap)
+	if err != nil {
+		return err
+	}
+
+	requestId, _ := uuid.NewRandom()
+	request := model.StartWorkflowRequest{
+		Name:          workflowName,
+		Version:       version,
+		CorrelationId: correlationId,
+		Input:         inputMap,
+		Priority:      0,
+	}
+
+	waitUntil, _ := cmd.Flags().GetString("wait-until")
+	log.Debug("wait until ", waitUntil)
+
+	workflowClient := internal.GetWorkflowClient()
+	run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
+	if execErr != nil {
+		return execErr
+	}
+
+	data, jsonError := json.MarshalIndent(run, "", "   ")
+	if jsonError != nil {
+		return jsonError
+	}
+	fmt.Println(string(data))
 
 	return nil
 }
@@ -731,7 +772,6 @@ func init() {
 	executeExecutionCmd.Flags().StringP("file", "f", "", "Input file with json data")
 	executeExecutionCmd.Flags().StringP("wait-until", "u", "", "Wait until task completes (instead of entire workflow)")
 	executeExecutionCmd.Flags().Int32("version", 1, "Workflow version (optional)")
-	executeExecutionCmd.Flags().BoolP("sync", "s", true, "Run synchronously")
 	executeExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
 
 	getExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")
