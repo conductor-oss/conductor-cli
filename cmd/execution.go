@@ -52,7 +52,8 @@ var (
 
 	startExecutionCmd = &cobra.Command{
 		Use:          "start",
-		Short:        "Start workflow execution",
+		Short:        "Start workflow execution asynchronously",
+		Long:         "Start workflow execution asynchronously and return the workflow ID immediately without waiting for completion.",
 		RunE:         startWorkflow,
 		SilenceUsage: true,
 		Example:      "execution start [flags]",
@@ -60,7 +61,8 @@ var (
 
 	executeExecutionCmd = &cobra.Command{
 		Use:          "execute",
-		Short:        "Execute workflow and get output",
+		Short:        "Execute workflow synchronously",
+		Long:         "Execute workflow synchronously and wait for completion, returning the full workflow execution output.",
 		RunE:         executeWorkflow,
 		SilenceUsage: true,
 		Example:      "execution execute [flags]",
