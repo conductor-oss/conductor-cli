@@ -38,6 +38,10 @@ func GetSecretsClient() client.SecretsClient {
 	return client.NewSecretsClient(apiClient)
 }
 
+func GetGatewayClient() client.ApiGatewayClient {
+	return client.NewApiGatewayClient(apiClient)
+}
+
 func SetAPIClient(client *client.APIClient) {
 	apiClient = client
 }
