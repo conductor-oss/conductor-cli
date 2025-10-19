@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 var webhookCmd = &cobra.Command{
@@ -64,20 +65,58 @@ func list(cmd *cobra.Command, args []string) error {
 	}
 
 	webhookClient := internal.GetWebhooksConfigClient()
-	tasks, _, err := webhookClient.GetAllWebhook(context.Background())
-	verbose, _ := cmd.Flags().GetBool("json")
+	webhooks, _, err := webhookClient.GetAllWebhook(context.Background())
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if err != nil {
 		return err
 	}
-	for _, task := range tasks {
-		if verbose {
-			bytes, _ := json.MarshalIndent(task, "", "   ")
-			fmt.Println(string(bytes))
-		} else {
-			fmt.Printf("%s,%s\n", task.Name, task.Id)
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(webhooks, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling webhooks: %v", err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Print as table
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tWEBHOOK ID\tWORKFLOWS\tURL")
+	for _, webhook := range webhooks {
+		// Get workflow names from both fields
+		workflows := []string{}
+		if webhook.WorkflowsToStart != nil {
+			for wf := range webhook.WorkflowsToStart {
+				workflows = append(workflows, wf)
+			}
+		}
+		if webhook.ReceiverWorkflowNamesToVersions != nil {
+			for wf := range webhook.ReceiverWorkflowNamesToVersions {
+				workflows = append(workflows, wf)
+			}
 		}
 
+		workflowStr := "-"
+		if len(workflows) > 0 {
+			workflowStr = strings.Join(workflows, ", ")
+			if len(workflowStr) > 30 {
+				workflowStr = workflowStr[:27] + "..."
+			}
+		}
+
+		// Construct webhook URL (standard Conductor webhook URL format)
+		webhookURL := fmt.Sprintf("/api/webhook/%s", webhook.Id)
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+			webhook.Name,
+			webhook.Id,
+			workflowStr,
+			webhookURL,
+		)
 	}
+	w.Flush()
+
 	return nil
 }
 

@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 var workflowCmd = &cobra.Command{
@@ -75,19 +76,43 @@ var (
 )
 
 func listWorkflow(cmd *cobra.Command, args []string) error {
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 
 	metadataClient := internal.GetMetadataClient()
 	workflows, _, err := metadataClient.GetAll(context.Background())
 	if err != nil {
 		return err
 	}
-	for _, workflow := range workflows {
-		workflowName := workflow.Name
-		if strings.Contains(workflow.Name, " ") {
-			workflowName = fmt.Sprintf("\"%s\"", strings.ReplaceAll(workflow.Name, "\"", "\\"))
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(workflows, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling workflows: %v", err)
 		}
-		fmt.Println(fmt.Sprintf("%s %d", workflowName, workflow.Version))
+		fmt.Println(string(data))
+		return nil
 	}
+
+	// Print as table
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tVERSION\tDESCRIPTION")
+	for _, workflow := range workflows {
+		description := workflow.Description
+		if description == "" {
+			description = "-"
+		}
+		// Truncate long descriptions
+		if len(description) > 50 {
+			description = description[:47] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%d\t%s\n",
+			workflow.Name,
+			workflow.Version,
+			description,
+		)
+	}
+	w.Flush()
+
 	return nil
 }
 
@@ -534,6 +559,7 @@ func init() {
 	createWorkflowMetadataCmd.Flags().Bool("js", false, "Input is javascript file")
 	createWorkflowMetadataCmd.Flags().Bool("json", true, "Input is json file")
 	createWorkflowMetadataCmd.MarkFlagsMutuallyExclusive("js", "json")
+	listWorkflowsMetadataCmd.Flags().Bool("json", false, "Print complete JSON output")
 	workflowCmd.AddCommand(
 		listWorkflowsMetadataCmd,
 		getWorkflowMetadataCmd,

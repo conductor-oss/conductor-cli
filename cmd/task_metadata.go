@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"regexp"
+	"text/tabwriter"
 )
 
 var taskCmd = &cobra.Command{
@@ -67,22 +68,65 @@ var (
 )
 
 func listTasks(cmd *cobra.Command, args []string) error {
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 
 	metadataClient := internal.GetMetadataClient()
 	tasks, _, err := metadataClient.GetTaskDefs(context.Background())
-	verbose, _ := cmd.Flags().GetBool("json")
 	if err != nil {
 		return err
 	}
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(tasks, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling tasks: %v", err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Print as table
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tEXECUTABLE\tDESCRIPTION\tOWNER\tTIMEOUT POLICY\tTIMEOUT (s)\tRETRY COUNT\tRESPONSE TIMEOUT (s)")
 	for _, task := range tasks {
-		if verbose {
-			bytes, _ := json.Marshal(task)
-			fmt.Println(string(bytes))
-		} else {
-			fmt.Println(task.Name)
+		// Determine if task is executable (has executionNameSpace or ownerApp)
+		executable := "no"
+		if task.ExecutionNameSpace != "" || task.OwnerApp != "" {
+			executable = "yes"
 		}
 
+		description := task.Description
+		if description == "" {
+			description = "-"
+		}
+		// Truncate long descriptions
+		if len(description) > 30 {
+			description = description[:27] + "..."
+		}
+
+		ownerEmail := task.OwnerEmail
+		if ownerEmail == "" {
+			ownerEmail = "-"
+		}
+
+		timeoutPolicy := task.TimeoutPolicy
+		if timeoutPolicy == "" {
+			timeoutPolicy = "-"
+		}
+
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\n",
+			task.Name,
+			executable,
+			description,
+			ownerEmail,
+			timeoutPolicy,
+			task.TimeoutSeconds,
+			task.RetryCount,
+			task.ResponseTimeoutSeconds,
+		)
 	}
+	w.Flush()
+
 	return nil
 }
 

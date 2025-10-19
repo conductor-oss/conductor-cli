@@ -17,23 +17,25 @@ var configCmd = &cobra.Command{
 
 var configSaveCmd = &cobra.Command{
 	Use:   "save",
-	Short: "Save current configuration to file",
-	Long: `Save the current server and authentication settings to a configuration file.
+	Short: "Save configuration to file (interactive)",
+	Long: `Interactively configure and save server and authentication settings to a configuration file.
 
 The configuration will be saved to ~/.conductor-cli/config.yaml by default,
 or to a profile-specific file if --profile is specified.
 
-Examples:
-  # Save to default config file
-  orkes --server http://localhost:8080/api --auth-key key123 config save
+If a configuration already exists, you can press Enter to keep existing values.
 
-  # Save to a named profile
-  orkes --server https://prod.example.com --auth-token token123 --profile production config save
+Examples:
+  # Interactively save to default config file
+  orkes config save
+
+  # Interactively save to a named profile
+  orkes config save --profile production
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		profileName := profile
 
-		if err := saveConfigFile(profileName); err != nil {
+		if err := interactiveSaveConfig(profileName); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
