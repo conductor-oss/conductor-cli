@@ -128,7 +128,6 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-
 func Execute(ctx context.Context) {
 	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
@@ -194,7 +193,7 @@ func initConfig() {
 
 	if err := viper.ReadInConfig(); err == nil {
 		if viper.GetBool("verbose") {
-			fmt.Fprintf(os.Stderr, "Using config file: %s\n", viper.ConfigFileUsed())
+			fmt.Fprintf(os.Stdout, "Using config file: %s\n", viper.ConfigFileUsed())
 		}
 	}
 }

@@ -2,7 +2,11 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
+	"golang.org/x/term"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +49,7 @@ Examples:
 			configFileName = fmt.Sprintf("config-%s.yaml", profileName)
 		}
 
-		fmt.Fprintf(os.Stderr, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
+		fmt.Fprintf(os.Stdout, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
 		return nil
 	},
 	SilenceUsage: true,
@@ -167,14 +171,14 @@ Examples:
 		// Ask for confirmation unless -y flag is set
 		if !yes {
 			reader := bufio.NewReader(os.Stdin)
-			fmt.Fprintf(os.Stderr, "Are you sure you want to delete %s? [y/N]: ", configPath)
+			fmt.Fprintf(os.Stdout, "Are you sure you want to delete %s? [y/N]: ", configPath)
 			response, err := reader.ReadString('\n')
 			if err != nil {
 				return err
 			}
 			response = strings.ToLower(strings.TrimSpace(response))
 			if response != "y" && response != "yes" {
-				fmt.Fprintf(os.Stderr, "Deletion cancelled\n")
+				fmt.Fprintf(os.Stdout, "Deletion cancelled\n")
 				return nil
 			}
 		}
@@ -184,7 +188,7 @@ Examples:
 			return fmt.Errorf("failed to delete config file: %w", err)
 		}
 
-		fmt.Fprintf(os.Stderr, "✓ Configuration deleted: %s\n", configPath)
+		fmt.Fprintf(os.Stdout, "✓ Configuration deleted: %s\n", configPath)
 		return nil
 	},
 	SilenceUsage: true,
@@ -231,7 +235,7 @@ func interactiveSaveConfig(profileName string) error {
 	if serverDefault == "" {
 		serverDefault = "http://localhost:8080/api"
 	}
-	fmt.Fprintf(os.Stderr, "Server URL [%s]: ", serverDefault)
+	fmt.Fprintf(os.Stdout, "Server URL [%s]: ", serverDefault)
 	serverInput, _ := reader.ReadString('\n')
 	serverInput = strings.TrimSpace(serverInput)
 	server := serverDefault
@@ -244,7 +248,7 @@ func interactiveSaveConfig(profileName string) error {
 	if serverTypeDefault == "" {
 		serverTypeDefault = "OSS"
 	}
-	fmt.Fprintf(os.Stderr, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
+	fmt.Fprintf(os.Stdout, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
 	serverTypeInput, _ := reader.ReadString('\n')
 	serverTypeInput = strings.TrimSpace(serverTypeInput)
 	serverType := serverTypeDefault
@@ -253,9 +257,9 @@ func interactiveSaveConfig(profileName string) error {
 	}
 
 	// Prompt for auth method
-	fmt.Fprintf(os.Stderr, "\nAuthentication method:\n")
-	fmt.Fprintf(os.Stderr, "  1. API Key + Secret\n")
-	fmt.Fprintf(os.Stderr, "  2. Auth Token\n")
+	fmt.Fprintf(os.Stdout, "\nAuthentication method:\n")
+	fmt.Fprintf(os.Stdout, "  1. API Key + Secret\n")
+	fmt.Fprintf(os.Stdout, "  2. Auth Token\n")
 
 	// Determine default auth method based on existing config
 	defaultAuthMethod := "1"
@@ -263,7 +267,7 @@ func interactiveSaveConfig(profileName string) error {
 		defaultAuthMethod = "2"
 	}
 
-	fmt.Fprintf(os.Stderr, "Choose [%s]: ", defaultAuthMethod)
+	fmt.Fprintf(os.Stdout, "Choose [%s]: ", defaultAuthMethod)
 	authMethodInput, _ := reader.ReadString('\n')
 	authMethodInput = strings.TrimSpace(authMethodInput)
 	authMethod := defaultAuthMethod
@@ -279,7 +283,7 @@ func interactiveSaveConfig(profileName string) error {
 		if authKeyDefault != "" {
 			authKeyDefault = "****" // Mask existing key
 		}
-		fmt.Fprintf(os.Stderr, "API Key [%s]: ", authKeyDefault)
+		fmt.Fprintf(os.Stdout, "API Key [%s]: ", authKeyDefault)
 		authKeyInput, _ := reader.ReadString('\n')
 		authKeyInput = strings.TrimSpace(authKeyInput)
 		if authKeyInput != "" {
@@ -292,7 +296,7 @@ func interactiveSaveConfig(profileName string) error {
 		if authSecretDefault != "" {
 			authSecretDefault = "****" // Mask existing secret
 		}
-		fmt.Fprintf(os.Stderr, "API Secret [%s]: ", authSecretDefault)
+		fmt.Fprintf(os.Stdout, "API Secret [%s]: ", authSecretDefault)
 		authSecretInput, _ := reader.ReadString('\n')
 		authSecretInput = strings.TrimSpace(authSecretInput)
 		if authSecretInput != "" {
@@ -306,8 +310,9 @@ func interactiveSaveConfig(profileName string) error {
 		if authTokenDefault != "" {
 			authTokenDefault = "****" // Mask existing token
 		}
-		fmt.Fprintf(os.Stderr, "Auth Token [%s]: ", authTokenDefault)
-		authTokenInput, _ := reader.ReadString('\n')
+		fmt.Fprintf(os.Stdout, "Auth Token [%s]: ", authTokenDefault)
+		authTokenInput, _ := ReadLineRaw(8192)
+		fmt.Println()
 		authTokenInput = strings.TrimSpace(authTokenInput)
 		if authTokenInput != "" {
 			authToken = authTokenInput
@@ -318,15 +323,9 @@ func interactiveSaveConfig(profileName string) error {
 
 	// Build config data
 	configData := make(map[string]interface{})
+	configData["server"] = server
+	configData["server-type"] = serverType
 
-	// Always write server URL
-	if server != "" {
-		configData["server"] = server
-	}
-	// Always write server type
-	if serverType != "" {
-		configData["server-type"] = serverType
-	}
 	if authKey != "" {
 		configData["auth-key"] = authKey
 	}
@@ -337,14 +336,59 @@ func interactiveSaveConfig(profileName string) error {
 		configData["auth-token"] = authToken
 	}
 
-	// Marshal to YAML
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return err
 	}
 
-	// Write to file
 	return os.WriteFile(configPath, data, 0600) // 0600 for security (credentials)
+}
+
+var ErrTooLong = errors.New("input exceeds limit")
+
+// ReadLineRaw reads from stdin in raw mode until a newline is entered
+// (accepts both '\n' and '\r'). It supports arbitrarily long lines up to `limit`.
+// The terminal state is always restored before returning.
+func ReadLineRaw(limit int) (string, error) {
+	fd := int(os.Stdin.Fd())
+
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return "", err
+	}
+	defer term.Restore(fd, oldState)
+
+	var out bytes.Buffer
+	tmp := make([]byte, 4096)
+
+	for {
+		n, rerr := os.Stdin.Read(tmp)
+		if n > 0 {
+			for _, c := range tmp[:n] {
+				// newline pressed in raw mode is usually '\r', but handle both
+				if c == '\n' || c == '\r' {
+					return out.String(), nil
+				}
+				if out.Len() >= limit {
+					// Drain until newline so the next read starts clean
+					// (best-effort; ignore errors while draining)
+					for c != '\n' && c != '\r' {
+						var b [1]byte
+						_, _ = os.Stdin.Read(b[:])
+						c = b[0]
+					}
+					return "", ErrTooLong
+				}
+				out.WriteByte(c)
+			}
+		}
+		if rerr != nil {
+			if rerr == io.EOF {
+				return out.String(), nil
+			}
+			return "", rerr
+		}
+	}
 }
 
 func init() {
