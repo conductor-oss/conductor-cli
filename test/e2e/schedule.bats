@@ -217,8 +217,7 @@ teardown() {
     # Create schedule
     ./orkes schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
 
-    # List with JSON flag
-    run bash -c "./orkes schedule list --json 2>/dev/null | grep e2e_test_schedule"
+    run bash -c "./orkes schedule list --json 2>/dev/null | jq '.[] | select(.name == \"e2e_test_schedule\")'"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *'"name"'* ]]
