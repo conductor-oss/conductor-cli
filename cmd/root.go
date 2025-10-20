@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
@@ -130,6 +131,161 @@ var rootCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func interactiveSaveConfig(profileName string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	configDir := filepath.Join(home, ".conductor-cli")
+
+	// Create config directory if it doesn't exist
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+
+	// Determine config file name
+	configFileName := "config.yaml"
+	if profileName != "" {
+		configFileName = fmt.Sprintf("config-%s.yaml", profileName)
+	}
+
+	configPath := filepath.Join(configDir, configFileName)
+
+	// Load existing config if it exists
+	existingConfig := make(map[string]string)
+	if data, err := os.ReadFile(configPath); err == nil {
+		var rawConfig map[string]interface{}
+		if err := yaml.Unmarshal(data, &rawConfig); err == nil {
+			for k, v := range rawConfig {
+				if str, ok := v.(string); ok {
+					existingConfig[k] = str
+				}
+			}
+		}
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	// Prompt for server URL
+	serverDefault := existingConfig["server"]
+	if serverDefault == "" {
+		serverDefault = "http://localhost:8080/api"
+	}
+	fmt.Fprintf(os.Stderr, "Server URL [%s]: ", serverDefault)
+	serverInput, _ := reader.ReadString('\n')
+	serverInput = strings.TrimSpace(serverInput)
+	server := serverDefault
+	if serverInput != "" {
+		server = serverInput
+	}
+
+	// Prompt for server type
+	serverTypeDefault := existingConfig["server-type"]
+	if serverTypeDefault == "" {
+		serverTypeDefault = "OSS"
+	}
+	fmt.Fprintf(os.Stderr, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
+	serverTypeInput, _ := reader.ReadString('\n')
+	serverTypeInput = strings.TrimSpace(serverTypeInput)
+	serverType := serverTypeDefault
+	if serverTypeInput != "" {
+		serverType = serverTypeInput
+	}
+
+	// Prompt for auth method
+	fmt.Fprintf(os.Stderr, "\nAuthentication method:\n")
+	fmt.Fprintf(os.Stderr, "  1. API Key + Secret\n")
+	fmt.Fprintf(os.Stderr, "  2. Auth Token\n")
+
+	// Determine default auth method based on existing config
+	defaultAuthMethod := "1"
+	if existingConfig["auth-token"] != "" {
+		defaultAuthMethod = "2"
+	}
+
+	fmt.Fprintf(os.Stderr, "Choose [%s]: ", defaultAuthMethod)
+	authMethodInput, _ := reader.ReadString('\n')
+	authMethodInput = strings.TrimSpace(authMethodInput)
+	authMethod := defaultAuthMethod
+	if authMethodInput != "" {
+		authMethod = authMethodInput
+	}
+
+	var authKey, authSecret, authToken string
+
+	if authMethod == "1" {
+		// API Key + Secret
+		authKeyDefault := existingConfig["auth-key"]
+		if authKeyDefault != "" {
+			authKeyDefault = "****" // Mask existing key
+		}
+		fmt.Fprintf(os.Stderr, "API Key [%s]: ", authKeyDefault)
+		authKeyInput, _ := reader.ReadString('\n')
+		authKeyInput = strings.TrimSpace(authKeyInput)
+		if authKeyInput != "" {
+			authKey = authKeyInput
+		} else if existingConfig["auth-key"] != "" {
+			authKey = existingConfig["auth-key"]
+		}
+
+		authSecretDefault := existingConfig["auth-secret"]
+		if authSecretDefault != "" {
+			authSecretDefault = "****" // Mask existing secret
+		}
+		fmt.Fprintf(os.Stderr, "API Secret [%s]: ", authSecretDefault)
+		authSecretInput, _ := reader.ReadString('\n')
+		authSecretInput = strings.TrimSpace(authSecretInput)
+		if authSecretInput != "" {
+			authSecret = authSecretInput
+		} else if existingConfig["auth-secret"] != "" {
+			authSecret = existingConfig["auth-secret"]
+		}
+	} else {
+		// Auth Token
+		authTokenDefault := existingConfig["auth-token"]
+		if authTokenDefault != "" {
+			authTokenDefault = "****" // Mask existing token
+		}
+		fmt.Fprintf(os.Stderr, "Auth Token [%s]: ", authTokenDefault)
+		authTokenInput, _ := reader.ReadString('\n')
+		authTokenInput = strings.TrimSpace(authTokenInput)
+		if authTokenInput != "" {
+			authToken = authTokenInput
+		} else if existingConfig["auth-token"] != "" {
+			authToken = existingConfig["auth-token"]
+		}
+	}
+
+	// Build config data
+	configData := make(map[string]interface{})
+
+	if server != "" && server != "http://localhost:8080/api" {
+		configData["server"] = server
+	}
+	if serverType != "" && serverType != "OSS" {
+		configData["server-type"] = serverType
+	}
+	if authKey != "" {
+		configData["auth-key"] = authKey
+	}
+	if authSecret != "" {
+		configData["auth-secret"] = authSecret
+	}
+	if authToken != "" {
+		configData["auth-token"] = authToken
+	}
+
+	// Marshal to YAML
+	data, err := yaml.Marshal(configData)
+	if err != nil {
+		return err
+	}
+
+	// Write to file
+	return os.WriteFile(configPath, data, 0600) // 0600 for security (credentials)
 }
 
 func saveConfigFile(profileName string) error {

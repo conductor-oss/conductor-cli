@@ -142,34 +142,62 @@ orkes --server https://developer.orkescloud.com --auth-token your-token --server
 
 ### Saving Your Configuration
 
-The `config save` command allows you to persist your server URL and credentials (for Enterprise) so you don't have to provide them with every command. This creates a configuration file in `~/.conductor-cli/`.
+The `config save` command provides an **interactive setup** that guides you through configuring your Conductor connection. It prompts you for:
+- Server URL
+- Server type (OSS or Enterprise)
+- Authentication method (API Key + Secret or Auth Token for Enterprise)
 
-**For OSS Conductor:**
+If a configuration already exists, you can press Enter to keep existing values (credentials are masked as `****`).
+
+**Interactive Configuration:**
 
 ```bash
-# Save OSS configuration (no authentication required)
-orkes --server http://localhost:8080/api --server-type OSS config save
+# Run interactive configuration
+orkes config save
 
-# Since OSS is the default, you can omit --server-type
-orkes --server http://localhost:8080/api config save
+# Example interaction:
+# Server URL [http://localhost:8080/api]: https://developer.orkescloud.com
+# Server type (OSS/Enterprise) [OSS]: Enterprise
+#
+# Authentication method:
+#   1. API Key + Secret
+#   2. Auth Token
+# Choose [1]: 2
+# Auth Token []: your-token-here
+# ✓ Configuration saved to ~/.conductor-cli/config.yaml
 ```
 
-**For Enterprise/Orkes Conductor:**
+**Updating Existing Configuration:**
 
-You must use **one** of the following authentication methods:
-
-1. **API Key + Secret**: Use both `--auth-key` and `--auth-secret` flags together
-2. **Auth Token**: Use `--auth-token` flag (you can copy this token from the Conductor UI)
+When a configuration file already exists, the interactive prompts show your current values. Press Enter to keep them:
 
 ```bash
-# Save Enterprise configuration with auth token
+orkes config save
+
+# Example with existing config:
+# Server URL [https://developer.orkescloud.com]: ← Press Enter to keep
+# Server type (OSS/Enterprise) [Enterprise]: ← Press Enter to keep
+#
+# Authentication method:
+#   1. API Key + Secret
+#   2. Auth Token
+# Choose [2]: ← Press Enter to keep
+# Auth Token [****]: ← Press Enter to keep or enter new token
+```
+
+**Non-Interactive (Legacy):**
+
+You can still save configuration non-interactively by providing flags:
+
+```bash
+# OSS Conductor
+orkes --server http://localhost:8080/api --server-type OSS config save
+
+# Enterprise with auth token
 orkes --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise config save
 
-# Save with API key + secret
+# Enterprise with API key + secret
 orkes --server https://developer.orkescloud.com --auth-key your-key --auth-secret your-secret --server-type Enterprise config save
-
-# Flags can be placed before or after the command
-orkes config save --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise
 ```
 
 Once saved, you can run commands without providing flags:
@@ -177,13 +205,6 @@ Once saved, you can run commands without providing flags:
 ```bash
 # After saving config, simply run:
 orkes workflow list
-```
-
-**Additional Configuration Options:**
-
-```bash
-# Save with verbose logging enabled
-orkes --server http://localhost:8080/api --verbose config save
 ```
 
 **Note:** Server URLs can be provided with or without `/api` suffix (e.g., `http://localhost:8080` or `http://localhost:8080/api`).
@@ -194,7 +215,20 @@ Profiles allow you to manage multiple Conductor environments (e.g., development,
 
 **Creating Profiles:**
 
-Use the `--profile` flag with `config save` to create named profiles:
+Use the `--profile` flag with `config save` to create named profiles. The command will run in interactive mode:
+
+```bash
+# Interactively configure development profile
+orkes config save --profile dev
+
+# Interactively configure staging profile
+orkes config save --profile staging
+
+# Interactively configure production profile
+orkes config save --profile production
+```
+
+You can also use the non-interactive method with flags:
 
 ```bash
 # Save local OSS development environment

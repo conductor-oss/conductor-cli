@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"os"
 	"strings"
+	"text/tabwriter"
 	"time"
 )
 
@@ -115,33 +116,47 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 	}
 	options := client.SchedulerResourceApiGetAllSchedulesOpts{WorkflowName: workflowName}
 	schedules, _, err := schedulerClient.GetAllSchedules(context.Background(), &options)
-	verbose, _ := cmd.Flags().GetBool("json")
-	cron, _ := cmd.Flags().GetBool("cron")
-	pretty, _ := cmd.Flags().GetBool("pretty")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if err != nil {
 		return err
 	}
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(schedules, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling schedules: %v", err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Print as table
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tCRON\tWORKFLOW\tSTATUS\tCREATED TIME")
 	for _, schedule := range schedules {
-		var bytes []byte
-		if verbose {
-			if pretty {
-				bytes, _ = json.MarshalIndent(schedule, "", "   ")
-			} else {
-				bytes, _ = json.Marshal(schedule)
-			}
+		status := "active"
+		if schedule.Paused {
+			status = "paused"
+		}
+		workflowName := schedule.StartWorkflowRequest.Name
 
-			fmt.Println(string(bytes))
-
-		} else {
-			if cron {
-				fmt.Println(schedule.Name, schedule.CronExpression)
-			} else {
-				fmt.Println(schedule.Name)
-			}
-
+		// Format create time
+		createdTime := "-"
+		if schedule.CreateTime > 0 {
+			t := time.UnixMilli(schedule.CreateTime)
+			createdTime = t.Format("2006-01-02 15:04:05")
 		}
 
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			schedule.Name,
+			schedule.CronExpression,
+			workflowName,
+			status,
+			createdTime,
+		)
 	}
+	w.Flush()
+
 	return nil
 }
 
