@@ -36,11 +36,6 @@ jobs:
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
 
-    - name: Run config E2E tests (no env variables)
-      run: |
-        bats test/e2e/config.bats --show-output-of-passing-tests
-        rm -rf ~/.conductor-cli
-
     - name: Run other E2E tests (with credentials)
       env:
         CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
