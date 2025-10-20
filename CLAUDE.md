@@ -48,16 +48,21 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 ### Workflow Commands
 
-| Command | Description | Required Args | Example |
-|---------|-------------|---------------|---------|
-| `workflow list` | List all workflows | None | `orkes workflow list` |
-| `workflow get <name>` | Get workflow definition | workflow name | `orkes workflow get my_workflow` |
-| `workflow get <name> <version>` | Get specific version | name, version | `orkes workflow get my_workflow 2` |
-| `workflow create <file>` | Create/register workflow | JSON file path | `orkes workflow create workflow.json --force` |
-| `workflow update <file>` | Update workflow | JSON file path | `orkes workflow update workflow.json` |
-| `workflow delete <name> <version>` | Delete workflow | name, version | `orkes workflow delete my_workflow 1` |
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `workflow list` | List all workflows | None | `--json` | `orkes workflow list` |
+| `workflow get <name>` | Get workflow definition | workflow name | | `orkes workflow get my_workflow` |
+| `workflow get <name> <version>` | Get specific version | name, version | | `orkes workflow get my_workflow 2` |
+| `workflow create <file>` | Create/register workflow | JSON file path | `--force` | `orkes workflow create workflow.json --force` |
+| `workflow update <file>` | Update workflow | JSON file path | | `orkes workflow update workflow.json` |
+| `workflow delete <name> <version>` | Delete workflow | name, version | | `orkes workflow delete my_workflow 1` |
 
-**Flag:** `--force` - Overwrite existing workflow when creating
+**Flags:**
+- `--force` - Overwrite existing workflow when creating
+- `--json` - Output complete JSON instead of table (applies to list command)
+
+**Table Output (workflow list):**
+Columns: NAME, VERSION, DESCRIPTION
 
 ### Execution Commands
 
@@ -81,44 +86,67 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 ### Task Commands
 
-| Command | Description | Required Args | Example |
-|---------|-------------|---------------|---------|
-| `execution task-poll <type>` | Poll for tasks | task type | `orkes execution task-poll my_task --count 5` |
-| `execution task-update` | Update task by ref name | workflow-id, task-ref-name, status | `orkes execution task-update --workflow-id abc --task-ref-name task1 --status COMPLETED` |
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `task list` | List all task definitions | None | `--json` | `orkes task list` |
+| `task get <task_type>` | Get task definition | task type | | `orkes task get my_task` |
+| `task create <file>` | Create task definition | JSON file | | `orkes task create task.json` |
+| `task update <file>` | Update task definition | JSON file | | `orkes task update task.json` |
+| `task delete <task_type>` | Delete task definition | task type | | `orkes task delete my_task` |
+| `execution task-poll <type>` | Poll for tasks | task type | | `orkes execution task-poll my_task --count 5` |
+| `execution task-update` | Update task by ref name | workflow-id, task-ref-name, status | | `orkes execution task-update --workflow-id abc --task-ref-name task1 --status COMPLETED` |
+
+**Flags:**
+- `--json` - Output complete JSON instead of table (applies to list command)
+
+**Table Output (task list):**
+Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETRY COUNT, RESPONSE TIMEOUT (s)
 
 ### Config Commands
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
-| `config save` | Save current configuration | None | `--profile` | `orkes --server http://localhost:8080/api --auth-key key --profile production config save` |
+| `config save` | Interactively save configuration | None | `--profile` | `orkes config save` or `orkes config save --profile production` |
 | `config list` | List all configuration profiles | None | None | `orkes config list` |
 | `config delete [profile]` | Delete configuration file | None | `--profile`, `-y` | `orkes config delete production` or `orkes config delete --profile production -y` |
 
 **Notes:**
-- `config save`: Use `--profile <name>` to save to a named profile (e.g., `config-production.yaml`). Without it, saves to default `config.yaml`.
+- `config save`: Interactive prompts for server URL, server type, and authentication method. Press Enter to keep existing values. Use `--profile <name>` to save to a named profile (e.g., `config-production.yaml`). Without it, saves to default `config.yaml`.
 - `config list`: Shows all profiles. Default config shown as "default", named profiles show as profile name only.
 - `config delete`: Profile can be specified as positional arg or via `--profile` flag. Use `-y` to skip confirmation prompt.
 
 ### Webhook Commands
 
-| Command | Description | Required Args | Example |
-|---------|-------------|---------------|---------|
-| `webhook list` | List webhooks | None | `orkes webhook list` |
-| `webhook get <id>` | Get webhook details | webhook ID | `orkes webhook get webhook-id` |
-| `webhook create` | Create webhook | name, source-platform, verifier | `orkes webhook create --name hook1 --source-platform Custom --verifier HEADER_BASED` |
-| `webhook update <id>` | Update webhook | webhook ID, file | `orkes webhook update id --file webhook.json` |
-| `webhook delete <id>` | Delete webhook | webhook ID | `orkes webhook delete webhook-id` |
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `webhook list` | List webhooks | None | `--json` | `orkes webhook list` |
+| `webhook get <id>` | Get webhook details | webhook ID | | `orkes webhook get webhook-id` |
+| `webhook create` | Create webhook | name, source-platform, verifier | | `orkes webhook create --name hook1 --source-platform Custom --verifier HEADER_BASED` |
+| `webhook update <id>` | Update webhook | webhook ID, file | | `orkes webhook update id --file webhook.json` |
+| `webhook delete <id>` | Delete webhook | webhook ID | | `orkes webhook delete webhook-id` |
+
+**Flags:**
+- `--json` - Output complete JSON instead of table (applies to list command)
+
+**Table Output (webhook list):**
+Columns: NAME, WEBHOOK ID, WORKFLOWS, URL
 
 ### Schedule Commands
 
-| Command | Description | Required Args | Example |
-|---------|-------------|---------------|---------|
-| `schedule list` | List schedules | None | `orkes schedule list` |
-| `schedule get <name>` | Get schedule details | schedule name | `orkes schedule get my_schedule` |
-| `schedule create <file>` | Create schedule | JSON file | `orkes schedule create schedule.json` |
-| `schedule delete <name>` | Delete schedule | schedule name | `orkes schedule delete my_schedule` |
-| `schedule pause <name>` | Pause schedule | schedule name | `orkes schedule pause my_schedule` |
-| `schedule resume <name>` | Resume schedule | schedule name | `orkes schedule resume my_schedule` |
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `schedule list` | List schedules | None | `--json` | `orkes schedule list` |
+| `schedule get <name>` | Get schedule details | schedule name | | `orkes schedule get my_schedule` |
+| `schedule create <file>` | Create schedule | JSON file | | `orkes schedule create schedule.json` |
+| `schedule delete <name>` | Delete schedule | schedule name | | `orkes schedule delete my_schedule` |
+| `schedule pause <name>` | Pause schedule | schedule name | | `orkes schedule pause my_schedule` |
+| `schedule resume <name>` | Resume schedule | schedule name | | `orkes schedule resume my_schedule` |
+
+**Flags:**
+- `--json` - Output complete JSON instead of table (applies to list command)
+
+**Table Output (schedule list):**
+Columns: NAME, WORKFLOW, STATUS, CREATED TIME
 
 ### Other Commands
 
@@ -137,15 +165,22 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 ## Output Format
 
-- **Default:** Human-readable text
+- **Default:** Formatted tables for list commands, human-readable text for other commands
+- **Table format:** Tab-separated columns with headers (for `list` commands)
+- **JSON format:** Available via `--json` flag for all `list` commands
 - **Workflow ID extraction:** UUIDs in format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (36 characters with hyphens)
 - **Status output:** Single line with status value (e.g., `RUNNING`, `COMPLETED`)
-- **List output:** One item per line (workflow names, IDs, etc.)
-- **JSON output:** Not currently available (use text parsing)
+
+**List Commands with Table/JSON Output:**
+- `workflow list` - Table with NAME, VERSION, DESCRIPTION (or `--json` for complete data)
+- `task list` - Table with NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETRY COUNT, RESPONSE TIMEOUT (s) (or `--json`)
+- `schedule list` - Table with NAME, WORKFLOW, STATUS, CREATED TIME (or `--json`)
+- `webhook list` - Table with NAME, WEBHOOK ID, WORKFLOWS, URL (or `--json`)
 
 **Important:** To parse output reliably, redirect stderr to `/dev/null` to suppress update notifications and warnings:
 ```bash
 orkes workflow list 2>/dev/null
+orkes task list --json 2>/dev/null
 WORKFLOW_ID=$(orkes execution start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 ```
 
