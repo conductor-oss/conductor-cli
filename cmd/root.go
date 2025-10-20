@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
@@ -13,15 +12,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 	"io"
 	stdlog "log"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 var (
@@ -133,237 +128,11 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func interactiveSaveConfig(profileName string) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	configDir := filepath.Join(home, ".conductor-cli")
-
-	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return err
-	}
-
-	// Determine config file name
-	configFileName := "config.yaml"
-	if profileName != "" {
-		configFileName = fmt.Sprintf("config-%s.yaml", profileName)
-	}
-
-	configPath := filepath.Join(configDir, configFileName)
-
-	// Load existing config if it exists
-	existingConfig := make(map[string]string)
-	if data, err := os.ReadFile(configPath); err == nil {
-		var rawConfig map[string]interface{}
-		if err := yaml.Unmarshal(data, &rawConfig); err == nil {
-			for k, v := range rawConfig {
-				if str, ok := v.(string); ok {
-					existingConfig[k] = str
-				}
-			}
-		}
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-
-	// Prompt for server URL
-	serverDefault := existingConfig["server"]
-	if serverDefault == "" {
-		serverDefault = "http://localhost:8080/api"
-	}
-	fmt.Fprintf(os.Stderr, "Server URL [%s]: ", serverDefault)
-	serverInput, _ := reader.ReadString('\n')
-	serverInput = strings.TrimSpace(serverInput)
-	server := serverDefault
-	if serverInput != "" {
-		server = serverInput
-	}
-
-	// Prompt for server type
-	serverTypeDefault := existingConfig["server-type"]
-	if serverTypeDefault == "" {
-		serverTypeDefault = "OSS"
-	}
-	fmt.Fprintf(os.Stderr, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
-	serverTypeInput, _ := reader.ReadString('\n')
-	serverTypeInput = strings.TrimSpace(serverTypeInput)
-	serverType := serverTypeDefault
-	if serverTypeInput != "" {
-		serverType = serverTypeInput
-	}
-
-	// Prompt for auth method
-	fmt.Fprintf(os.Stderr, "\nAuthentication method:\n")
-	fmt.Fprintf(os.Stderr, "  1. API Key + Secret\n")
-	fmt.Fprintf(os.Stderr, "  2. Auth Token\n")
-
-	// Determine default auth method based on existing config
-	defaultAuthMethod := "1"
-	if existingConfig["auth-token"] != "" {
-		defaultAuthMethod = "2"
-	}
-
-	fmt.Fprintf(os.Stderr, "Choose [%s]: ", defaultAuthMethod)
-	authMethodInput, _ := reader.ReadString('\n')
-	authMethodInput = strings.TrimSpace(authMethodInput)
-	authMethod := defaultAuthMethod
-	if authMethodInput != "" {
-		authMethod = authMethodInput
-	}
-
-	var authKey, authSecret, authToken string
-
-	if authMethod == "1" {
-		// API Key + Secret
-		authKeyDefault := existingConfig["auth-key"]
-		if authKeyDefault != "" {
-			authKeyDefault = "****" // Mask existing key
-		}
-		fmt.Fprintf(os.Stderr, "API Key [%s]: ", authKeyDefault)
-		authKeyInput, _ := reader.ReadString('\n')
-		authKeyInput = strings.TrimSpace(authKeyInput)
-		if authKeyInput != "" {
-			authKey = authKeyInput
-		} else if existingConfig["auth-key"] != "" {
-			authKey = existingConfig["auth-key"]
-		}
-
-		authSecretDefault := existingConfig["auth-secret"]
-		if authSecretDefault != "" {
-			authSecretDefault = "****" // Mask existing secret
-		}
-		fmt.Fprintf(os.Stderr, "API Secret [%s]: ", authSecretDefault)
-		authSecretInput, _ := reader.ReadString('\n')
-		authSecretInput = strings.TrimSpace(authSecretInput)
-		if authSecretInput != "" {
-			authSecret = authSecretInput
-		} else if existingConfig["auth-secret"] != "" {
-			authSecret = existingConfig["auth-secret"]
-		}
-	} else {
-		// Auth Token
-		authTokenDefault := existingConfig["auth-token"]
-		if authTokenDefault != "" {
-			authTokenDefault = "****" // Mask existing token
-		}
-		fmt.Fprintf(os.Stderr, "Auth Token [%s]: ", authTokenDefault)
-		authTokenInput, _ := reader.ReadString('\n')
-		authTokenInput = strings.TrimSpace(authTokenInput)
-		if authTokenInput != "" {
-			authToken = authTokenInput
-		} else if existingConfig["auth-token"] != "" {
-			authToken = existingConfig["auth-token"]
-		}
-	}
-
-	// Build config data
-	configData := make(map[string]interface{})
-
-	if server != "" && server != "http://localhost:8080/api" {
-		configData["server"] = server
-	}
-	if serverType != "" && serverType != "OSS" {
-		configData["server-type"] = serverType
-	}
-	if authKey != "" {
-		configData["auth-key"] = authKey
-	}
-	if authSecret != "" {
-		configData["auth-secret"] = authSecret
-	}
-	if authToken != "" {
-		configData["auth-token"] = authToken
-	}
-
-	// Marshal to YAML
-	data, err := yaml.Marshal(configData)
-	if err != nil {
-		return err
-	}
-
-	// Write to file
-	return os.WriteFile(configPath, data, 0600) // 0600 for security (credentials)
-}
-
-func saveConfigFile(profileName string) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	configDir := filepath.Join(home, ".conductor-cli")
-
-	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return err
-	}
-
-	// Determine config file name
-	configFileName := "config.yaml"
-	if profileName != "" {
-		configFileName = fmt.Sprintf("config-%s.yaml", profileName)
-	}
-
-	configPath := filepath.Join(configDir, configFileName)
-
-	// Build config data from current viper settings
-	configData := make(map[string]interface{})
-
-	if server := viper.GetString("server"); server != "" && server != "http://localhost:8080/api" {
-		configData["server"] = server
-	}
-	if authKey := viper.GetString("auth-key"); authKey != "" {
-		configData["auth-key"] = authKey
-	}
-	if authSecret := viper.GetString("auth-secret"); authSecret != "" {
-		configData["auth-secret"] = authSecret
-	}
-	if authToken := viper.GetString("auth-token"); authToken != "" {
-		configData["auth-token"] = authToken
-	}
-	if srvType := viper.GetString("server-type"); srvType != "" && srvType != "OSS" {
-		configData["server-type"] = srvType
-	}
-
-	// Marshal to YAML
-	data, err := yaml.Marshal(configData)
-	if err != nil {
-		return err
-	}
-
-	// Write to file
-	return os.WriteFile(configPath, data, 0600) // 0600 for security (credentials)
-}
-
 func Execute(ctx context.Context) {
 	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func getHttpClient() *http.Client {
-	baseDialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}
-	netTransport := &http.Transport{
-		DialContext:         baseDialer.DialContext,
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 100,
-		DisableCompression:  false,
-	}
-	client := http.Client{
-		Transport:     netTransport,
-		CheckRedirect: nil,
-		Jar:           nil,
-		Timeout:       30 * time.Second,
-	}
-	return &client
-
 }
 
 func initConfig() {
@@ -424,7 +193,7 @@ func initConfig() {
 
 	if err := viper.ReadInConfig(); err == nil {
 		if viper.GetBool("verbose") {
-			fmt.Fprintf(os.Stderr, "Using config file: %s\n", viper.ConfigFileUsed())
+			fmt.Fprintf(os.Stdout, "Using config file: %s\n", viper.ConfigFileUsed())
 		}
 	}
 }

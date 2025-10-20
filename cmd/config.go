@@ -2,12 +2,17 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
+	"golang.org/x/term"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 var configCmd = &cobra.Command{
@@ -44,7 +49,7 @@ Examples:
 			configFileName = fmt.Sprintf("config-%s.yaml", profileName)
 		}
 
-		fmt.Fprintf(os.Stderr, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
+		fmt.Fprintf(os.Stdout, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
 		return nil
 	},
 	SilenceUsage: true,
@@ -166,14 +171,14 @@ Examples:
 		// Ask for confirmation unless -y flag is set
 		if !yes {
 			reader := bufio.NewReader(os.Stdin)
-			fmt.Fprintf(os.Stderr, "Are you sure you want to delete %s? [y/N]: ", configPath)
+			fmt.Fprintf(os.Stdout, "Are you sure you want to delete %s? [y/N]: ", configPath)
 			response, err := reader.ReadString('\n')
 			if err != nil {
 				return err
 			}
 			response = strings.ToLower(strings.TrimSpace(response))
 			if response != "y" && response != "yes" {
-				fmt.Fprintf(os.Stderr, "Deletion cancelled\n")
+				fmt.Fprintf(os.Stdout, "Deletion cancelled\n")
 				return nil
 			}
 		}
@@ -183,10 +188,207 @@ Examples:
 			return fmt.Errorf("failed to delete config file: %w", err)
 		}
 
-		fmt.Fprintf(os.Stderr, "✓ Configuration deleted: %s\n", configPath)
+		fmt.Fprintf(os.Stdout, "✓ Configuration deleted: %s\n", configPath)
 		return nil
 	},
 	SilenceUsage: true,
+}
+
+func interactiveSaveConfig(profileName string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	configDir := filepath.Join(home, ".conductor-cli")
+
+	// Create config directory if it doesn't exist
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+
+	// Determine config file name
+	configFileName := "config.yaml"
+	if profileName != "" {
+		configFileName = fmt.Sprintf("config-%s.yaml", profileName)
+	}
+
+	configPath := filepath.Join(configDir, configFileName)
+
+	// Load existing config if it exists
+	existingConfig := make(map[string]string)
+	if data, err := os.ReadFile(configPath); err == nil {
+		var rawConfig map[string]interface{}
+		if err := yaml.Unmarshal(data, &rawConfig); err == nil {
+			for k, v := range rawConfig {
+				if str, ok := v.(string); ok {
+					existingConfig[k] = str
+				}
+			}
+		}
+	}
+
+	reader := bufio.NewReader(os.Stdin)
+
+	// Prompt for server URL
+	serverDefault := existingConfig["server"]
+	if serverDefault == "" {
+		serverDefault = "http://localhost:8080/api"
+	}
+	fmt.Fprintf(os.Stdout, "Server URL [%s]: ", serverDefault)
+	serverInput, _ := reader.ReadString('\n')
+	serverInput = strings.TrimSpace(serverInput)
+	server := serverDefault
+	if serverInput != "" {
+		server = serverInput
+	}
+
+	// Prompt for server type
+	serverTypeDefault := existingConfig["server-type"]
+	if serverTypeDefault == "" {
+		serverTypeDefault = "OSS"
+	}
+	fmt.Fprintf(os.Stdout, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
+	serverTypeInput, _ := reader.ReadString('\n')
+	serverTypeInput = strings.TrimSpace(serverTypeInput)
+	serverType := serverTypeDefault
+	if serverTypeInput != "" {
+		serverType = serverTypeInput
+	}
+
+	// Prompt for auth method
+	fmt.Fprintf(os.Stdout, "\nAuthentication method:\n")
+	fmt.Fprintf(os.Stdout, "  1. API Key + Secret\n")
+	fmt.Fprintf(os.Stdout, "  2. Auth Token\n")
+
+	// Determine default auth method based on existing config
+	defaultAuthMethod := "1"
+	if existingConfig["auth-token"] != "" {
+		defaultAuthMethod = "2"
+	}
+
+	fmt.Fprintf(os.Stdout, "Choose [%s]: ", defaultAuthMethod)
+	authMethodInput, _ := reader.ReadString('\n')
+	authMethodInput = strings.TrimSpace(authMethodInput)
+	authMethod := defaultAuthMethod
+	if authMethodInput != "" {
+		authMethod = authMethodInput
+	}
+
+	var authKey, authSecret, authToken string
+
+	if authMethod == "1" {
+		// API Key + Secret
+		authKeyDefault := existingConfig["auth-key"]
+		if authKeyDefault != "" {
+			authKeyDefault = "****" // Mask existing key
+		}
+		fmt.Fprintf(os.Stdout, "API Key [%s]: ", authKeyDefault)
+		authKeyInput, _ := reader.ReadString('\n')
+		authKeyInput = strings.TrimSpace(authKeyInput)
+		if authKeyInput != "" {
+			authKey = authKeyInput
+		} else if existingConfig["auth-key"] != "" {
+			authKey = existingConfig["auth-key"]
+		}
+
+		authSecretDefault := existingConfig["auth-secret"]
+		if authSecretDefault != "" {
+			authSecretDefault = "****" // Mask existing secret
+		}
+		fmt.Fprintf(os.Stdout, "API Secret [%s]: ", authSecretDefault)
+		authSecretInput, _ := reader.ReadString('\n')
+		authSecretInput = strings.TrimSpace(authSecretInput)
+		if authSecretInput != "" {
+			authSecret = authSecretInput
+		} else if existingConfig["auth-secret"] != "" {
+			authSecret = existingConfig["auth-secret"]
+		}
+	} else {
+		// Auth Token
+		authTokenDefault := existingConfig["auth-token"]
+		if authTokenDefault != "" {
+			authTokenDefault = "****" // Mask existing token
+		}
+		fmt.Fprintf(os.Stdout, "Auth Token [%s]: ", authTokenDefault)
+		authTokenInput, _ := ReadLineRaw(8192)
+		fmt.Println()
+		authTokenInput = strings.TrimSpace(authTokenInput)
+		if authTokenInput != "" {
+			authToken = authTokenInput
+		} else if existingConfig["auth-token"] != "" {
+			authToken = existingConfig["auth-token"]
+		}
+	}
+
+	// Build config data
+	configData := make(map[string]interface{})
+	configData["server"] = server
+	configData["server-type"] = serverType
+
+	if authKey != "" {
+		configData["auth-key"] = authKey
+	}
+	if authSecret != "" {
+		configData["auth-secret"] = authSecret
+	}
+	if authToken != "" {
+		configData["auth-token"] = authToken
+	}
+
+	data, err := yaml.Marshal(configData)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, data, 0600) // 0600 for security (credentials)
+}
+
+var ErrTooLong = errors.New("input exceeds limit")
+
+// ReadLineRaw reads from stdin in raw mode until a newline is entered
+// (accepts both '\n' and '\r'). It supports arbitrarily long lines up to `limit`.
+// The terminal state is always restored before returning.
+func ReadLineRaw(limit int) (string, error) {
+	fd := int(os.Stdin.Fd())
+
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return "", err
+	}
+	defer term.Restore(fd, oldState)
+
+	var out bytes.Buffer
+	tmp := make([]byte, 4096)
+
+	for {
+		n, rerr := os.Stdin.Read(tmp)
+		if n > 0 {
+			for _, c := range tmp[:n] {
+				// newline pressed in raw mode is usually '\r', but handle both
+				if c == '\n' || c == '\r' {
+					return out.String(), nil
+				}
+				if out.Len() >= limit {
+					// Drain until newline so the next read starts clean
+					// (best-effort; ignore errors while draining)
+					for c != '\n' && c != '\r' {
+						var b [1]byte
+						_, _ = os.Stdin.Read(b[:])
+						c = b[0]
+					}
+					return "", ErrTooLong
+				}
+				out.WriteByte(c)
+			}
+		}
+		if rerr != nil {
+			if rerr == io.EOF {
+				return out.String(), nil
+			}
+			return "", rerr
+		}
+	}
 }
 
 func init() {
