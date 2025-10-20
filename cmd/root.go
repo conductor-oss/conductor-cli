@@ -262,10 +262,12 @@ func interactiveSaveConfig(profileName string) error {
 	// Build config data
 	configData := make(map[string]interface{})
 
-	if server != "" && server != "http://localhost:8080/api" {
+	// Always write server URL
+	if server != "" {
 		configData["server"] = server
 	}
-	if serverType != "" && serverType != "OSS" {
+	// Always write server type
+	if serverType != "" {
 		configData["server-type"] = serverType
 	}
 	if authKey != "" {
