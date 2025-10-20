@@ -132,7 +132,7 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 
 	// Print as table
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tWORKFLOW\tSTATUS\tCREATED TIME")
+	fmt.Fprintln(w, "NAME\tCRON\tWORKFLOW\tSTATUS\tCREATED TIME")
 	for _, schedule := range schedules {
 		status := "active"
 		if schedule.Paused {
@@ -147,8 +147,9 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 			createdTime = t.Format("2006-01-02 15:04:05")
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			schedule.Name,
+			schedule.CronExpression,
 			workflowName,
 			status,
 			createdTime,
