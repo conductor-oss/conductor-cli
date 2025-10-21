@@ -252,8 +252,34 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if jsonOutput {
+		data, err := json.MarshalIndent(results, "", "   ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Table output
+	fmt.Printf("%-25s %-38s %-30s %-25s %-15s\n", "START TIME", "WORKFLOW ID", "WORKFLOW NAME", "END TIME", "STATUS")
 	for _, item := range results.Results {
-		fmt.Println(item.WorkflowId)
+		startTime := item.StartTime
+		if startTime == "" {
+			startTime = "-"
+		}
+		endTime := item.EndTime
+		if endTime == "" {
+			endTime = "-"
+		}
+		fmt.Printf("%-25s %-38s %-30s %-25s %-15s\n",
+			startTime,
+			item.WorkflowId,
+			item.WorkflowType,
+			endTime,
+			item.Status,
+		)
 	}
 
 	return nil
@@ -760,6 +786,7 @@ func init() {
 	searchExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	searchExecutionCmd.Flags().String("start-time-after", "", "Filter executions started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchExecutionCmd.Flags().String("start-time-before", "", "Filter executions started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
+	searchExecutionCmd.Flags().Bool("json", false, "Output complete JSON instead of table")
 
 	startExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	startExecutionCmd.Flags().StringP("input", "i", "", "Input json")
