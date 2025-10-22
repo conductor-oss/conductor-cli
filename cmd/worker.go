@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"crypto/sha1"
@@ -12,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -28,17 +30,50 @@ import (
 var (
 	workerCmd = &cobra.Command{
 		Use:   "worker",
-		Short: "Worker commands (EXPERIMENTAL)",
-		Long:  "⚠️  EXPERIMENTAL FEATURE - Worker features are experimental and may change in future releases.\n\nManage and run workers for task processing.",
+		Short: "Task worker management",
+		Long:  "Commands for managing task workers",
 	}
 
-	workerRunCmd = &cobra.Command{
-		Use:          "run <js_file>",
-		Short:        "Run a JavaScript worker that polls and processes tasks",
-		Long:         "Run a JavaScript worker that continuously polls for tasks of a specific type and executes the provided JavaScript file for each task.",
-		RunE:         runWorker,
+	workerJsCmd = &cobra.Command{
+		Use:          "js <js_file>",
+		Short:        "Run a JavaScript worker that polls and processes tasks (EXPERIMENTAL)",
+		Long:         "⚠️  EXPERIMENTAL FEATURE - Run a JavaScript worker that continuously polls for tasks of a specific type and executes the provided JavaScript file for each task.",
+		RunE:         runJsWorker,
 		SilenceUsage: true,
-		Example:      "orkes worker run --type my_task worker.js",
+		Example:      "orkes worker js --type my_task worker.js",
+	}
+
+	workerExecCmd = &cobra.Command{
+		Use:   "exec <command> [args...]",
+		Short: "Poll and execute tasks using an external command",
+		Long: `Continuously poll for tasks and execute them using an external command.
+
+The worker runs in continuous mode, polling for tasks and executing them in
+parallel goroutines (similar to JavaScript workers).
+
+The task JSON is passed to the command via stdin. The command should read the task
+from stdin and write a result JSON to stdout.
+
+Environment variables set for the worker:
+  TASK_TYPE      - Type of the task
+  TASK_ID        - Task ID
+  WORKFLOW_ID    - Workflow ID
+  EXECUTION_ID   - Workflow execution ID (same as WORKFLOW_ID)
+
+Expected stdout format:
+  {
+    "status": "COMPLETED|FAILED|IN_PROGRESS",
+    "output": {"key": "value"},
+    "logs": ["log line 1", "log line 2"],
+    "reason": "failure reason (optional)"
+  }
+
+Exit codes:
+  0: Task handled successfully (status determines success/failure)
+  non-zero: Failure (task marked as FAILED)`,
+		RunE:         execWorker,
+		SilenceUsage: true,
+		Example:      "worker exec --type greet_task python worker.py\nworker exec --type greet_task python worker.py --count 5\nworker exec --type greet_task ./worker.sh --verbose",
 	}
 )
 
@@ -47,7 +82,7 @@ type TaskResult struct {
 	Body   map[string]interface{} `json:"body"`
 }
 
-func runWorker(cmd *cobra.Command, args []string) error {
+func runJsWorker(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("JavaScript file path is required")
 	}
@@ -361,14 +396,241 @@ func httpRequest(method, url string, headers map[string]interface{}, body string
 	}
 }
 
-func init() {
-	workerRunCmd.Flags().String("type", "", "Task type to poll for (required)")
-	workerRunCmd.MarkFlagRequired("type")
-	workerRunCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
-	workerRunCmd.Flags().String("worker-id", "", "Worker ID")
-	workerRunCmd.Flags().String("domain", "", "Domain")
-	workerRunCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
+// WorkerResult represents the expected output from a worker command
+type WorkerResult struct {
+	Status string                 `json:"status"` // COMPLETED | FAILED | IN_PROGRESS
+	Output map[string]interface{} `json:"output,omitempty"`
+	Logs   []string               `json:"logs,omitempty"`
+	Reason string                 `json:"reason,omitempty"`
+}
 
-	workerCmd.AddCommand(workerRunCmd)
+func execWorker(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 {
+		return cmd.Usage()
+	}
+
+	taskType, _ := cmd.Flags().GetString("type")
+	if taskType == "" {
+		return fmt.Errorf("--type flag is required")
+	}
+
+	workerCmd := args[0]
+	workerArgs := args[1:]
+
+	workerId, _ := cmd.Flags().GetString("worker-id")
+	domain, _ := cmd.Flags().GetString("domain")
+	pollTimeout, _ := cmd.Flags().GetInt32("poll-timeout")
+	execTimeout, _ := cmd.Flags().GetInt32("exec-timeout")
+	count, _ := cmd.Flags().GetInt32("count")
+
+	taskClient := internal.GetTaskClient()
+
+	// Continuous mode: poll and process in goroutines
+	fmt.Printf("Starting worker for task type: %s\n", taskType)
+	fmt.Printf("Command: %s %v\n", workerCmd, workerArgs)
+	if workerId != "" {
+		fmt.Printf("Worker ID: %s\n", workerId)
+	}
+
+	for {
+		opts := &client.TaskResourceApiBatchPollOpts{}
+		if workerId != "" {
+			opts.Workerid = optional.NewString(workerId)
+		}
+		if domain != "" {
+			opts.Domain = optional.NewString(domain)
+		}
+		if count > 0 {
+			opts.Count = optional.NewInt32(count)
+		}
+		if pollTimeout > 0 {
+			opts.Timeout = optional.NewInt32(pollTimeout)
+		}
+
+		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
+		if err != nil {
+			log.Errorf("Error polling tasks: %v", err)
+			continue
+		}
+
+		if len(tasks) == 0 {
+			log.Debug("No tasks available")
+			continue
+		}
+
+		log.Infof("Polled %d task(s)", len(tasks))
+
+		// Process tasks in parallel goroutines
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			wg.Add(1)
+			go func(t model.Task) {
+				defer wg.Done()
+				executeExternalWorker(t, workerCmd, workerArgs, workerId, domain, execTimeout, taskClient)
+			}(task)
+		}
+
+		wg.Wait()
+	}
+}
+
+func executeExternalWorker(task model.Task, workerCmd string, workerArgs []string, workerId, domain string, execTimeout int32, taskClient *client.TaskResourceApiService) {
+	log.Infof("Processing task: %s (workflow: %s)", task.TaskId, task.WorkflowInstanceId)
+
+	// Marshal task to JSON for stdin
+	taskJSON, err := json.Marshal(task)
+	if err != nil {
+		log.Errorf("Error marshaling task: %v", err)
+		updateExecTaskFailed(taskClient, task, workerId, fmt.Sprintf("error marshaling task: %v", err))
+		return
+	}
+
+	// Execute worker command
+	ctx := context.Background()
+	if execTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(execTimeout)*time.Second)
+		defer cancel()
+	}
+
+	execCmd := exec.CommandContext(ctx, workerCmd, workerArgs...)
+	execCmd.Env = append(execCmd.Environ(),
+		"TASK_TYPE="+task.TaskType,
+		"TASK_ID="+task.TaskId,
+		"WORKFLOW_ID="+task.WorkflowInstanceId,
+		"EXECUTION_ID="+task.WorkflowInstanceId,
+	)
+	if domain != "" {
+		execCmd.Env = append(execCmd.Env, "POLL_DOMAIN="+domain)
+	}
+
+	execCmd.Stdin = bytes.NewReader(taskJSON)
+
+	var stdout, stderr bytes.Buffer
+	execCmd.Stdout = &stdout
+	execCmd.Stderr = &stderr
+
+	execErr := execCmd.Run()
+
+	// Parse worker result
+	var result WorkerResult
+	if execErr != nil {
+		// Worker failed with non-zero exit
+		result = WorkerResult{
+			Status: "FAILED",
+			Reason: fmt.Sprintf("worker exec failed: %v; stderr=%s", execErr, stderr.String()),
+			Logs:   []string{stderr.String()},
+		}
+	} else {
+		// Parse stdout
+		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+			result = WorkerResult{
+				Status: "FAILED",
+				Reason: fmt.Sprintf("invalid worker stdout JSON: %v; raw=%s", err, stdout.String()),
+				Logs:   []string{stdout.String()},
+			}
+		}
+	}
+
+	// Validate status
+	switch result.Status {
+	case "COMPLETED", "FAILED", "IN_PROGRESS":
+		// Valid status
+	default:
+		result.Status = "FAILED"
+		result.Reason = fmt.Sprintf("invalid status from worker: %s", result.Status)
+	}
+
+	// Convert status string to TaskResultStatus
+	var status model.TaskResultStatus
+	switch result.Status {
+	case "COMPLETED":
+		status = model.CompletedTask
+	case "FAILED":
+		status = model.FailedTask
+	case "IN_PROGRESS":
+		status = model.InProgressTask
+	default:
+		status = model.FailedTask
+	}
+
+	// Update task with result
+	taskResult := model.TaskResult{
+		TaskId:             task.TaskId,
+		WorkflowInstanceId: task.WorkflowInstanceId,
+		Status:             status,
+	}
+
+	if result.Output != nil {
+		taskResult.OutputData = result.Output
+	}
+
+	if len(result.Logs) > 0 {
+		logs := make([]model.TaskExecLog, len(result.Logs))
+		for i, logLine := range result.Logs {
+			logs[i] = model.TaskExecLog{
+				Log: logLine,
+			}
+		}
+		taskResult.Logs = logs
+	}
+
+	if result.Reason != "" {
+		taskResult.ReasonForIncompletion = result.Reason
+	}
+
+	if workerId != "" {
+		taskResult.WorkerId = workerId
+	}
+
+	// Update task
+	_, _, err = taskClient.UpdateTask(context.Background(), &taskResult)
+	if err != nil {
+		log.Errorf("Error updating task %s: %v", task.TaskId, err)
+		return
+	}
+
+	log.Infof("Task %s completed with status: %s", task.TaskId, result.Status)
+}
+
+func updateExecTaskFailed(taskClient *client.TaskResourceApiService, task model.Task, workerId, reason string) {
+	taskResult := model.TaskResult{
+		TaskId:                  task.TaskId,
+		WorkflowInstanceId:      task.WorkflowInstanceId,
+		Status:                  model.FailedTask,
+		ReasonForIncompletion:   reason,
+		OutputData:              map[string]interface{}{"error": reason},
+	}
+
+	if workerId != "" {
+		taskResult.WorkerId = workerId
+	}
+
+	_, _, err := taskClient.UpdateTask(context.Background(), &taskResult)
+	if err != nil {
+		log.Errorf("Error updating task %s as failed: %v", task.TaskId, err)
+	}
+}
+
+func init() {
+	// Worker JS flags
+	workerJsCmd.Flags().String("type", "", "Task type to poll for (required)")
+	workerJsCmd.MarkFlagRequired("type")
+	workerJsCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
+	workerJsCmd.Flags().String("worker-id", "", "Worker ID")
+	workerJsCmd.Flags().String("domain", "", "Domain")
+	workerJsCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
+
+	// Worker exec flags
+	workerExecCmd.Flags().String("type", "", "Task type to poll for (required)")
+	workerExecCmd.MarkFlagRequired("type")
+	workerExecCmd.Flags().String("worker-id", "", "Worker ID")
+	workerExecCmd.Flags().String("domain", "", "Domain")
+	workerExecCmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
+	workerExecCmd.Flags().Int32("exec-timeout", 0, "Execution timeout in seconds (0 = no timeout)")
+	workerExecCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
+
+	workerCmd.AddCommand(workerJsCmd)
+	workerCmd.AddCommand(workerExecCmd)
 	rootCmd.AddCommand(workerCmd)
 }
