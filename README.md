@@ -405,6 +405,43 @@ orkes workflow get "<workflow name with spaces>"
 orkes workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
 ```
 
+## Task Workers
+
+⚠️ **EXPERIMENTAL FEATURES**
+
+The CLI supports two types of task workers for processing Conductor tasks:
+
+### Generic Workers (Any Language)
+
+Execute tasks using external programs written in **any language** (Python, Node.js, Go, Rust, shell scripts, etc.). The CLI polls for tasks and passes them to your worker via stdin/stdout.
+
+**Best for:** Complex logic, heavy dependencies, full language ecosystem access
+
+👉 **[Complete Generic Worker Documentation →](WORKER_EXEC.md)**
+
+**Quick example:**
+```bash
+# Run a Python worker (single execution)
+orkes worker exec greet_task python3 worker.py
+
+# Run continuously with parallel execution
+orkes worker exec greet_task python3 worker.py --continuous
+```
+
+### JavaScript Workers (Built-in)
+
+Execute tasks using **JavaScript** scripts with built-in utilities (HTTP, crypto, string functions). No external dependencies needed.
+
+**Best for:** Lightweight tasks, quick scripts, HTTP integrations
+
+👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
+
+**Quick example:**
+```bash
+# Run a JavaScript worker
+orkes worker js --type greet_task worker.js
+```
+
 ## Exit Codes
 
 The CLI uses standard exit codes for error handling:
