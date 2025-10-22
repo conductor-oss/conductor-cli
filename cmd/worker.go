@@ -44,7 +44,7 @@ var (
 	}
 
 	workerExecCmd = &cobra.Command{
-		Use:   "exec <task_type> <command> [args...]",
+		Use:   "exec <command> [args...]",
 		Short: "Poll and execute tasks using an external command",
 		Long: `Continuously poll for tasks and execute them using an external command.
 
@@ -73,7 +73,7 @@ Exit codes:
   non-zero: Failure (task marked as FAILED)`,
 		RunE:         execWorker,
 		SilenceUsage: true,
-		Example:      "worker exec greet_task python worker.py\nworker exec greet_task python worker.py --count 5\nworker exec greet_task ./worker.sh --verbose",
+		Example:      "worker exec --type greet_task python worker.py\nworker exec --type greet_task python worker.py --count 5\nworker exec --type greet_task ./worker.sh --verbose",
 	}
 )
 
@@ -405,13 +405,17 @@ type WorkerResult struct {
 }
 
 func execWorker(cmd *cobra.Command, args []string) error {
-	if len(args) < 2 {
+	if len(args) < 1 {
 		return cmd.Usage()
 	}
 
-	taskType := args[0]
-	workerCmd := args[1]
-	workerArgs := args[2:]
+	taskType, _ := cmd.Flags().GetString("type")
+	if taskType == "" {
+		return fmt.Errorf("--type flag is required")
+	}
+
+	workerCmd := args[0]
+	workerArgs := args[1:]
 
 	workerId, _ := cmd.Flags().GetString("worker-id")
 	domain, _ := cmd.Flags().GetString("domain")
@@ -618,6 +622,8 @@ func init() {
 	workerJsCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
 
 	// Worker exec flags
+	workerExecCmd.Flags().String("type", "", "Task type to poll for (required)")
+	workerExecCmd.MarkFlagRequired("type")
 	workerExecCmd.Flags().String("worker-id", "", "Worker ID")
 	workerExecCmd.Flags().String("domain", "", "Domain")
 	workerExecCmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")

@@ -16,10 +16,11 @@ The `worker exec` command continuously polls for tasks and executes them in para
 ## Usage
 
 ```bash
-orkes worker exec <task_type> <command> [args...]
+orkes worker exec --type <task_type> <command> [args...]
 ```
 
 **Flags:**
+- `--type`: Task type to poll for (required)
 - `--worker-id`: Worker identifier
 - `--domain`: Poll domain
 - `--poll-timeout`: Poll timeout in milliseconds (default: 100)
@@ -92,16 +93,16 @@ Run the worker:
 
 ```bash
 # Start worker for 'greet_task'
-orkes worker exec greet_task python3 worker.py
+orkes worker exec --type greet_task python3 worker.py
 
 # Poll multiple tasks per batch (poll 5 tasks at a time)
-orkes worker exec greet_task python3 worker.py --count 5
+orkes worker exec --type greet_task python3 worker.py --count 5
 
 # With worker ID and domain
-orkes worker exec greet_task python3 worker.py --worker-id worker-1 --domain production
+orkes worker exec --type greet_task python3 worker.py --worker-id worker-1 --domain production
 
 # With execution timeout (30 seconds per task)
-orkes worker exec greet_task python3 worker.py --exec-timeout 30
+orkes worker exec --type greet_task python3 worker.py --exec-timeout 30
 ```
 
 ## Example: Shell Script Worker
@@ -142,7 +143,7 @@ The worker automatically runs in continuous mode:
 
 ```bash
 # Poll 10 tasks at a time and process them in parallel
-orkes worker exec greet_task python3 worker.py --count 10
+orkes worker exec --type greet_task python3 worker.py --count 10
 ```
 
 ## Error Handling
