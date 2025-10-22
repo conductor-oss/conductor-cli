@@ -421,11 +421,11 @@ Execute tasks using external programs written in **any language** (Python, Node.
 
 **Quick example:**
 ```bash
-# Run a Python worker (single execution)
+# Run a Python worker (continuous polling with parallel execution)
 orkes worker exec greet_task python3 worker.py
 
-# Run continuously with parallel execution
-orkes worker exec greet_task python3 worker.py --continuous
+# Poll multiple tasks per batch for higher throughput
+orkes worker exec greet_task python3 worker.py --count 5
 ```
 
 ### JavaScript Workers (Built-in)

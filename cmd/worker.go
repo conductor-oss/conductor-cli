@@ -46,13 +46,13 @@ var (
 	workerExecCmd = &cobra.Command{
 		Use:   "exec <task_type> <command> [args...]",
 		Short: "Poll and execute tasks using an external command",
-		Long: `Poll for tasks and execute them using an external command.
+		Long: `Continuously poll for tasks and execute them using an external command.
+
+The worker runs in continuous mode, polling for tasks and executing them in
+parallel goroutines (similar to JavaScript workers).
 
 The task JSON is passed to the command via stdin. The command should read the task
 from stdin and write a result JSON to stdout.
-
-With --continuous flag, the worker runs in continuous mode, polling for tasks and
-executing them in parallel goroutines (similar to JavaScript workers).
 
 Environment variables set for the worker:
   TASK_TYPE      - Type of the task
@@ -73,7 +73,7 @@ Exit codes:
   non-zero: Failure (task marked as FAILED)`,
 		RunE:         execWorker,
 		SilenceUsage: true,
-		Example:      "worker exec greet_task python worker.py\nworker exec greet_task python worker.py --continuous\nworker exec greet_task ./worker.sh --verbose",
+		Example:      "worker exec greet_task python worker.py\nworker exec greet_task python worker.py --count 5\nworker exec greet_task ./worker.sh --verbose",
 	}
 )
 
@@ -417,88 +417,57 @@ func execWorker(cmd *cobra.Command, args []string) error {
 	domain, _ := cmd.Flags().GetString("domain")
 	pollTimeout, _ := cmd.Flags().GetInt32("poll-timeout")
 	execTimeout, _ := cmd.Flags().GetInt32("exec-timeout")
-	continuous, _ := cmd.Flags().GetBool("continuous")
 	count, _ := cmd.Flags().GetInt32("count")
 
 	taskClient := internal.GetTaskClient()
 
-	if continuous {
-		// Continuous mode: poll and process in goroutines
-		fmt.Printf("Starting continuous worker for task type: %s\n", taskType)
-		fmt.Printf("Command: %s %v\n", workerCmd, workerArgs)
-		if workerId != "" {
-			fmt.Printf("Worker ID: %s\n", workerId)
-		}
-
-		for {
-			opts := &client.TaskResourceApiBatchPollOpts{}
-			if workerId != "" {
-				opts.Workerid = optional.NewString(workerId)
-			}
-			if domain != "" {
-				opts.Domain = optional.NewString(domain)
-			}
-			if count > 0 {
-				opts.Count = optional.NewInt32(count)
-			}
-			if pollTimeout > 0 {
-				opts.Timeout = optional.NewInt32(pollTimeout)
-			}
-
-			tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
-			if err != nil {
-				log.Errorf("Error polling tasks: %v", err)
-				continue
-			}
-
-			if len(tasks) == 0 {
-				log.Debug("No tasks available")
-				continue
-			}
-
-			log.Infof("Polled %d task(s)", len(tasks))
-
-			// Process tasks in parallel goroutines
-			var wg sync.WaitGroup
-			for _, task := range tasks {
-				wg.Add(1)
-				go func(t model.Task) {
-					defer wg.Done()
-					executeExternalWorker(t, workerCmd, workerArgs, workerId, domain, execTimeout, taskClient)
-				}(task)
-			}
-
-			wg.Wait()
-		}
-	}
-
-	// Single execution mode: poll once and execute one task
-	opts := &client.TaskResourceApiBatchPollOpts{
-		Count: optional.NewInt32(1),
-	}
+	// Continuous mode: poll and process in goroutines
+	fmt.Printf("Starting worker for task type: %s\n", taskType)
+	fmt.Printf("Command: %s %v\n", workerCmd, workerArgs)
 	if workerId != "" {
-		opts.Workerid = optional.NewString(workerId)
-	}
-	if domain != "" {
-		opts.Domain = optional.NewString(domain)
-	}
-	if pollTimeout > 0 {
-		opts.Timeout = optional.NewInt32(pollTimeout)
+		fmt.Printf("Worker ID: %s\n", workerId)
 	}
 
-	tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
-	if err != nil {
-		return fmt.Errorf("error polling task: %v", err)
-	}
+	for {
+		opts := &client.TaskResourceApiBatchPollOpts{}
+		if workerId != "" {
+			opts.Workerid = optional.NewString(workerId)
+		}
+		if domain != "" {
+			opts.Domain = optional.NewString(domain)
+		}
+		if count > 0 {
+			opts.Count = optional.NewInt32(count)
+		}
+		if pollTimeout > 0 {
+			opts.Timeout = optional.NewInt32(pollTimeout)
+		}
 
-	if len(tasks) == 0 {
-		fmt.Println("No tasks available")
-		return nil
-	}
+		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
+		if err != nil {
+			log.Errorf("Error polling tasks: %v", err)
+			continue
+		}
 
-	task := tasks[0]
-	executeExternalWorker(task, workerCmd, workerArgs, workerId, domain, execTimeout, taskClient)
-	return nil
+		if len(tasks) == 0 {
+			log.Debug("No tasks available")
+			continue
+		}
+
+		log.Infof("Polled %d task(s)", len(tasks))
+
+		// Process tasks in parallel goroutines
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			wg.Add(1)
+			go func(t model.Task) {
+				defer wg.Done()
+				executeExternalWorker(t, workerCmd, workerArgs, workerId, domain, execTimeout, taskClient)
+			}(task)
+		}
+
+		wg.Wait()
+	}
 }
 
 func executeExternalWorker(task model.Task, workerCmd string, workerArgs []string, workerId, domain string, execTimeout int32, taskClient *client.TaskResourceApiService) {
@@ -653,8 +622,7 @@ func init() {
 	workerExecCmd.Flags().String("domain", "", "Domain")
 	workerExecCmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
 	workerExecCmd.Flags().Int32("exec-timeout", 0, "Execution timeout in seconds (0 = no timeout)")
-	workerExecCmd.Flags().Bool("continuous", false, "Run in continuous mode, polling and executing tasks in parallel")
-	workerExecCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch (for continuous mode)")
+	workerExecCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 
 	workerCmd.AddCommand(workerJsCmd)
 	workerCmd.AddCommand(workerExecCmd)

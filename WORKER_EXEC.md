@@ -4,13 +4,14 @@ The CLI supports executing tasks using external worker programs written in any l
 
 ## How it Works
 
-The `worker exec` command polls for tasks and executes them using an external command:
+The `worker exec` command continuously polls for tasks and executes them in parallel goroutines:
 
-1. **Polls** for a task of the specified type
+1. **Continuously polls** for tasks of the specified type
 2. **Passes** the full task JSON to your worker via **stdin**
 3. **Sets** environment variables with task metadata
 4. **Reads** the result JSON from your worker's **stdout**
 5. **Updates** the task in Conductor with the result
+6. **Executes** each task in a separate goroutine for parallel processing
 
 ## Usage
 
@@ -23,8 +24,7 @@ orkes worker exec <task_type> <command> [args...]
 - `--domain`: Poll domain
 - `--poll-timeout`: Poll timeout in milliseconds (default: 100)
 - `--exec-timeout`: Worker execution timeout in seconds (0 = no timeout)
-- `--continuous`: Run in continuous mode, polling and executing tasks in parallel goroutines
-- `--count`: Number of tasks to poll in each batch for continuous mode (default: 1)
+- `--count`: Number of tasks to poll in each batch (default: 1)
 
 ## Worker Contract
 
@@ -91,20 +91,17 @@ chmod +x worker.py
 Run the worker:
 
 ```bash
-# Poll once for 'greet_task' and execute with Python worker
+# Start worker for 'greet_task'
 orkes worker exec greet_task python3 worker.py
 
-# Run in continuous mode (polls continuously and executes in parallel)
-orkes worker exec greet_task python3 worker.py --continuous
-
-# Continuous mode with batch polling (poll 5 tasks at a time)
-orkes worker exec greet_task python3 worker.py --continuous --count 5
+# Poll multiple tasks per batch (poll 5 tasks at a time)
+orkes worker exec greet_task python3 worker.py --count 5
 
 # With worker ID and domain
-orkes worker exec greet_task python3 worker.py --continuous --worker-id worker-1 --domain production
+orkes worker exec greet_task python3 worker.py --worker-id worker-1 --domain production
 
 # With execution timeout (30 seconds per task)
-orkes worker exec greet_task python3 worker.py --continuous --exec-timeout 30
+orkes worker exec greet_task python3 worker.py --exec-timeout 30
 ```
 
 ## Example: Shell Script Worker
@@ -132,23 +129,21 @@ jq -n \
   }'
 ```
 
-## Continuous Mode
+## Parallel Execution
 
-For production use, run the worker in continuous mode with the `--continuous` flag:
+The worker automatically runs in continuous mode:
 
-```bash
-# Run worker continuously with automatic polling and parallel execution
-orkes worker exec greet_task python3 worker.py --continuous --worker-id worker-1
-
-# Poll multiple tasks per batch for higher throughput
-orkes worker exec greet_task python3 worker.py --continuous --count 10
-```
-
-In continuous mode, the CLI:
 1. Continuously polls for tasks
 2. Executes each task in a separate goroutine (parallel execution)
 3. Automatically retries on polling errors
 4. Logs all task processing with timestamps
+
+**Batch polling for higher throughput:**
+
+```bash
+# Poll 10 tasks at a time and process them in parallel
+orkes worker exec greet_task python3 worker.py --count 10
+```
 
 ## Error Handling
 
