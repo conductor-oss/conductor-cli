@@ -16,8 +16,9 @@ import (
 )
 
 var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "CLI configuration management",
+	Use:     "config",
+	Short:   "CLI configuration management",
+	GroupID: "config",
 }
 
 var configSaveCmd = &cobra.Command{

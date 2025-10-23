@@ -46,41 +46,43 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 ## Command Reference
 
+
 ### Workflow Commands
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
+| **Definition Management** | | | | |
 | `workflow list` | List all workflows | None | `--json` | `orkes workflow list` |
 | `workflow get <name>` | Get workflow definition | workflow name | | `orkes workflow get my_workflow` |
 | `workflow get <name> <version>` | Get specific version | name, version | | `orkes workflow get my_workflow 2` |
 | `workflow create <file>` | Create/register workflow | JSON file path | `--force` | `orkes workflow create workflow.json --force` |
 | `workflow update <file>` | Update workflow | JSON file path | | `orkes workflow update workflow.json` |
-| `workflow delete <name> <version>` | Delete workflow | name, version | | `orkes workflow delete my_workflow 1` |
+| `workflow delete <name> <version>` | Delete workflow definition | name, version | | `orkes workflow delete my_workflow 1` |
+| **Execution Management** | | | | |
+| `workflow start --workflow <name>` | Start workflow async | None | `--input`, `--file`, `--version`, `--correlation`, `--sync` | `orkes workflow start --workflow my_workflow` |
+| `workflow start --sync` | Start and wait for completion | None | `--workflow`, `--input`, `--file`, `--wait-until` | `orkes workflow start --workflow my_workflow --sync` |
+| `workflow status <id>` | Get execution status | workflow ID | | `orkes workflow status abc-123` |
+| `workflow get-execution <id>` | Get full execution details | workflow ID | `--complete` | `orkes workflow get-execution abc-123` |
+| `workflow search` | Search executions | None | `--workflow`, `--status`, `--count`, `--start-time-after`, `--start-time-before`, `--json` | `orkes workflow search --workflow my_workflow --status FAILED` |
+| `workflow terminate <id>` | Terminate execution | workflow ID | | `orkes workflow terminate abc-123` |
+| `workflow pause <id>` | Pause execution | workflow ID | | `orkes workflow pause abc-123` |
+| `workflow resume <id>` | Resume paused execution | workflow ID | | `orkes workflow resume abc-123` |
+| `workflow delete-execution <id>` | Delete execution | workflow ID | `--archive` | `orkes workflow delete-execution abc-123` |
+| `workflow restart <id>` | Restart completed workflow | workflow ID | `--use-latest` | `orkes workflow restart abc-123` |
+| `workflow retry <id>` | Retry last failed task | workflow ID | `--resume-subworkflow-tasks` | `orkes workflow retry abc-123` |
+| `workflow rerun <id>` | Rerun from failed task | workflow ID | `--task-id`, `--correlation-id`, `--task-input`, `--workflow-input` | `orkes workflow rerun abc-123` |
+| `workflow skip-task <id> <ref>` | Skip a task | workflow ID, task ref | `--task-input`, `--task-output` | `orkes workflow skip-task abc-123 task1` |
+| `workflow jump <id> <ref>` | Jump to task | workflow ID, task ref | `--task-input` | `orkes workflow jump abc-123 task2` |
+| `workflow update-state <id>` | Update workflow state | workflow ID | `--request-id`, `--wait-until-task-ref`, `--variables`, `--task-updates` | `orkes workflow update-state abc-123 --variables '{"key":"value"}'` |
 
 **Flags:**
 - `--force` - Overwrite existing workflow when creating
 - `--json` - Output complete JSON instead of table (applies to list command)
+- `--sync` - Execute synchronously and wait for completion (for start command)
+- `--complete` - Include complete details (for get-execution command)
 
 **Table Output (workflow list):**
 Columns: NAME, VERSION, DESCRIPTION
-
-### Execution Commands
-
-| Command | Description | Required Args | Optional Flags | Example |
-|---------|-------------|---------------|----------------|---------|
-| `execution start --workflow <name>` | Start workflow | workflow name | `--input`, `--file`, `--version` | `orkes execution start --workflow my_workflow` |
-| `execution start` with input | Start with input data | workflow name, input JSON | | `orkes execution start --workflow my_workflow --input '{"key":"value"}'` |
-| `execution start` with file | Start with input file | workflow name, file path | | `orkes execution start --workflow my_workflow --file input.json` |
-| `execution status <id>` | Get execution status | workflow ID | | `orkes execution status abc-123` |
-| `execution get <id>` | Get full execution details | workflow ID | | `orkes execution get abc-123` |
-| `execution terminate <id>` | Terminate execution | workflow ID | | `orkes execution terminate abc-123` |
-| `execution pause <id>` | Pause execution | workflow ID | | `orkes execution pause abc-123` |
-| `execution resume <id>` | Resume paused execution | workflow ID | | `orkes execution resume abc-123` |
-| `execution restart <id>` | Restart completed workflow | workflow ID | | `orkes execution restart abc-123` |
-| `execution rerun <id>` | Rerun from failed task | workflow ID | | `orkes execution rerun abc-123` |
-| `execution retry <id>` | Retry last failed task | workflow ID | | `orkes execution retry abc-123` |
-| `execution delete <id>` | Delete execution | workflow ID | | `orkes execution delete abc-123` |
-| `execution search` | Search executions | None | `--workflow`, `--status`, `--count`, `--start-time-after`, `--start-time-before` | `orkes execution search --workflow my_workflow --status FAILED` |
 
 **Status values:** `RUNNING`, `COMPLETED`, `FAILED`, `TERMINATED`, `TIMED_OUT`, `PAUSED`
 
@@ -88,13 +90,17 @@ Columns: NAME, VERSION, DESCRIPTION
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
+| **Definition Management** | | | | |
 | `task list` | List all task definitions | None | `--json` | `orkes task list` |
 | `task get <task_type>` | Get task definition | task type | | `orkes task get my_task` |
 | `task create <file>` | Create task definition | JSON file | | `orkes task create task.json` |
 | `task update <file>` | Update task definition | JSON file | | `orkes task update task.json` |
 | `task delete <task_type>` | Delete task definition | task type | | `orkes task delete my_task` |
-| `execution task-poll <type>` | Poll for tasks | task type | | `orkes execution task-poll my_task --count 5` |
-| `execution task-update` | Update task by ref name | workflow-id, task-ref-name, status | | `orkes execution task-update --workflow-id abc --task-ref-name task1 --status COMPLETED` |
+| **Execution Management** | | | | |
+| `task poll <type>` | Batch poll for tasks | task type | `--count`, `--worker-id`, `--domain`, `--timeout` | `orkes task poll my_task --count 5` |
+| `task update-execution` | Update task by ref name | None | `--workflow-id`, `--task-ref-name`, `--status`, `--output`, `--worker-id` | `orkes task update-execution --workflow-id abc --task-ref-name task1 --status COMPLETED` |
+| `task signal` | Signal task async | None | `--workflow-id`, `--status`, `--output` | `orkes task signal --workflow-id abc --status COMPLETED` |
+| `task signal-sync` | Signal task sync | None | `--workflow-id`, `--status`, `--output` | `orkes task signal-sync --workflow-id abc --status COMPLETED` |
 
 **Flags:**
 - `--json` - Output complete JSON instead of table (applies to list command)
@@ -181,7 +187,7 @@ Columns: NAME, WORKFLOW, STATUS, CREATED TIME
 ```bash
 orkes workflow list 2>/dev/null
 orkes task list --json 2>/dev/null
-WORKFLOW_ID=$(orkes execution start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+WORKFLOW_ID=$(orkes workflow start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 ```
 
 ## Input Format
@@ -192,7 +198,7 @@ Workflows can accept input data in two ways:
 
 **1. Inline JSON (--input flag):**
 ```bash
-orkes execution start --workflow my_workflow --input '{"key":"value","count":42}'
+orkes workflow start --workflow my_workflow --input '{"key":"value","count":42}'
 ```
 
 **2. JSON File (--file flag):**
@@ -207,7 +213,7 @@ orkes execution start --workflow my_workflow --input '{"key":"value","count":42}
 }
 
 # Start with file
-orkes execution start --workflow my_workflow --file input.json
+orkes workflow start --workflow my_workflow --file input.json
 ```
 
 ### Workflow Definition Format
@@ -250,19 +256,19 @@ orkes --profile production workflow create workflow.json --force
 
 ```bash
 # Start workflow and capture ID
-WORKFLOW_ID=$(orkes execution start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}')
+WORKFLOW_ID=$(orkes workflow start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}')
 
 # Start with input data
-WORKFLOW_ID=$(orkes execution start --workflow my_workflow --input '{"orderId":"12345","customerId":"cust_001"}' 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+WORKFLOW_ID=$(orkes workflow start --workflow my_workflow --input '{"orderId":"12345","customerId":"cust_001"}' 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 
 # Start with input from file
-WORKFLOW_ID=$(orkes execution start --workflow my_workflow --file input.json 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+WORKFLOW_ID=$(orkes workflow start --workflow my_workflow --file input.json 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 
 # Check status
-orkes execution status "$WORKFLOW_ID"
+orkes workflow status "$WORKFLOW_ID"
 
 # Get full details
-orkes execution get "$WORKFLOW_ID"
+orkes workflow get-execution "$WORKFLOW_ID"
 ```
 
 ### 3. Multi-environment workflow
@@ -272,7 +278,7 @@ orkes execution get "$WORKFLOW_ID"
 ORKES_PROFILE=dev orkes workflow create workflow.json --force
 
 # Test in dev
-ORKES_PROFILE=dev orkes execution start --workflow my_workflow
+ORKES_PROFILE=dev orkes workflow start --workflow my_workflow
 
 # Deploy to prod after testing
 ORKES_PROFILE=prod orkes workflow create workflow.json --force
@@ -282,14 +288,14 @@ ORKES_PROFILE=prod orkes workflow create workflow.json --force
 
 ```bash
 # Check status
-STATUS=$(orkes execution status "$WORKFLOW_ID" 2>/dev/null)
+STATUS=$(orkes workflow status "$WORKFLOW_ID" 2>/dev/null)
 
 if [ "$STATUS" = "FAILED" ]; then
   # Retry failed task
-  orkes execution retry "$WORKFLOW_ID"
+  orkes workflow retry "$WORKFLOW_ID"
 
   # Or rerun from failed point
-  orkes execution rerun "$WORKFLOW_ID"
+  orkes workflow rerun "$WORKFLOW_ID"
 fi
 ```
 
@@ -297,10 +303,10 @@ fi
 
 ```bash
 # Find running workflows
-orkes execution search --workflow my_workflow --status RUNNING
+orkes workflow search --workflow my_workflow --status RUNNING
 
 # Terminate specific execution
-orkes execution terminate "$WORKFLOW_ID"
+orkes workflow terminate "$WORKFLOW_ID"
 ```
 
 ### 6. Create and test webhook
@@ -335,10 +341,10 @@ orkes workflow delete my_workflow 1
 
 ```bash
 # Poll for tasks
-orkes execution task-poll my_task_type --count 10 --worker-id worker1
+orkes task poll my_task_type --count 10 --worker-id worker1
 
 # Update task status
-orkes execution task-update \
+orkes task update-execution \
   --workflow-id "$WORKFLOW_ID" \
   --task-ref-name my_task \
   --status COMPLETED \
@@ -349,15 +355,15 @@ orkes execution task-update \
 
 ```bash
 # Find failed executions for a workflow
-orkes execution search --workflow my_workflow --status FAILED --count 50
+orkes workflow search --workflow my_workflow --status FAILED --count 50
 
 # Find executions within time range
-orkes execution search --workflow my_workflow \
+orkes workflow search --workflow my_workflow \
   --start-time-after "2025-01-01" \
   --start-time-before "2025-01-31"
 
 # Combine filters
-orkes execution search --workflow my_workflow \
+orkes workflow search --workflow my_workflow \
   --status RUNNING \
   --start-time-after "2025-01-01 10:00:00" \
   --count 100

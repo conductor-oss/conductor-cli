@@ -220,6 +220,16 @@ func init() {
 	// Disable conductor-go SDK logging by using the noop logger
 	sdklog.SetLogger(sdklog.NewNop())
 
+	// Add command groups
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "conductor", Title: "Conductor Management:"},
+		&cobra.Group{ID: "config", Title: "CLI Configuration:"},
+		&cobra.Group{ID: "development", Title: "Development:"},
+	)
+
+	// Set group ID for auto-generated completion command
+	rootCmd.SetCompletionCommandGroupID("config")
+
 	defaultHelpFunc := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if cmd.HasParent() {

@@ -29,9 +29,10 @@ import (
 
 var (
 	workerCmd = &cobra.Command{
-		Use:   "worker",
-		Short: "Task worker management",
-		Long:  "Commands for managing task workers",
+		Use:     "worker",
+		Short:   "Task worker management",
+		Long:    "Commands for managing task workers",
+		GroupID: "development",
 	}
 
 	workerJsCmd = &cobra.Command{
