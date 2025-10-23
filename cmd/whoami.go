@@ -46,17 +46,18 @@ var whoamiCmd = &cobra.Command{
 		email, emailOk := claims["email"].(string)
 		name, nameOk := claims["name"].(string)
 
-		if emailOk && email != "" {
-			fmt.Printf("Email: %s\n", email)
-		}
 		if nameOk && name != "" {
-			fmt.Printf("Name: %s\n", name)
+			fmt.Println(name)
+		}
+
+		if emailOk && email != "" {
+			fmt.Println(email)
 		}
 
 		// If email and name are not available, check for sub
 		if (!emailOk || email == "") && (!nameOk || name == "") {
 			if sub, ok := claims["sub"].(string); ok && sub != "" {
-				fmt.Printf("Subject: %s\n", sub)
+				fmt.Println(sub)
 			}
 		}
 
