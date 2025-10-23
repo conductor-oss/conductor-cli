@@ -246,7 +246,7 @@ func interactiveSaveConfig(profileName string) error {
 	// Prompt for server type
 	serverTypeDefault := existingConfig["server-type"]
 	if serverTypeDefault == "" {
-		serverTypeDefault = "OSS"
+		serverTypeDefault = "Enterprise"
 	}
 	fmt.Fprintf(os.Stdout, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
 	serverTypeInput, _ := reader.ReadString('\n')

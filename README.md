@@ -127,17 +127,17 @@ The CLI connects to your Conductor server and can optionally persist configurati
 
 The CLI supports two types of Conductor servers:
 
-- **OSS Conductor** (default): Open-source Conductor - requires only server URL, no authentication
-- **Enterprise (Orkes Conductor)**: Requires server URL and authentication credentials
+- **Enterprise (Orkes Conductor)** (default): Requires server URL and authentication credentials
+- **OSS Conductor**: Open-source Conductor - requires only server URL, no authentication
 
-Use the `--server-type` flag to specify your server type (defaults to `OSS`):
+Use the `--server-type` flag to specify your server type (defaults to `Enterprise`):
 
 ```bash
-# OSS Conductor (default)
-orkes --server http://localhost:8080/api --server-type OSS workflow list
+# Enterprise/Orkes Conductor (default)
+orkes --server https://developer.orkescloud.com --auth-token your-token workflow list
 
-# Enterprise/Orkes Conductor
-orkes --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise workflow list
+# OSS Conductor
+orkes --server http://localhost:8080/api --server-type OSS workflow list
 ```
 
 ### Saving Your Configuration
@@ -157,7 +157,7 @@ orkes config save
 
 # Example interaction:
 # Server URL [http://localhost:8080/api]: https://developer.orkescloud.com
-# Server type (OSS/Enterprise) [OSS]: Enterprise
+# Server type (OSS/Enterprise) [Enterprise]: ← Press Enter to keep
 #
 # Authentication method:
 #   1. API Key + Secret
@@ -190,14 +190,14 @@ orkes config save
 You can still save configuration non-interactively by providing flags:
 
 ```bash
-# OSS Conductor
-orkes --server http://localhost:8080/api --server-type OSS config save
-
-# Enterprise with auth token
-orkes --server https://developer.orkescloud.com --auth-token your-token --server-type Enterprise config save
+# Enterprise with auth token (default server type)
+orkes --server https://developer.orkescloud.com --auth-token your-token config save
 
 # Enterprise with API key + secret
-orkes --server https://developer.orkescloud.com --auth-key your-key --auth-secret your-secret --server-type Enterprise config save
+orkes --server https://developer.orkescloud.com --auth-key your-key --auth-secret your-secret config save
+
+# OSS Conductor
+orkes --server http://localhost:8080/api --server-type OSS config save
 ```
 
 Once saved, you can run commands without providing flags:
@@ -231,14 +231,14 @@ orkes config save --profile production
 You can also use the non-interactive method with flags:
 
 ```bash
-# Save local OSS development environment
-orkes --server http://localhost:8080/api --server-type OSS --profile dev config save
-
-# Save Enterprise staging environment
-orkes --server https://staging.example.com --auth-token staging-token --server-type Enterprise --profile staging config save
+# Save Enterprise staging environment (default server type)
+orkes --server https://staging.example.com --auth-token staging-token --profile staging config save
 
 # Save Enterprise production environment
-orkes --server https://prod.example.com --auth-token prod-token --server-type Enterprise --profile production config save
+orkes --server https://prod.example.com --auth-token prod-token --profile production config save
+
+# Save local OSS development environment
+orkes --server http://localhost:8080/api --server-type OSS --profile dev config save
 ```
 
 **Using Profiles:**
@@ -319,8 +319,8 @@ orkes --server http://different-server:8080/api workflow list
 # Use different auth token temporarily
 orkes --auth-token temporary-token workflow list
 
-# Combine multiple overrides
-orkes --server http://localhost:8080/api --auth-token token --server-type Enterprise workflow list
+# Use OSS server type
+orkes --server http://localhost:8080/api --server-type OSS workflow list
 ```
 
 ### Environment Variables
@@ -337,8 +337,8 @@ export CONDUCTOR_SERVER_URL=http://localhost:8080/api
 export CONDUCTOR_AUTH_KEY=your-api-key
 export CONDUCTOR_AUTH_SECRET=your-api-secret
 
-# Server type (OSS or Enterprise)
-export CONDUCTOR_SERVER_TYPE=Enterprise
+# Server type (OSS or Enterprise, defaults to Enterprise)
+export CONDUCTOR_SERVER_TYPE=OSS
 
 # Profile selection
 export ORKES_PROFILE=production
@@ -349,17 +349,9 @@ export ORKES_PROFILE=production
 Configuration files use YAML format and are stored in `~/.conductor-cli/`:
 
 ```yaml
-# Example config.yaml for OSS Conductor (no authentication)
-server: http://localhost:8080/api
-server-type: OSS
-verbose: false
-```
-
-```yaml
-# Example config.yaml for Enterprise with auth token
+# Example config.yaml for Enterprise with auth token (default)
 server: https://developer.orkescloud.com/api
 auth-token: your-auth-token
-server-type: Enterprise
 verbose: false
 ```
 
@@ -368,14 +360,20 @@ verbose: false
 server: https://developer.orkescloud.com/api
 auth-key: your-api-key
 auth-secret: your-api-secret
-server-type: Enterprise
+verbose: false
+```
+
+```yaml
+# Example config.yaml for OSS Conductor (no authentication)
+server: http://localhost:8080/api
+server-type: OSS
 verbose: false
 ```
 
 **Notes:**
-- `server-type` defaults to `OSS` if not specified
-- OSS Conductor doesn't require `auth-token`, `auth-key`, or `auth-secret`
+- `server-type` defaults to `Enterprise` if not specified
 - Enterprise requires one authentication method (`auth-token` OR `auth-key`+`auth-secret`)
+- OSS Conductor doesn't require `auth-token`, `auth-key`, or `auth-secret`
 
 You can also specify a custom config file location:
 
