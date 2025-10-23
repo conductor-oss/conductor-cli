@@ -43,7 +43,7 @@ jobs:
         CONDUCTOR_AUTH_SECRET: ${{ secrets.CONDUCTOR_AUTH_SECRET }}
         CONDUCTOR_SERVER_TYPE: Enterprise
       run: |
-        bats test/e2e/workflow.bats test/e2e/webhook.bats test/e2e/schedule.bats test/e2e/rerun.bats --show-output-of-passing-tests
+        bats test/e2e/*.bats --show-output-of-passing-tests
 
     - name: Upload test artifacts
       if: always()

@@ -36,6 +36,9 @@ var whoamiCmd = &cobra.Command{
 			return fmt.Errorf("no authentication configured - please configure auth-token or auth-key/auth-secret")
 		}
 
+		// Print server URL
+		fmt.Println(url)
+
 		// Decode JWT token (without verification, just reading claims)
 		claims, err := decodeJWT(jwtToken)
 		if err != nil {
