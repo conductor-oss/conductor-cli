@@ -344,6 +344,16 @@ export CONDUCTOR_SERVER_TYPE=Enterprise
 export ORKES_PROFILE=production
 ```
 
+#### Disabling Colored Output
+
+If you want to disable color output for any reason (CI/CD, etc), you can use:
+
+```bash
+export NO_COLOR=1
+```
+
+Any non-null value in the NO_COLOR variable will disable colored output.
+
 ### Configuration File Format
 
 Configuration files use YAML format and are stored in `~/.conductor-cli/`:
