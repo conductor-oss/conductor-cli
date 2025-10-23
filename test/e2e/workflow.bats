@@ -35,7 +35,7 @@ get_workflow_id() {
 }
 
 @test "3. Start workflow execution" {
-    run bash -c "./orkes execution start --workflow '$WORKFLOW_NAME' 2>/dev/null"
+    run bash -c "./orkes workflow start --workflow '$WORKFLOW_NAME' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -51,7 +51,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes execution status '$WORKFLOW_ID' 2>/dev/null"
+    run bash -c "./orkes workflow status '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == "RUNNING" ]]
@@ -62,7 +62,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes execution terminate '$WORKFLOW_ID' 2>/dev/null"
+    run bash -c "./orkes workflow terminate '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     echo "Terminated workflow UUID: $WORKFLOW_ID"
@@ -76,7 +76,7 @@ get_workflow_id() {
     # Wait a moment for termination to process
     sleep 2
 
-    run bash -c "./orkes execution status '$WORKFLOW_ID' 2>/dev/null"
+    run bash -c "./orkes workflow status '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == "TERMINATED" ]]
@@ -87,7 +87,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes execution delete '$WORKFLOW_ID' -y 2>/dev/null"
+    run bash -c "./orkes workflow delete-execution '$WORKFLOW_ID' -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"deleted successfully"* ]]
@@ -102,7 +102,7 @@ get_workflow_id() {
     # Wait a moment for deletion to process
     sleep 2
 
-    run bash -c "./orkes execution status '$WORKFLOW_ID' 2>/dev/null"
+    run bash -c "./orkes workflow status '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     # Should fail since the execution was deleted
     [ "$status" -ne 0 ]

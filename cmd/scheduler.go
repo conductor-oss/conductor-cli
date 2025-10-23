@@ -20,7 +20,7 @@ import (
 var schedulerCmd = &cobra.Command{
 	Use:     "schedule",
 	Short:   "Schedule management",
-	GroupID: "metadata",
+	GroupID: "conductor",
 }
 
 var (

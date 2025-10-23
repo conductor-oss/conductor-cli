@@ -1,80 +1,124 @@
 package cmd
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"html"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"text/tabwriter"
+	"time"
+
 	"github.com/antihax/optional"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	"github.com/conductor-sdk/conductor-go/sdk/model"
+	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/console"
+	"github.com/dop251/goja_nodejs/require"
 	"github.com/google/uuid"
 	"github.com/orkes-io/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"os"
-	"strconv"
-	"strings"
-	"time"
 )
 
+var workflowCmd = &cobra.Command{
+	Use:     "workflow",
+	Short:   "Workflow definition and execution management",
+	GroupID: "conductor",
+}
+
 var (
-	// Execution command group
-	executionCmd = &cobra.Command{
-		Use:     "execution",
-		Short:   "Workflow and Task execution",
-		Long:    "Commands for managing workflow and task execution",
-		GroupID: "execution",
+	// Workflow Definition Management Commands
+	listWorkflowsMetadataCmd = &cobra.Command{
+		Use:          "list",
+		Short:        "List workflows",
+		RunE:         listWorkflow,
+		SilenceUsage: true,
 	}
 
-	// Execution subcommands
+	getWorkflowMetadataCmd = &cobra.Command{
+		Use:          "get <workflow_name> [version]",
+		Short:        "Get Workflow",
+		RunE:         getWorkflowMetadata,
+		SilenceUsage: true,
+	}
+
+	getAllWorkflowMetadataCmd = &cobra.Command{
+		Use:          "get_all",
+		Short:        "Get All Workflows",
+		RunE:         getAllWorkflowMetadata,
+		SilenceUsage: true,
+	}
+
+	updateWorkflowMetadataCmd = &cobra.Command{
+		Use:          "update <workflow_definition.json>",
+		Short:        "Update Workflow",
+		Long:         "Update an existing workflow from a JSON or JavaScript file.\n\nJavaScript format (--js flag) is experimental and subject to change.",
+		RunE:         updateWorkflowMetadata,
+		SilenceUsage: true,
+	}
+
+	createWorkflowMetadataCmd = &cobra.Command{
+		Use:          "create <workflow_definition.json>",
+		Short:        "Create Workflow",
+		Long:         "Create a workflow from a JSON or JavaScript file.\n\nJavaScript format (--js flag) is experimental and subject to change.",
+		RunE:         createWorkflowMetadata,
+		SilenceUsage: true,
+	}
+
+	deleteWorkflowMetadataCmd = &cobra.Command{
+		Use:          "delete <workflow_name> <version>",
+		Short:        "Delete Workflow",
+		RunE:         deleteWorkflowMetadata,
+		SilenceUsage: true,
+	}
+
+	// Workflow Execution Management Commands
 	searchExecutionCmd = &cobra.Command{
 		Use:          "search",
 		Short:        "Search for workflow executions",
 		RunE:         searchWorkflowExecutions,
 		SilenceUsage: true,
-		Example:      "execution search [flags] search_text",
+		Example:      "workflow search [flags] search_text",
 	}
 
 	statusExecutionCmd = &cobra.Command{
-		Use:          "status",
+		Use:          "status <workflow_id>",
 		Short:        "Get workflow execution status",
 		RunE:         getWorkflowExecutionStatus,
 		SilenceUsage: true,
-		Example:      "execution status [workflow_id] [workflow_id2]...",
+		Example:      "workflow status [workflow_id] [workflow_id2]...",
 	}
 
 	getExecutionCmd = &cobra.Command{
-		Use:          "get",
+		Use:          "get-execution <workflow_id>",
 		Short:        "Get full workflow execution details",
 		RunE:         getWorkflowExecution,
 		SilenceUsage: true,
-		Example:      "execution get [flags] [workflow_id] [workflow_id2]...",
+		Example:      "workflow get-execution [flags] [workflow_id] [workflow_id2]...",
 	}
 
 	startExecutionCmd = &cobra.Command{
 		Use:          "start",
-		Short:        "Start workflow execution asynchronously",
-		Long:         "Start workflow execution asynchronously and return the workflow ID immediately without waiting for completion.",
+		Short:        "Start workflow execution",
+		Long:         "Start workflow execution. Use --sync flag to execute synchronously and wait for completion.",
 		RunE:         startWorkflow,
 		SilenceUsage: true,
-		Example:      "execution start [flags]",
-	}
-
-	executeExecutionCmd = &cobra.Command{
-		Use:          "execute",
-		Short:        "Execute workflow synchronously",
-		Long:         "Execute workflow synchronously and wait for completion, returning the full workflow execution output.",
-		RunE:         executeWorkflow,
-		SilenceUsage: true,
-		Example:      "execution execute [flags]",
+		Example:      "workflow start --workflow my_workflow\nworkflow start --workflow my_workflow --sync",
 	}
 
 	terminateExecutionCmd = &cobra.Command{
-		Use:          "terminate",
+		Use:          "terminate <workflow_id>",
 		Short:        "Terminate a running workflow execution",
 		RunE:         terminateWorkflow,
 		SilenceUsage: true,
-		Example:      "execution terminate [flags]",
+		Example:      "workflow terminate [workflow_id]",
 	}
 
 	pauseExecutionCmd = &cobra.Command{
@@ -82,7 +126,7 @@ var (
 		Short:        "Pause a running workflow execution",
 		RunE:         pauseWorkflow,
 		SilenceUsage: true,
-		Example:      "execution pause [workflow_id]",
+		Example:      "workflow pause [workflow_id]",
 	}
 
 	resumeExecutionCmd = &cobra.Command{
@@ -90,15 +134,15 @@ var (
 		Short:        "Resume a paused workflow execution",
 		RunE:         resumeWorkflow,
 		SilenceUsage: true,
-		Example:      "execution resume [workflow_id]",
+		Example:      "workflow resume [workflow_id]",
 	}
 
 	deleteExecutionCmd = &cobra.Command{
-		Use:          "delete <workflow_id>",
+		Use:          "delete-execution <workflow_id>",
 		Short:        "Delete a workflow execution",
 		RunE:         deleteWorkflowExecution,
 		SilenceUsage: true,
-		Example:      "execution delete [workflow_id]\nexecution delete --archive [workflow_id]",
+		Example:      "workflow delete-execution [workflow_id]\nworkflow delete-execution --archive [workflow_id]",
 	}
 
 	restartExecutionCmd = &cobra.Command{
@@ -106,7 +150,7 @@ var (
 		Short:        "Restart a completed workflow",
 		RunE:         restartWorkflow,
 		SilenceUsage: true,
-		Example:      "execution restart [workflow_id]\nexecution restart --use-latest [workflow_id]",
+		Example:      "workflow restart [workflow_id]\nworkflow restart --use-latest [workflow_id]",
 	}
 
 	retryExecutionCmd = &cobra.Command{
@@ -114,7 +158,7 @@ var (
 		Short:        "Retry the last failed task",
 		RunE:         retryWorkflow,
 		SilenceUsage: true,
-		Example:      "execution retry [workflow_id]",
+		Example:      "workflow retry [workflow_id]",
 	}
 
 	skipTaskExecutionCmd = &cobra.Command{
@@ -122,7 +166,7 @@ var (
 		Short:        "Skip a task in a running workflow",
 		RunE:         skipTask,
 		SilenceUsage: true,
-		Example:      "execution skip-task [workflow_id] [task_ref_name]",
+		Example:      "workflow skip-task [workflow_id] [task_ref_name]",
 	}
 
 	rerunExecutionCmd = &cobra.Command{
@@ -130,7 +174,7 @@ var (
 		Short:        "Rerun workflow from a specific task",
 		RunE:         rerunWorkflow,
 		SilenceUsage: true,
-		Example:      "execution rerun [workflow_id] --task-id [task_id]",
+		Example:      "workflow rerun [workflow_id] --task-id [task_id]",
 	}
 
 	jumpExecutionCmd = &cobra.Command{
@@ -138,7 +182,7 @@ var (
 		Short:        "Jump workflow execution to given task",
 		RunE:         jumpToTask,
 		SilenceUsage: true,
-		Example:      "execution jump [workflow_id] [task_ref_name]",
+		Example:      "workflow jump [workflow_id] [task_ref_name]",
 	}
 
 	updateStateExecutionCmd = &cobra.Command{
@@ -146,11 +190,486 @@ var (
 		Short:        "Update workflow state (variables and tasks)",
 		RunE:         updateWorkflowState,
 		SilenceUsage: true,
-		Example:      "execution update-state [workflow_id] --variables '{\"key\":\"value\"}'",
+		Example:      "workflow update-state [workflow_id] --variables '{\"key\":\"value\"}'",
 	}
 )
+func listWorkflow(cmd *cobra.Command, args []string) error {
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 
-// parseTimeToEpochMillis parses human-readable time formats to epoch milliseconds
+	metadataClient := internal.GetMetadataClient()
+	workflows, _, err := metadataClient.GetAll(context.Background())
+	if err != nil {
+		return err
+	}
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(workflows, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling workflows: %v", err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Print as table
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tVERSION\tDESCRIPTION")
+	for _, workflow := range workflows {
+		description := workflow.Description
+		if description == "" {
+			description = "-"
+		}
+		// Truncate long descriptions
+		if len(description) > 50 {
+			description = description[:47] + "..."
+		}
+		fmt.Fprintf(w, "%s\t%d\t%s\n",
+			workflow.Name,
+			workflow.Version,
+			description,
+		)
+	}
+	w.Flush()
+
+	return nil
+}
+
+func getWorkflowMetadata(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 || len(args) > 2 {
+		return cmd.Usage()
+	}
+
+	metadataClient := internal.GetMetadataClient()
+	name := args[0]
+
+	var versionOpts *client.MetadataResourceApiGetOpts
+	var errorMsg string
+
+	if len(args) == 2 {
+		version, err := strconv.Atoi(args[1])
+		if err != nil {
+			return fmt.Errorf("invalid version '%s': must be a number", args[1])
+		}
+		versionOpts = &client.MetadataResourceApiGetOpts{Version: optional.NewInt32(int32(version))}
+		errorMsg = fmt.Sprintf("Failed to get workflow '%s' version %d", name, version)
+	} else {
+		versionOpts = &client.MetadataResourceApiGetOpts{}
+		errorMsg = fmt.Sprintf("Failed to get workflow '%s'", name)
+	}
+
+	metadata, _, err := metadataClient.Get(context.Background(), html.EscapeString(name), versionOpts)
+	if err != nil {
+		return parseAPIError(err, errorMsg)
+	}
+
+	bytes, _ := json.MarshalIndent(metadata, "", "   ")
+	fmt.Println(string(bytes))
+	return nil
+}
+
+func getAllWorkflowMetadata(cmd *cobra.Command, args []string) error {
+	metadataClient := internal.GetMetadataClient()
+	var expr string
+	var regex *regexp.Regexp
+	if len(args) == 1 {
+		var err error
+		expr = args[0]
+		regex, err = regexp.Compile(expr)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	metadata, _, err := metadataClient.GetAll(context.Background())
+	if err != nil {
+		return err
+	}
+	fmt.Println("[")
+	for i, data := range metadata {
+		if regex != nil {
+			if regex.Match([]byte(data.Name)) {
+				bytes, _ := json.MarshalIndent(data, "", "   ")
+				fmt.Println(string(bytes))
+			}
+		} else {
+			bytes, _ := json.MarshalIndent(data, "", "   ")
+			fmt.Println(string(bytes))
+		}
+		if i < len(metadata)-1 {
+			fmt.Print(",")
+		}
+	}
+	fmt.Println("]")
+
+	return nil
+}
+
+func updateWorkflowMetadata(cmd *cobra.Command, args []string) error {
+	metadataClient := internal.GetMetadataClient()
+	var data []byte
+	var err error
+	if len(args) == 1 {
+		data, err = os.ReadFile(args[0])
+		if err != nil {
+			return err
+		}
+	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+
+		data = read()
+		if len(data) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
+	}
+	var workflowDefs []model.WorkflowDef
+
+	javascript, _ := cmd.Flags().GetBool("js")
+	if javascript {
+		js := string(data)
+		workflowJson, conversionError := getWorkflowFromJS(js)
+		if conversionError != nil {
+			return conversionError
+		}
+		data = []byte(workflowJson)
+	}
+
+	var workflowDef model.WorkflowDef
+	err = json.Unmarshal(data, &workflowDef)
+	if err != nil {
+		return parseJSONError(err, string(data), "workflow definition")
+	}
+	workflowDefs = append(workflowDefs, workflowDef)
+	_, err = metadataClient.Update(context.Background(), workflowDefs)
+	if err != nil {
+		return parseAPIError(err, "Failed to update workflow")
+	}
+	return nil
+}
+
+func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
+	var data []byte
+	var err error
+	if len(args) == 1 {
+		data, err = os.ReadFile(args[0])
+		if err != nil {
+			fmt.Println("Error reading file ", err.Error())
+			return err
+		}
+	} else {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+
+		data = read()
+		if len(data) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
+	}
+	js := string(data)
+	var json string
+	javascript, _ := cmd.Flags().GetBool("js")
+	if javascript {
+		json, err = getWorkflowFromJS(js)
+		data = []byte(json)
+		if err != nil {
+			return err
+		}
+	}
+	err = registerWorkflow(data, true)
+	return err
+}
+
+func registerWorkflow(data []byte, force bool) error {
+	metadataClient := internal.GetMetadataClient()
+	var workflowDef model.WorkflowDef
+	err := json.Unmarshal(data, &workflowDef)
+	if err != nil {
+		return parseJSONError(err, string(data), "workflow definition")
+	}
+	_, err = metadataClient.RegisterWorkflowDef(context.Background(), force, workflowDef)
+	if err != nil {
+		return parseAPIError(err, "Failed to create workflow")
+	}
+	return nil
+}
+
+func deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
+	return _deleteWorkflowMetadata(cmd, args)
+}
+func _deleteWorkflowMetadata(cmd *cobra.Command, args []string) error {
+	metadataClient := internal.GetMetadataClient()
+	if len(args) == 0 {
+		// Check if stdin has data available
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			return fmt.Errorf("error checking stdin: %v", err)
+		}
+
+		// If running interactively (no pipe/redirect), show usage
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return cmd.Usage()
+		}
+
+		workflows := readLines()
+		if len(workflows) == 0 {
+			return fmt.Errorf("no workflow data received from stdin")
+		}
+		log.Info("Read ", len(workflows), " from console")
+		r := regexp.MustCompile(`[^\s"]+|"([^"]*)"`)
+		if !yes {
+			// When piped input, auto-confirm since user can't interact
+			fmt.Printf("Auto-confirming deletion of %d workflow(s) from piped input. Use --yes to skip confirmation.\n", len(workflows))
+		}
+		for _, workflow := range workflows {
+			a := r.FindAllString(workflow, -1)
+			if len(a) != 2 {
+				return errors.New("no version specified")
+			}
+			name := a[0]
+			version, err := strconv.Atoi(a[1])
+			if err != nil {
+				return fmt.Errorf("invalid version '%s' for workflow '%s': %v", a[1], name, err)
+			}
+			log.Info("Deleting workflow: ", name, " version: ", version)
+			_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
+			if err != nil {
+				return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
+			}
+		}
+		return nil
+	} else if len(args) == 2 {
+		name := args[0]
+		version, err := strconv.Atoi(args[1])
+		if err != nil {
+			return err
+		}
+
+		// Confirm deletion
+		resourceName := fmt.Sprintf("%s version %d", name, version)
+		if !confirmDeletion("workflow", resourceName) {
+			fmt.Println("Deletion cancelled")
+			return nil
+		}
+
+		_, err = metadataClient.UnregisterWorkflowDef(context.Background(), name, int32(version))
+		if err != nil {
+			return parseAPIError(err, fmt.Sprintf("Failed to delete workflow '%s' version %d", name, version))
+		}
+		fmt.Printf("Workflow '%s' version %d deleted successfully\n", name, version)
+		return nil
+	}
+
+	return cmd.Usage()
+
+}
+
+// parseJSONError provides helpful error messages for JSON parsing failures
+func parseJSONError(err error, jsonContent string, contextName string) error {
+	errStr := err.Error()
+
+	// Common JSON syntax error patterns
+	if strings.Contains(errStr, "invalid character") && strings.Contains(errStr, "in string literal") {
+		// Find the approximate line number by counting newlines
+		lines := strings.Split(jsonContent, "\n")
+
+		// Look for unterminated strings (missing quotes)
+		for i, line := range lines {
+			// Simple heuristic: look for lines with odd number of quotes
+			quoteCount := strings.Count(line, "\"") - strings.Count(line, "\\\"")
+			if quoteCount%2 != 0 && strings.Contains(line, ":") {
+				return fmt.Errorf("JSON syntax error in %s: unterminated string on line %d\nLine content: %s\nHint: Check for missing closing quote (\") on this line", contextName, i+1, strings.TrimSpace(line))
+			}
+		}
+
+		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for unterminated strings (missing quotes)", contextName, errStr)
+	}
+
+	if strings.Contains(errStr, "unexpected end of JSON input") {
+		return fmt.Errorf("JSON syntax error in %s: unexpected end of file\nHint: Check for missing closing braces } or brackets ]", contextName)
+	}
+
+	if strings.Contains(errStr, "invalid character") {
+		return fmt.Errorf("JSON syntax error in %s: %s\nHint: Check for invalid characters, missing commas, or malformed values", contextName, errStr)
+	}
+
+	// Fallback for other JSON errors
+	return fmt.Errorf("Invalid %s format: %s", contextName, errStr)
+}
+
+// parseAPIError extracts useful error information from API responses
+func parseAPIError(err error, defaultMsg string) error {
+	errStr := err.Error()
+
+	// Try to extract JSON from error message
+	// Error format: "error: {...}, body: {...}"
+	var jsonStr string
+	if strings.Contains(errStr, "body: {") {
+		// Extract the body part
+		parts := strings.Split(errStr, "body: ")
+		if len(parts) > 1 {
+			jsonStr = parts[1]
+		}
+	} else if strings.Contains(errStr, "error: {") {
+		// Extract the error part
+		parts := strings.Split(errStr, "error: ")
+		if len(parts) > 1 {
+			jsonStr = strings.Split(parts[1], ", body:")[0]
+		}
+	}
+
+	if jsonStr != "" {
+		// Try to parse the JSON with validation errors
+		var errorResponse struct {
+			Status           int    `json:"status"`
+			Message          string `json:"message"`
+			ValidationErrors []struct {
+				Path    string `json:"path"`
+				Message string `json:"message"`
+			} `json:"validationErrors"`
+		}
+
+		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil {
+			if errorResponse.Message != "" {
+				message := fmt.Sprintf("%s: %s", defaultMsg, errorResponse.Message)
+
+				// Add validation error details if available
+				if len(errorResponse.ValidationErrors) > 0 {
+					message += "\nValidation errors:"
+					for _, validationErr := range errorResponse.ValidationErrors {
+						if validationErr.Path != "" {
+							message += fmt.Sprintf("\n  - %s: %s", validationErr.Path, validationErr.Message)
+						} else {
+							message += fmt.Sprintf("\n  - %s", validationErr.Message)
+						}
+					}
+				}
+
+				if errorResponse.Status > 0 {
+					message += fmt.Sprintf(" (status: %d)", errorResponse.Status)
+				}
+
+				return fmt.Errorf(message)
+			}
+		}
+	}
+
+	// Fallback to original error if parsing fails
+	return fmt.Errorf("%s: %v", defaultMsg, err)
+}
+
+func read() []byte {
+	var b bytes.Buffer
+	in := bufio.NewReader(os.Stdin)
+	defer os.Stdin.Close()
+	for {
+		line, err := in.ReadString('\n')
+		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				b.WriteString(line)
+			}
+			break
+		}
+		b.WriteString(line)
+	}
+	return b.Bytes()
+}
+
+func readString() string {
+	var b bytes.Buffer
+	in := bufio.NewReader(os.Stdin)
+	defer os.Stdin.Close()
+	for {
+		line, err := in.ReadString('\n')
+		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				b.WriteString(line)
+			}
+			break
+		}
+		b.WriteString(line)
+	}
+	return b.String()
+}
+
+func readLines() []string {
+	var lines = make([]string, 0)
+	in := bufio.NewReader(os.Stdin)
+	defer os.Stdin.Close()
+	for {
+		line, err := in.ReadString('\n')
+		if err != nil {
+			// If we have a partial line (no newline at EOF), include it
+			if len(line) > 0 {
+				line = strings.TrimSpace(line)
+				if len(line) > 0 {
+					lines = append(lines, line)
+				}
+			}
+			break
+		}
+		line = strings.TrimSpace(line)
+		if len(line) > 0 {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+var script = `
+const wf = workflow();
+wf.tasks.forEach(t => {
+    if(t.inputParameters == null) t.inputParameters = {};
+    if(t.function != null) {
+        t.type = "INLINE";
+        t.inputParameters["expression"] = t.function.toString() + "\n" + t.function.name + "();";
+        t.inputParameters["evaluatorType"] = "graaljs";
+    } else if (t.type == "WAIT") {
+        if(t.name == null) t.name = "WAIT";
+        if(t.duration != null) {
+            t.inputParameters["duration"] = t.duration;
+        }
+    }
+    if(t.taskReferenceName == null) {
+        t.taskReferenceName = t.name;
+    }
+
+});
+JSON.stringify(wf);
+`
+
+func getWorkflowFromJS(js string) (string, error) {
+	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	console.Enable(vm)
+
+	updatedScript := js + "\n" + script
+	prog, err := goja.Compile("", updatedScript, true)
+	if err != nil {
+		fmt.Printf("Error compiling the script %v ", err)
+		return "", err
+	}
+	value, err := vm.RunProgram(prog)
+	return value.String(), err
+}
 func parseTimeToEpochMillis(timeStr string) (int64, error) {
 	if timeStr == "" {
 		return 0, fmt.Errorf("empty time string")
@@ -372,6 +891,7 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 	input, _ := cmd.Flags().GetString("input")
 	inputFile, _ := cmd.Flags().GetString("file")
 	correlationId, _ := cmd.Flags().GetString("correlation")
+	sync, _ := cmd.Flags().GetBool("sync")
 
 	if workflowName == "" {
 		if len(args) == 1 {
@@ -403,6 +923,36 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	workflowClient := internal.GetWorkflowClient()
+
+	// Synchronous execution
+	if sync {
+		requestId, _ := uuid.NewRandom()
+		request := model.StartWorkflowRequest{
+			Name:          workflowName,
+			Version:       version,
+			CorrelationId: correlationId,
+			Input:         inputMap,
+			Priority:      0,
+		}
+
+		waitUntil, _ := cmd.Flags().GetString("wait-until")
+		log.Debug("wait until ", waitUntil)
+
+		run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
+		if execErr != nil {
+			return execErr
+		}
+
+		data, jsonError := json.MarshalIndent(run, "", "   ")
+		if jsonError != nil {
+			return jsonError
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
+	// Asynchronous execution
 	opts := &client.WorkflowResourceApiStartWorkflowOpts{}
 	if version > 0 {
 		opts.Version = optional.NewInt32(version)
@@ -411,7 +961,6 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 		opts.CorrelationId = optional.NewString(correlationId)
 	}
 
-	workflowClient := internal.GetWorkflowClient()
 	workflowId, _, startErr := workflowClient.StartWorkflow(cmd.Context(), inputMap, workflowName, opts)
 	if startErr != nil {
 		return startErr
@@ -420,71 +969,6 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
-
-func executeWorkflow(cmd *cobra.Command, args []string) error {
-	workflowName, _ := cmd.Flags().GetString("workflow")
-	version, _ := cmd.Flags().GetInt32("version")
-	input, _ := cmd.Flags().GetString("input")
-	inputFile, _ := cmd.Flags().GetString("file")
-	correlationId, _ := cmd.Flags().GetString("correlation")
-
-	if workflowName == "" {
-		if len(args) == 1 {
-			workflowName = args[0]
-		} else {
-			return cmd.Usage()
-		}
-	}
-
-	var inputJson []byte
-	var err error
-
-	if input != "" {
-		inputJson = []byte(input)
-	} else if inputFile != "" {
-		inputJson, err = os.ReadFile(inputFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	if inputJson == nil {
-		inputJson = []byte("{}")
-	}
-
-	var inputMap map[string]interface{}
-	err = json.Unmarshal(inputJson, &inputMap)
-	if err != nil {
-		return err
-	}
-
-	requestId, _ := uuid.NewRandom()
-	request := model.StartWorkflowRequest{
-		Name:          workflowName,
-		Version:       version,
-		CorrelationId: correlationId,
-		Input:         inputMap,
-		Priority:      0,
-	}
-
-	waitUntil, _ := cmd.Flags().GetString("wait-until")
-	log.Debug("wait until ", waitUntil)
-
-	workflowClient := internal.GetWorkflowClient()
-	run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
-	if execErr != nil {
-		return execErr
-	}
-
-	data, jsonError := json.MarshalIndent(run, "", "   ")
-	if jsonError != nil {
-		return jsonError
-	}
-	fmt.Println(string(data))
-
-	return nil
-}
-
 func pauseWorkflow(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return cmd.Usage()
@@ -781,7 +1265,18 @@ func updateWorkflowState(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+
 func init() {
+	rootCmd.AddCommand(workflowCmd)
+
+	// Definition management flags
+	createWorkflowMetadataCmd.Flags().Bool("force", false, "--force overwrite existing workflow")
+	createWorkflowMetadataCmd.Flags().Bool("js", false, "Input is javascript file")
+	createWorkflowMetadataCmd.Flags().Bool("json", true, "Input is json file")
+	createWorkflowMetadataCmd.MarkFlagsMutuallyExclusive("js", "json")
+	listWorkflowsMetadataCmd.Flags().Bool("json", false, "Print complete JSON output")
+
+	// Execution management flags
 	searchExecutionCmd.Flags().Int32P("count", "c", 10, "No of workflow executions to return (max 1000)")
 	searchExecutionCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
 	searchExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
@@ -793,14 +1288,10 @@ func init() {
 	startExecutionCmd.Flags().StringP("input", "i", "", "Input json")
 	startExecutionCmd.Flags().StringP("file", "f", "", "Input file with json data")
 	startExecutionCmd.Flags().Int32("version", 0, "Workflow version (optional)")
+	startExecutionCmd.Flags().StringP("correlation", "", "", "Correlation ID")
+	startExecutionCmd.Flags().Bool("sync", false, "Execute synchronously and wait for completion")
+	startExecutionCmd.Flags().StringP("wait-until", "u", "", "Wait until task completes (only with --sync)")
 	startExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
-
-	executeExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
-	executeExecutionCmd.Flags().StringP("input", "i", "", "Input json")
-	executeExecutionCmd.Flags().StringP("file", "f", "", "Input file with json data")
-	executeExecutionCmd.Flags().StringP("wait-until", "u", "", "Wait until task completes (instead of entire workflow)")
-	executeExecutionCmd.Flags().Int32("version", 1, "Workflow version (optional)")
-	executeExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
 
 	getExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")
 	deleteExecutionCmd.Flags().BoolP("archive", "a", false, "Archive the workflow execution instead of removing it completely")
@@ -823,12 +1314,19 @@ func init() {
 	updateStateExecutionCmd.Flags().String("variables", "", "Variables to update as JSON string")
 	updateStateExecutionCmd.Flags().String("task-updates", "", "Task updates as JSON string")
 
-	executionCmd.AddCommand(
+	workflowCmd.AddCommand(
+		// Definition management
+		listWorkflowsMetadataCmd,
+		getWorkflowMetadataCmd,
+		getAllWorkflowMetadataCmd,
+		updateWorkflowMetadataCmd,
+		createWorkflowMetadataCmd,
+		deleteWorkflowMetadataCmd,
+		// Execution management
 		searchExecutionCmd,
 		statusExecutionCmd,
 		getExecutionCmd,
 		startExecutionCmd,
-		executeExecutionCmd,
 		terminateExecutionCmd,
 		pauseExecutionCmd,
 		resumeExecutionCmd,
@@ -840,7 +1338,4 @@ func init() {
 		jumpExecutionCmd,
 		updateStateExecutionCmd,
 	)
-
-	// Add execution command to root
-	rootCmd.AddCommand(executionCmd)
 }

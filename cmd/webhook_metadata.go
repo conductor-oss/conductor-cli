@@ -16,7 +16,7 @@ import (
 var webhookCmd = &cobra.Command{
 	Use:     "webhook",
 	Short:   "Webhook management",
-	GroupID: "metadata",
+	GroupID: "conductor",
 }
 
 var (

@@ -222,10 +222,9 @@ func init() {
 
 	// Add command groups
 	rootCmd.AddGroup(
-		&cobra.Group{ID: "metadata", Title: "Metadata Commands:"},
-		&cobra.Group{ID: "execution", Title: "Execution Commands:"},
-		&cobra.Group{ID: "config", Title: "Configuration Commands:"},
-		&cobra.Group{ID: "development", Title: "Development Commands:"},
+		&cobra.Group{ID: "conductor", Title: "Conductor Management:"},
+		&cobra.Group{ID: "config", Title: "CLI Configuration:"},
+		&cobra.Group{ID: "development", Title: "Development:"},
 	)
 
 	// Set group ID for auto-generated completion command
