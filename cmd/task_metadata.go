@@ -13,8 +13,9 @@ import (
 )
 
 var taskCmd = &cobra.Command{
-	Use:   "task",
-	Short: "Task definition management",
+	Use:     "task",
+	Short:   "Task definition management",
+	GroupID: "metadata",
 }
 
 var (

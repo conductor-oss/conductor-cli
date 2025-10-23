@@ -13,10 +13,11 @@ import (
 )
 
 var updateCmd = &cobra.Command{
-	Use:   "update",
-	Short: "Update the CLI to the latest version",
-	Long:  "Download and install the latest version of the Conductor CLI from GitHub releases.",
-	RunE:  runUpdate,
+	Use:     "update",
+	Short:   "Update the CLI to the latest version",
+	Long:    "Download and install the latest version of the Conductor CLI from GitHub releases.",
+	GroupID: "config",
+	RunE:    runUpdate,
 }
 
 func init() {

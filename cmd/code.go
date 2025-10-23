@@ -96,6 +96,7 @@ var codeCmd = &cobra.Command{
 	Use:          "code",
 	Short:        "Generate projects from templates",
 	Long:         "Interactive project generation from boilerplate templates",
+	GroupID:      "development",
 	RunE:         interactiveCodeGenerate,
 	SilenceUsage: true,
 }

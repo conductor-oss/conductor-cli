@@ -20,9 +20,10 @@ import (
 var (
 	// Execution command group
 	executionCmd = &cobra.Command{
-		Use:   "execution",
-		Short: "Workflow and Task execution",
-		Long:  "Commands for managing workflow and task execution",
+		Use:     "execution",
+		Short:   "Workflow and Task execution",
+		Long:    "Commands for managing workflow and task execution",
+		GroupID: "execution",
 	}
 
 	// Execution subcommands

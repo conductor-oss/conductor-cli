@@ -13,8 +13,9 @@ import (
 )
 
 var whoamiCmd = &cobra.Command{
-	Use:   "whoami",
-	Short: "Display information about the current user",
+	Use:     "whoami",
+	Short:   "Display information about the current user",
+	GroupID: "config",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var jwtToken string
 

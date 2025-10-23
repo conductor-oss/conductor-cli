@@ -25,8 +25,9 @@ import (
 )
 
 var workflowCmd = &cobra.Command{
-	Use:   "workflow",
-	Short: "Workflow definition management",
+	Use:     "workflow",
+	Short:   "Workflow definition management",
+	GroupID: "metadata",
 }
 
 var (
