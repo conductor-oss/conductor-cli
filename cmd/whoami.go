@@ -4,8 +4,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
+	"github.com/conductor-sdk/conductor-go/sdk/authentication"
+	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	"github.com/spf13/cobra"
 )
 
@@ -19,9 +22,16 @@ var whoamiCmd = &cobra.Command{
 		if token != "" {
 			jwtToken = token
 		} else if key != "" && secret != "" {
-			// TODO: Get token from SDK's token manager
-			// Need to access: apiClient.TokenManager or similar
-			return fmt.Errorf("whoami with API key/secret not yet implemented")
+			// Get token using SDK's authentication.GetToken
+			tokenResponse, _, err := authentication.GetToken(
+				*settings.NewAuthenticationSettings(key, secret),
+				settings.NewHttpSettings(url),
+				http.DefaultClient,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to get token from API: %v", err)
+			}
+			jwtToken = tokenResponse.Token
 		} else {
 			return fmt.Errorf("no authentication configured - please configure auth-token or auth-key/auth-secret")
 		}
