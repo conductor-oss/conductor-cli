@@ -5,6 +5,8 @@
 
 WORKFLOW_NAME="cli_e2e_test_workflow"
 WORKFLOW_FILE="test/e2e/test-workflow.json"
+WORKFLOW_NAME_2="cli_e2e_test_workflow_2"
+WORKFLOW_FILE_2="test/e2e/test-workflow-2.json"
 WORKFLOW_ID=""
 
 setup() {
@@ -34,7 +36,35 @@ get_workflow_id() {
     [[ "$output" == *"wait_task"* ]]
 }
 
-@test "3. Start workflow execution" {
+@test "3. Create workflow definition for sync test" {
+    run bash -c "./orkes workflow create '$WORKFLOW_FILE_2' --force 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+}
+
+@test "4. Start workflow execution with --sync --version 1" {
+    run bash -c "./orkes workflow start --workflow '$WORKFLOW_NAME_2' --sync --version 1 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+
+    # Output should be JSON (workflow execution details), not just a UUID
+    [[ "$output" == *"\"status\""* ]]
+    [[ "$output" == *"\"workflowId\""* ]]
+    [[ "$output" == *"$WORKFLOW_NAME_2"* ]]
+
+    # Should NOT be just a single line UUID
+    line_count=$(echo "$output" | wc -l | tr -d ' ')
+    [ "$line_count" -gt 1 ]
+}
+
+@test "5. Cleanup - delete workflow definition for sync test" {
+    run bash -c "./orkes workflow delete '$WORKFLOW_NAME_2' 1 -y 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"deleted successfully"* ]]
+}
+
+@test "6. Start workflow execution" {
     run bash -c "./orkes workflow start --workflow '$WORKFLOW_NAME' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -46,7 +76,7 @@ get_workflow_id() {
     echo "Started workflow UUID: $WORKFLOW_ID"
 }
 
-@test "4. Check workflow status is RUNNING" {
+@test "7. Check workflow status is RUNNING" {
     # Read the workflow ID from previous test
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -57,7 +87,7 @@ get_workflow_id() {
     [[ "$output" == "RUNNING" ]]
 }
 
-@test "5. Terminate workflow execution" {
+@test "8. Terminate workflow execution" {
     # Read the workflow ID from previous test
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -68,7 +98,7 @@ get_workflow_id() {
     echo "Terminated workflow UUID: $WORKFLOW_ID"
 }
 
-@test "6. Check workflow status is TERMINATED" {
+@test "9. Check workflow status is TERMINATED" {
     # Read the workflow ID from previous test
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -82,7 +112,7 @@ get_workflow_id() {
     [[ "$output" == "TERMINATED" ]]
 }
 
-@test "7. Delete workflow execution" {
+@test "10. Delete workflow execution" {
     # Read the workflow ID from previous test
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -94,7 +124,7 @@ get_workflow_id() {
     echo "Deleted workflow UUID: $WORKFLOW_ID"
 }
 
-@test "8. Verify execution no longer exists" {
+@test "11. Verify execution no longer exists" {
     # Read the workflow ID from previous test
     WORKFLOW_ID=$(cat /tmp/workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -108,7 +138,7 @@ get_workflow_id() {
     [ "$status" -ne 0 ]
 }
 
-@test "9. Cleanup - delete workflow definition" {
+@test "12. Cleanup - delete workflow definition" {
     run bash -c "./orkes workflow delete '$WORKFLOW_NAME' 1 -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
