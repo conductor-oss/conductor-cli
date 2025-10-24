@@ -34,6 +34,10 @@ func GetTaskClient() *client.TaskResourceApiService {
 	return &client.TaskResourceApiService{APIClient: apiClient}
 }
 
+func GetGatewayClient() client.ApiGatewayClient {
+	return client.NewApiGatewayClient(apiClient)
+}
+
 func SetAPIClient(client *client.APIClient) {
 	apiClient = client
 }
