@@ -108,9 +108,17 @@ var (
 		Use:          "start",
 		Short:        "Start workflow execution",
 		Long:         "Start workflow execution. Use --sync flag to execute synchronously and wait for completion.",
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			sync, _ := cmd.Flags().GetBool("sync")
+			version, _ := cmd.Flags().GetInt32("version")
+			if sync && version == 0 {
+				return fmt.Errorf("--version is required when using --sync flag")
+			}
+			return nil
+		},
 		RunE:         startWorkflow,
 		SilenceUsage: true,
-		Example:      "workflow start --workflow my_workflow\nworkflow start --workflow my_workflow --sync",
+		Example:      "workflow start --workflow my_workflow\nworkflow start --workflow my_workflow --sync --version 1",
 	}
 
 	terminateExecutionCmd = &cobra.Command{
