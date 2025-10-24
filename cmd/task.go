@@ -105,7 +105,7 @@ func listTasks(cmd *cobra.Command, args []string) error {
 	metadataClient := internal.GetMetadataClient()
 	tasks, _, err := metadataClient.GetTaskDefs(context.Background())
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to list tasks")
 	}
 
 	if jsonOutput {
@@ -171,7 +171,7 @@ func getTask(cmd *cobra.Command, args []string) error {
 	taskType := args[0]
 	task, _, err := metadataClient.GetTaskDef(context.Background(), taskType)
 	if err != nil {
-		return err
+		return parseAPIError(err, fmt.Sprintf("Failed to get task '%s'", taskType))
 	}
 	bytes, _ := json.MarshalIndent(task, "", "   ")
 	fmt.Println(string(bytes))
@@ -215,7 +215,7 @@ func createTask(cmd *cobra.Command, args []string) error {
 	}
 	_, err = metadataClient.RegisterTaskDef(context.Background(), taskDefs)
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to create task")
 	}
 	return nil
 }
@@ -252,7 +252,7 @@ func updateTask(cmd *cobra.Command, args []string) error {
 	}
 	_, err = metadataClient.UpdateTaskDef(context.Background(), taskDef)
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to update task")
 	}
 	return nil
 }
@@ -274,7 +274,7 @@ func getAllTasks(cmd *cobra.Command, args []string) error {
 
 	taskDefs, _, err := metadataClient.GetTaskDefs(context.Background())
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to get tasks")
 	}
 
 	fmt.Println("[")
@@ -311,7 +311,7 @@ func deleteTaskMetadata(cmd *cobra.Command, args []string) error {
 
 		_, err := metadataClient.UnregisterTaskDef(context.Background(), name)
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to delete task '%s'", name))
 		}
 		fmt.Printf("Task '%s' deleted successfully\n", name)
 	}

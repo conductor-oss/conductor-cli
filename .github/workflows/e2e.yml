@@ -36,6 +36,12 @@ jobs:
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
 
+    - name: Run E2E tests (no credentials)
+      env:
+        CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
+      run: |
+        bats test/e2e/auth.bats --show-output-of-passing-tests
+
     - name: Run other E2E tests (with credentials)
       env:
         CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
@@ -43,7 +49,7 @@ jobs:
         CONDUCTOR_AUTH_SECRET: ${{ secrets.CONDUCTOR_AUTH_SECRET }}
         CONDUCTOR_SERVER_TYPE: Enterprise
       run: |
-        bats test/e2e/*.bats --show-output-of-passing-tests
+        bats test/e2e/workflow.bats test/e2e/rerun.bats test/e2e/schedule.bats test/e2e/webhook.bats test/e2e/whoami.bats --show-output-of-passing-tests
 
     - name: Upload test artifacts
       if: always()
