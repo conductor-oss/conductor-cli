@@ -240,6 +240,16 @@ func init() {
 		defaultHelpFunc(cmd, args)
 	})
 
+	defaultUsageFunc := rootCmd.UsageFunc()
+	rootCmd.SetUsageFunc(func(cmd *cobra.Command) error {
+		if cmd.HasParent() {
+			cmd.InheritedFlags().VisitAll(func(flag *pflag.Flag) {
+				flag.Hidden = true
+			})
+		}
+		return defaultUsageFunc(cmd)
+	})
+
 	// Configuration file flag
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.conductor-cli/config.yaml)")
 
