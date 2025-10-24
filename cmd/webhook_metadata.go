@@ -69,7 +69,7 @@ func list(cmd *cobra.Command, args []string) error {
 	webhooks, _, err := webhookClient.GetAllWebhook(context.Background())
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to list webhooks")
 	}
 
 	if jsonOutput {
@@ -174,7 +174,7 @@ func get(cmd *cobra.Command, args []string) error {
 	webhookClient := internal.GetWebhooksConfigClient()
 	webhook, _, err := webhookClient.GetWebhook(context.Background(), args[0])
 	if err != nil {
-		return err
+		return parseAPIError(err, fmt.Sprintf("Failed to get webhook '%s'", args[0]))
 	}
 
 	data, _ := json.MarshalIndent(webhook, "", "   ")

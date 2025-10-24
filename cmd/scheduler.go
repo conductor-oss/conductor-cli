@@ -119,7 +119,7 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 	schedules, _, err := schedulerClient.GetAllSchedules(context.Background(), &options)
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to list schedules")
 	}
 
 	if jsonOutput {
@@ -174,7 +174,7 @@ func getSchedule(cmd *cobra.Command, args []string) error {
 	for i := 0; i < len(args); i++ {
 		schedule, _, err := schedulerClient.GetSchedule(context.Background(), args[i])
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to get schedule '%s'", args[i]))
 		}
 		bytes, _ := json.MarshalIndent(schedule, "", "   ")
 		fmt.Println(string(bytes))

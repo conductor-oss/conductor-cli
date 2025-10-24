@@ -207,7 +207,7 @@ func listWorkflow(cmd *cobra.Command, args []string) error {
 	metadataClient := internal.GetMetadataClient()
 	workflows, _, err := metadataClient.GetAll(context.Background())
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to list workflows")
 	}
 
 	if jsonOutput {
@@ -291,7 +291,7 @@ func getAllWorkflowMetadata(cmd *cobra.Command, args []string) error {
 
 	metadata, _, err := metadataClient.GetAll(context.Background())
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to get workflows")
 	}
 	fmt.Println("[")
 	for i, data := range metadata {
@@ -547,6 +547,7 @@ func parseAPIError(err error, defaultMsg string) error {
 		var errorResponse struct {
 			Status           int    `json:"status"`
 			Message          string `json:"message"`
+			Error            string `json:"error"`
 			ValidationErrors []struct {
 				Path    string `json:"path"`
 				Message string `json:"message"`
@@ -554,6 +555,15 @@ func parseAPIError(err error, defaultMsg string) error {
 		}
 
 		if json.Unmarshal([]byte(jsonStr), &errorResponse) == nil {
+			// Check for authentication errors
+			if errorResponse.Error == "INVALID_TOKEN" || errorResponse.Error == "ERROR_WHILE_FETCHING" {
+				message := errorResponse.Message
+				if message == "" {
+					message = "Authentication failed"
+				}
+				return fmt.Errorf("%s\nPlease check your authentication settings. Run 'orkes config save' to configure credentials", message)
+			}
+
 			if errorResponse.Message != "" {
 				message := fmt.Sprintf("%s: %s", defaultMsg, errorResponse.Message)
 
@@ -777,7 +787,7 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 
 	results, _, err := workflowClient.Search(context.Background(), &searchOpts)
 	if err != nil {
-		return err
+		return parseAPIError(err, "Failed to search workflows")
 	}
 
 	jsonOutput, _ := cmd.Flags().GetBool("json")
@@ -823,7 +833,7 @@ func getWorkflowExecutionStatus(cmd *cobra.Command, args []string) error {
 		id := args[i]
 		status, _, getStateErr := workflowClient.GetWorkflowState(context.Background(), id, true, true)
 		if getStateErr != nil {
-			return getStateErr
+			return parseAPIError(getStateErr, fmt.Sprintf("Failed to get workflow status for '%s'", id))
 		}
 		fmt.Println(status.Status)
 	}
@@ -845,7 +855,7 @@ func getWorkflowExecution(cmd *cobra.Command, args []string) error {
 			options := &client.WorkflowResourceApiGetExecutionStatusOpts{IncludeTasks: optional.NewBool(true)}
 			status, _, err := workflowClient.GetExecutionStatus(context.Background(), id, options)
 			if err != nil {
-				return err
+				return parseAPIError(err, fmt.Sprintf("Failed to get workflow execution for '%s'", id))
 			}
 			data, marshallError := json.MarshalIndent(status, "", "   ")
 			if marshallError != nil {
@@ -857,7 +867,7 @@ func getWorkflowExecution(cmd *cobra.Command, args []string) error {
 			options := &client.WorkflowResourceApiGetExecutionStatusOpts{IncludeTasks: optional.NewBool(false)}
 			status, _, err := workflowClient.GetExecutionStatus(context.Background(), id, options)
 			if err != nil {
-				return err
+				return parseAPIError(err, fmt.Sprintf("Failed to get workflow execution for '%s'", id))
 			}
 			// Remove workflowDefinition from output
 			status.WorkflowDefinition = nil
@@ -949,7 +959,7 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 
 		run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
 		if execErr != nil {
-			return execErr
+			return parseAPIError(execErr, "Failed to start workflow")
 		}
 
 		data, jsonError := json.MarshalIndent(run, "", "   ")
@@ -971,7 +981,7 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 
 	workflowId, _, startErr := workflowClient.StartWorkflow(cmd.Context(), inputMap, workflowName, opts)
 	if startErr != nil {
-		return startErr
+		return parseAPIError(startErr, "Failed to start workflow")
 	}
 	fmt.Println(workflowId)
 
