@@ -2,6 +2,8 @@ module github.com/orkes-io/conductor-cli
 
 go 1.23
 
+replace github.com/conductor-sdk/conductor-go => github.com/conductor-oss/go-sdk v0.0.0-20251028131231-ee4646b84c99
+
 require (
 	github.com/antihax/optional v1.0.0
 	github.com/conductor-sdk/conductor-go v1.7.0
