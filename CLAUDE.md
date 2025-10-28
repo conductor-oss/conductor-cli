@@ -215,6 +215,68 @@ echo "secret_value" | orkes secret put my_secret
 cat secret.txt | orkes secret put my_secret
 ```
 
+### API Gateway Commands
+
+API Gateway allows exposing Conductor workflows as REST APIs with authentication, CORS configuration, and route management.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| **Service Management** | | | | |
+| `api-gateway service list` | List all services | None | `--complete` | `orkes api-gateway service list` |
+| `api-gateway service get <id>` | Get service details | service ID | | `orkes api-gateway service get my-service` |
+| `api-gateway service create [file]` | Create service | None (file optional) | `--service-id`, `--name`, `--path`, `--description`, `--enabled`, `--mcp-enabled`, `--auth-config-id`, `--cors-allowed-origins`, `--cors-allowed-methods`, `--cors-allowed-headers` | `orkes api-gateway service create service.json` |
+| `api-gateway service update <id> <file>` | Update service | service ID, JSON file | | `orkes api-gateway service update my-service service.json` |
+| `api-gateway service delete <id>` | Delete service | service ID | | `orkes api-gateway service delete my-service` |
+| **Auth Configuration Management** | | | | |
+| `api-gateway auth list` | List auth configs | None | `--complete` | `orkes api-gateway auth list` |
+| `api-gateway auth get <id>` | Get auth config | auth config ID | | `orkes api-gateway auth get token-based` |
+| `api-gateway auth create [file]` | Create auth config | None (file optional) | `--auth-config-id`, `--auth-type`, `--application-id`, `--api-keys` | `orkes api-gateway auth create auth.json` |
+| `api-gateway auth update <id> <file>` | Update auth config | auth config ID, JSON file | | `orkes api-gateway auth update token-based auth.json` |
+| `api-gateway auth delete <id>` | Delete auth config | auth config ID | | `orkes api-gateway auth delete token-based` |
+| **Route Management** | | | | |
+| `api-gateway route list <service_id>` | List routes for service | service ID | `--complete` | `orkes api-gateway route list my-service` |
+| `api-gateway route create <service_id> [file]` | Create route | service ID (file optional) | `--http-method`, `--path`, `--workflow-name`, `--workflow-version`, `--execution-mode`, `--description`, `--request-metadata-as-input`, `--workflow-metadata-in-output`, `--wait-until-tasks` | `orkes api-gateway route create my-service route.json` |
+| `api-gateway route update <service_id> <path> <file>` | Update route | service ID, route path, JSON file | | `orkes api-gateway route update my-service /users route.json` |
+| `api-gateway route delete <service_id> <method> <path>` | Delete route | service ID, HTTP method, route path | | `orkes api-gateway route delete my-service GET /users` |
+
+**Service Create Flags:**
+- `--service-id` - Service ID (required when not using file)
+- `--name` - Display name of the service
+- `--path` - Base path for the service (required when not using file)
+- `--description` - Description of the service
+- `--enabled` - Enable the service (default: true)
+- `--mcp-enabled` - Enable MCP for the service (default: false)
+- `--auth-config-id` - Authentication configuration ID
+- `--cors-allowed-origins` - CORS allowed origins (repeatable, comma-separated)
+- `--cors-allowed-methods` - CORS allowed methods (repeatable, comma-separated)
+- `--cors-allowed-headers` - CORS allowed headers (repeatable, comma-separated)
+
+**Auth Config Create Flags:**
+- `--auth-config-id` - Authentication configuration ID (required when not using file)
+- `--auth-type` - Authentication type: API_KEY or NONE (required when not using file)
+- `--application-id` - Application ID
+- `--api-keys` - API keys (repeatable, comma-separated)
+
+**Route Create Flags:**
+- `--http-method` - HTTP method: GET, POST, PUT, DELETE, etc. (required when not using file)
+- `--path` - Route path (required when not using file)
+- `--workflow-name` - Workflow name to map to this route (required when not using file)
+- `--workflow-version` - Workflow version (optional, uses latest if not specified)
+- `--execution-mode` - Workflow execution mode: SYNC or ASYNC (default: SYNC)
+- `--description` - Route description
+- `--request-metadata-as-input` - Pass request metadata as workflow input
+- `--workflow-metadata-in-output` - Include workflow metadata in output
+- `--wait-until-tasks` - Comma-separated task reference names to wait for
+
+**Table Output (service list):**
+Columns: ID, NAME, PATH, ENABLED, AUTH CONFIG, ROUTES
+
+**Table Output (auth list):**
+Columns: ID, AUTH TYPE, APPLICATION ID, API KEYS
+
+**Table Output (route list):**
+Columns: METHOD, PATH, WORKFLOW, VERSION, EXECUTION MODE, DESCRIPTION
+
 ### Other Commands
 
 | Command | Description | Example |
@@ -483,6 +545,125 @@ orkes secret cache-clear --redis
 
 # Clear both caches at once
 orkes secret cache-clear
+```
+
+### 11. Create and manage API Gateway services
+
+```bash
+# Create service from JSON file
+orkes api-gateway service create service.json
+
+# Create service using flags
+orkes api-gateway service create \
+  --service-id my-api \
+  --name "My API Service" \
+  --path "/api/v1" \
+  --description "API for accessing workflows" \
+  --enabled \
+  --auth-config-id token-based \
+  --cors-allowed-origins "https://example.com" \
+  --cors-allowed-methods "GET,POST,PUT,DELETE" \
+  --cors-allowed-headers "*"
+
+# List all services
+orkes api-gateway service list
+
+# Get service details
+orkes api-gateway service get my-api
+```
+
+**Example service JSON:**
+```json
+{
+  "id": "my-api",
+  "name": "My API Service",
+  "path": "/api/v1",
+  "description": "API for accessing workflows",
+  "enabled": true,
+  "mcpEnabled": true,
+  "authConfigId": "token-based",
+  "corsConfig": {
+    "accessControlAllowOrigin": ["https://example.com"],
+    "accessControlAllowMethods": ["GET", "POST", "PUT", "DELETE"],
+    "accessControlAllowHeaders": ["*"]
+  }
+}
+```
+
+### 12. Set up API Gateway authentication
+
+```bash
+# Create auth config from file
+orkes api-gateway auth create auth-config.json
+
+# Create auth config using flags
+orkes api-gateway auth create \
+  --auth-config-id "token-based" \
+  --auth-type "API_KEY" \
+  --application-id "my-app-id" \
+  --api-keys "key1,key2,key3"
+
+# List auth configs
+orkes api-gateway auth list
+
+# Get specific auth config
+orkes api-gateway auth get token-based
+```
+
+**Example auth config JSON:**
+```json
+{
+  "id": "token-based",
+  "authenticationType": "API_KEY",
+  "applicationId": "my-app-id",
+  "apiKeys": ["key1", "key2"]
+}
+```
+
+### 13. Create API Gateway routes for workflows
+
+```bash
+# Create a route from JSON
+orkes api-gateway route create my-api route.json
+
+# Create a route using flags
+orkes api-gateway route create my-service \
+  --http-method "GET" \
+  --path "/users/{userId}" \
+  --description "Get user by ID" \
+  --workflow-name "get_user_workflow" \
+  --workflow-version 1 \
+  --execution-mode "SYNC"
+
+# Create async route with metadata
+orkes api-gateway route create my-service \
+  --http-method "POST" \
+  --path "/orders" \
+  --description "Create order" \
+  --workflow-name "create_order_workflow" \
+  --execution-mode "ASYNC" \
+  --request-metadata-as-input \
+  --workflow-metadata-in-output
+
+# List routes for a service
+orkes api-gateway route list my-api
+
+# Delete a route
+orkes api-gateway route delete my-api GET /users
+```
+
+**Example route JSON:**
+```json
+{
+  "path": "/users/{userId}",
+  "httpMethod": "GET",
+  "description": "Get user by ID",
+  "workflowExecutionMode": "SYNC",
+  "mappedWorkflow": {
+    "name": "get_user_workflow",
+    "version": 1
+  }
+}
 ```
 
 ## Error Handling
