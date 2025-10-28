@@ -13,6 +13,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	errAPIGatewayEnterpriseOnly = "API Gateway management is only available in Enterprise. Not supported in OSS Conductor"
+)
+
 var (
 	apiGatewayCmd = &cobra.Command{
 		Use:     "api-gateway",
@@ -160,6 +164,10 @@ func getGatewayClient() client.ApiGatewayClient {
 }
 
 func listServices(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	complete, _ := cmd.Flags().GetBool("complete")
 
 	gatewayClient := getGatewayClient()
@@ -201,6 +209,10 @@ func listServices(cmd *cobra.Command, args []string) error {
 }
 
 func getService(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	serviceId := args[0]
 	gatewayClient := getGatewayClient()
 	service, _, err := gatewayClient.GetService(context.Background(), serviceId)
@@ -218,6 +230,10 @@ func getService(cmd *cobra.Command, args []string) error {
 }
 
 func createService(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	var service gateway.ApiGatewayService
 
 	// Check if file was provided
@@ -294,6 +310,10 @@ func createService(cmd *cobra.Command, args []string) error {
 }
 
 func updateService(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	serviceId := args[0]
 	filePath := args[1]
 
@@ -318,6 +338,10 @@ func updateService(cmd *cobra.Command, args []string) error {
 }
 
 func deleteService(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	serviceId := args[0]
 
 	if !confirmDeletion("service", serviceId) {
@@ -338,6 +362,10 @@ func deleteService(cmd *cobra.Command, args []string) error {
 // ==================== Auth Config Functions ====================
 
 func listAuthConfigs(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	complete, _ := cmd.Flags().GetBool("complete")
 
 	gatewayClient := getGatewayClient()
@@ -373,6 +401,10 @@ func listAuthConfigs(cmd *cobra.Command, args []string) error {
 }
 
 func getAuthConfig(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	authConfigId := args[0]
 	gatewayClient := getGatewayClient()
 	authConfig, _, err := gatewayClient.GetAuthConfig(context.Background(), authConfigId)
@@ -390,6 +422,10 @@ func getAuthConfig(cmd *cobra.Command, args []string) error {
 }
 
 func createAuthConfig(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	var authConfig gateway.ApiGatewayAuthConfig
 
 	// Check if file was provided
@@ -443,6 +479,10 @@ func createAuthConfig(cmd *cobra.Command, args []string) error {
 }
 
 func updateAuthConfig(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	authConfigId := args[0]
 	filePath := args[1]
 
@@ -467,6 +507,10 @@ func updateAuthConfig(cmd *cobra.Command, args []string) error {
 }
 
 func deleteAuthConfig(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	authConfigId := args[0]
 
 	if !confirmDeletion("auth config", authConfigId) {
@@ -487,6 +531,10 @@ func deleteAuthConfig(cmd *cobra.Command, args []string) error {
 // ==================== Route Functions ====================
 
 func listRoutes(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	complete, _ := cmd.Flags().GetBool("complete")
 	serviceId := args[0]
 
@@ -540,6 +588,10 @@ func listRoutes(cmd *cobra.Command, args []string) error {
 }
 
 func createRoute(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	if len(args) < 1 {
 		return cmd.Usage()
 	}
@@ -613,6 +665,10 @@ func createRoute(cmd *cobra.Command, args []string) error {
 }
 
 func updateRoute(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	serviceId := args[0]
 	routePath := args[1]
 	filePath := args[2]
@@ -638,6 +694,10 @@ func updateRoute(cmd *cobra.Command, args []string) error {
 }
 
 func deleteRoute(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
+	}
+
 	serviceId := args[0]
 	httpMethod := args[1]
 	routePath := args[2]
