@@ -154,6 +154,62 @@ Columns: NAME, WEBHOOK ID, WORKFLOWS, URL
 **Table Output (schedule list):**
 Columns: NAME, WORKFLOW, STATUS, CREATED TIME
 
+### Secret Commands
+
+Secret management for storing and managing sensitive configuration values like API keys, passwords, and tokens.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| **Secret Management** | | | | |
+| `secret list` | List all secrets | None | `--with-tags`, `--json` | `orkes secret list` |
+| `secret get <key>` | Get secret value | secret key | `--show-value` | `orkes secret get db_password` |
+| `secret put <key> [value]` | Create/update secret | secret key | `--value` | `orkes secret put db_password mySecret` |
+| `secret delete <key>` | Delete secret | secret key | | `orkes secret delete db_password` |
+| `secret exists <key>` | Check if secret exists | secret key | | `orkes secret exists db_password` |
+| **Tag Management** | | | | |
+| `secret tag-list <key>` | List tags for secret | secret key | `--json` | `orkes secret tag-list db_password` |
+| `secret tag-add <key>` | Add tags to secret | secret key | `--tag` (repeatable) | `orkes secret tag-add db_password --tag env:prod` |
+| `secret tag-delete <key>` | Delete tags from secret | secret key | `--tag` (repeatable) | `orkes secret tag-delete db_password --tag env:prod` |
+| **Cache Management** | | | | |
+| `secret cache-clear` | Clear secrets cache | None | `--local`, `--redis` | `orkes secret cache-clear --local` |
+
+**Flags:**
+- `--with-tags` - Include tags in list output (applies to list command)
+- `--json` - Output complete JSON instead of table (applies to list and tag-list commands)
+- `--show-value` - Display actual secret value (applies to get command, otherwise shows "Secret exists" message)
+- `--value` - Provide secret value via flag instead of argument (applies to put command)
+- `--tag` - Tag in key:value format, repeatable (applies to tag-add and tag-delete commands)
+- `--local` - Clear local cache only (applies to cache-clear command)
+- `--redis` - Clear Redis cache only (applies to cache-clear command)
+- If neither `--local` nor `--redis` is specified for cache-clear, both caches are cleared
+
+**Table Output (secret list):**
+- Default: Column: KEY
+- With `--with-tags`: Columns: KEY, TAGS
+
+**Table Output (secret tag-list):**
+Columns: KEY, VALUE, TYPE
+
+**Security Notes:**
+- Secret values are NOT displayed by default in `get` command for security
+- Use `--show-value` flag explicitly to display secret values
+- Delete operations require confirmation unless `--yes` flag is used
+
+**Input Methods (secret put):**
+```bash
+# Method 1: Value as argument
+orkes secret put my_secret "secret_value"
+
+# Method 2: Value via flag
+orkes secret put my_secret --value "secret_value"
+
+# Method 3: Value from stdin
+echo "secret_value" | orkes secret put my_secret
+
+# Method 4: Value from file
+cat secret.txt | orkes secret put my_secret
+```
+
 ### Other Commands
 
 | Command | Description | Example |
@@ -182,6 +238,7 @@ Columns: NAME, WORKFLOW, STATUS, CREATED TIME
 - `task list` - Table with NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETRY COUNT, RESPONSE TIMEOUT (s) (or `--json`)
 - `schedule list` - Table with NAME, WORKFLOW, STATUS, CREATED TIME (or `--json`)
 - `webhook list` - Table with NAME, WEBHOOK ID, WORKFLOWS, URL (or `--json`)
+- `secret list` - Table with KEY, or KEY and TAGS with `--with-tags` (or `--json`)
 
 **Important:** To parse output reliably, redirect stderr to `/dev/null` to suppress update notifications and warnings:
 ```bash
@@ -375,6 +432,53 @@ orkes workflow search --workflow my_workflow \
 - `--count <n>` - Number of results (max 1000, default 10)
 - `--start-time-after <time>` - Started after time (formats: YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch milliseconds)
 - `--start-time-before <time>` - Started before time (same formats)
+
+### 10. Manage secrets
+
+```bash
+# Create a secret from command line
+orkes secret put db_password mySecretPassword123
+
+# Create a secret from environment variable
+orkes secret put api_key --value "$MY_API_KEY"
+
+# Create a secret from file (without exposing value in command history)
+cat secret.txt | orkes secret put encryption_key
+
+# List all secrets (keys only)
+orkes secret list
+
+# List secrets with tags
+orkes secret list --with-tags
+
+# Get secret value (requires explicit flag for security)
+orkes secret get db_password --show-value
+
+# Check if secret exists
+orkes secret exists db_password
+
+# Add tags to organize secrets
+orkes secret tag-add db_password --tag env:prod --tag team:backend --tag type:database
+
+# List tags for a secret
+orkes secret tag-list db_password
+
+# Delete specific tags
+orkes secret tag-delete db_password --tag env:prod
+
+# Delete a secret (requires confirmation)
+orkes secret delete old_api_key
+
+# Delete without confirmation
+orkes secret delete old_api_key -y
+
+# Clear caches after secret rotation
+orkes secret cache-clear --local
+orkes secret cache-clear --redis
+
+# Clear both caches at once
+orkes secret cache-clear
+```
 
 ## Error Handling
 
