@@ -15,9 +15,10 @@ import (
 
 var (
 	apiGatewayCmd = &cobra.Command{
-		Use:   "api-gateway",
-		Short: "API Gateway management commands",
-		Long:  "Manage API Gateway services, routes, and authentication configurations.",
+		Use:     "api-gateway",
+		Short:   "API Gateway management commands",
+		Long:    "Manage API Gateway services, routes, and authentication configurations.",
+		GroupID: "conductor",
 	}
 
 	// Service commands
@@ -43,11 +44,11 @@ var (
 	}
 
 	serviceCreateCmd = &cobra.Command{
-		Use:          "create <file>",
-		Short:        "Create an API Gateway service from a JSON file",
+		Use:          "create [file]",
+		Short:        "Create an API Gateway service from a JSON file or flags",
+		Long:         "Create an API Gateway service. You can either provide a JSON file or use command-line flags.",
 		RunE:         createService,
 		SilenceUsage: true,
-		Args:         cobra.ExactArgs(1),
 	}
 
 	serviceUpdateCmd = &cobra.Command{
@@ -89,11 +90,11 @@ var (
 	}
 
 	authConfigCreateCmd = &cobra.Command{
-		Use:          "create <file>",
-		Short:        "Create an authentication configuration from a JSON file",
+		Use:          "create [file]",
+		Short:        "Create an authentication configuration from a JSON file or flags",
+		Long:         "Create an authentication configuration. You can either provide a JSON file or use command-line flags.",
 		RunE:         createAuthConfig,
 		SilenceUsage: true,
-		Args:         cobra.ExactArgs(1),
 	}
 
 	authConfigUpdateCmd = &cobra.Command{
@@ -128,11 +129,11 @@ var (
 	}
 
 	routeCreateCmd = &cobra.Command{
-		Use:          "create <service_id> <file>",
-		Short:        "Create a route for a service from a JSON file",
+		Use:          "create <service_id> [file]",
+		Short:        "Create a route for a service from a JSON file or flags",
+		Long:         "Create a route for a service. You can either provide a JSON file or use command-line flags.",
 		RunE:         createRoute,
 		SilenceUsage: true,
-		Args:         cobra.ExactArgs(2),
 	}
 
 	routeUpdateCmd = &cobra.Command{
@@ -217,24 +218,78 @@ func getService(cmd *cobra.Command, args []string) error {
 }
 
 func createService(cmd *cobra.Command, args []string) error {
-	filePath := args[0]
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("error reading file: %v", err)
-	}
-
 	var service gateway.ApiGatewayService
-	if err := json.Unmarshal(fileData, &service); err != nil {
-		return fmt.Errorf("error parsing JSON: %v", err)
+
+	// Check if file was provided
+	if len(args) > 0 {
+		// Load from file
+		filePath := args[0]
+		fileData, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("error reading file: %v", err)
+		}
+
+		if err := json.Unmarshal(fileData, &service); err != nil {
+			return fmt.Errorf("error parsing JSON: %v", err)
+		}
+	} else {
+		// Build from flags
+		serviceId, _ := cmd.Flags().GetString("service-id")
+		name, _ := cmd.Flags().GetString("name")
+		path, _ := cmd.Flags().GetString("path")
+		description, _ := cmd.Flags().GetString("description")
+		enabled, _ := cmd.Flags().GetBool("enabled")
+		mcpEnabled, _ := cmd.Flags().GetBool("mcp-enabled")
+		authConfigId, _ := cmd.Flags().GetString("auth-config-id")
+
+		// If no flags provided, show usage
+		if serviceId == "" && name == "" && path == "" && description == "" && authConfigId == "" {
+			return cmd.Usage()
+		}
+
+		// Validate required fields
+		if serviceId == "" {
+			return fmt.Errorf("--service-id is required when not using a file")
+		}
+		if path == "" {
+			return fmt.Errorf("--path is required when not using a file")
+		}
+
+		service = gateway.ApiGatewayService{
+			Id:           serviceId,
+			Name:         name,
+			Path:         path,
+			Description:  description,
+			Enabled:      enabled,
+			McpEnabled:   mcpEnabled,
+			AuthConfigId: authConfigId,
+		}
+
+		// Build CORS config if any CORS flags are provided
+		corsOrigins, _ := cmd.Flags().GetStringSlice("cors-allowed-origins")
+		corsMethods, _ := cmd.Flags().GetStringSlice("cors-allowed-methods")
+		corsHeaders, _ := cmd.Flags().GetStringSlice("cors-allowed-headers")
+
+		if len(corsOrigins) > 0 || len(corsMethods) > 0 || len(corsHeaders) > 0 {
+			service.CorsConfig = &gateway.CorsConfig{
+				AccessControlAllowOrigin:  corsOrigins,
+				AccessControlAllowMethods: corsMethods,
+				AccessControlAllowHeaders: corsHeaders,
+			}
+		}
 	}
 
 	gatewayClient := getGatewayClient()
-	_, err = gatewayClient.CreateService(context.Background(), service)
+	_, err := gatewayClient.CreateService(context.Background(), service)
 	if err != nil {
 		return fmt.Errorf("error creating service: %v", err)
 	}
 
-	fmt.Printf("Service created successfully: %s\n", service.Name)
+	displayName := service.Name
+	if displayName == "" {
+		displayName = service.Id
+	}
+	fmt.Printf("Service created successfully: %s\n", displayName)
 	return nil
 }
 
@@ -335,19 +390,50 @@ func getAuthConfig(cmd *cobra.Command, args []string) error {
 }
 
 func createAuthConfig(cmd *cobra.Command, args []string) error {
-	filePath := args[0]
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("error reading file: %v", err)
-	}
-
 	var authConfig gateway.ApiGatewayAuthConfig
-	if err := json.Unmarshal(fileData, &authConfig); err != nil {
-		return fmt.Errorf("error parsing JSON: %v", err)
+
+	// Check if file was provided
+	if len(args) > 0 {
+		// Load from file
+		filePath := args[0]
+		fileData, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("error reading file: %v", err)
+		}
+
+		if err := json.Unmarshal(fileData, &authConfig); err != nil {
+			return fmt.Errorf("error parsing JSON: %v", err)
+		}
+	} else {
+		// Build from flags
+		authConfigId, _ := cmd.Flags().GetString("auth-config-id")
+		authType, _ := cmd.Flags().GetString("auth-type")
+		applicationId, _ := cmd.Flags().GetString("application-id")
+		apiKeys, _ := cmd.Flags().GetStringSlice("api-keys")
+
+		// If no flags provided, show usage
+		if authConfigId == "" && authType == "" && applicationId == "" {
+			return cmd.Usage()
+		}
+
+		// Validate required fields
+		if authConfigId == "" {
+			return fmt.Errorf("--auth-config-id is required when not using a file")
+		}
+		if authType == "" {
+			return fmt.Errorf("--auth-type is required when not using a file (API_KEY or NONE)")
+		}
+
+		authConfig = gateway.ApiGatewayAuthConfig{
+			Id:            authConfigId,
+			AuthType:      gateway.AuthType(authType),
+			ApplicationId: applicationId,
+			ApiKeys:       apiKeys,
+		}
 	}
 
 	gatewayClient := getGatewayClient()
-	_, err = gatewayClient.CreateAuthConfig(context.Background(), authConfig)
+	_, err := gatewayClient.CreateAuthConfig(context.Background(), authConfig)
 	if err != nil {
 		return fmt.Errorf("error creating auth config: %v", err)
 	}
@@ -454,21 +540,70 @@ func listRoutes(cmd *cobra.Command, args []string) error {
 }
 
 func createRoute(cmd *cobra.Command, args []string) error {
-	serviceId := args[0]
-	filePath := args[1]
-
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("error reading file: %v", err)
+	if len(args) < 1 {
+		return cmd.Usage()
 	}
 
+	serviceId := args[0]
 	var route gateway.ApiGatewayRoute
-	if err := json.Unmarshal(fileData, &route); err != nil {
-		return fmt.Errorf("error parsing JSON: %v", err)
+
+	// Check if file was provided
+	if len(args) > 1 {
+		// Load from file
+		filePath := args[1]
+		fileData, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Errorf("error reading file: %v", err)
+		}
+
+		if err := json.Unmarshal(fileData, &route); err != nil {
+			return fmt.Errorf("error parsing JSON: %v", err)
+		}
+	} else {
+		// Build from flags
+		httpMethod, _ := cmd.Flags().GetString("http-method")
+		path, _ := cmd.Flags().GetString("path")
+		description, _ := cmd.Flags().GetString("description")
+		execMode, _ := cmd.Flags().GetString("execution-mode")
+		waitUntilTasks, _ := cmd.Flags().GetString("wait-until-tasks")
+		workflowMetadata, _ := cmd.Flags().GetBool("workflow-metadata-in-output")
+		workflowName, _ := cmd.Flags().GetString("workflow-name")
+		workflowVersion, _ := cmd.Flags().GetInt32("workflow-version")
+		requestMetadata, _ := cmd.Flags().GetBool("request-metadata-as-input")
+
+		// If no flags provided, show usage
+		if httpMethod == "" && path == "" && workflowName == "" {
+			return cmd.Usage()
+		}
+
+		// Validate required fields
+		if httpMethod == "" {
+			return fmt.Errorf("--http-method is required when not using a file")
+		}
+		if path == "" {
+			return fmt.Errorf("--path is required when not using a file")
+		}
+		if workflowName == "" {
+			return fmt.Errorf("--workflow-name is required when not using a file")
+		}
+
+		route = gateway.ApiGatewayRoute{
+			HttpMethod:               httpMethod,
+			Path:                     path,
+			Description:              description,
+			WorkflowExecutionMode:    execMode,
+			WaitUntilTasks:           waitUntilTasks,
+			WorkflowMetadataInOutput: workflowMetadata,
+			MappedWorkflow: &gateway.MappedWorkflow{
+				Name:                   workflowName,
+				Version:                workflowVersion,
+				RequestMetadataAsInput: requestMetadata,
+			},
+		}
 	}
 
 	gatewayClient := getGatewayClient()
-	_, err = gatewayClient.CreateRoute(context.Background(), serviceId, route)
+	_, err := gatewayClient.CreateRoute(context.Background(), serviceId, route)
 	if err != nil {
 		return fmt.Errorf("error creating route: %v", err)
 	}
@@ -560,6 +695,35 @@ func init() {
 	serviceListCmd.Flags().Bool("complete", false, "Print complete JSON output")
 	authConfigListCmd.Flags().Bool("complete", false, "Print complete JSON output")
 	routeListCmd.Flags().Bool("complete", false, "Print complete JSON output")
+
+	// Service create flags
+	serviceCreateCmd.Flags().String("service-id", "", "Service ID (required when not using file)")
+	serviceCreateCmd.Flags().String("name", "", "Display name of the service")
+	serviceCreateCmd.Flags().String("path", "", "Base path for the service (required when not using file)")
+	serviceCreateCmd.Flags().String("description", "", "Description of the service")
+	serviceCreateCmd.Flags().Bool("enabled", true, "Enable the service")
+	serviceCreateCmd.Flags().Bool("mcp-enabled", false, "Enable MCP for the service")
+	serviceCreateCmd.Flags().String("auth-config-id", "", "Authentication configuration ID")
+	serviceCreateCmd.Flags().StringSlice("cors-allowed-origins", nil, "CORS allowed origins (can be specified multiple times)")
+	serviceCreateCmd.Flags().StringSlice("cors-allowed-methods", nil, "CORS allowed methods (can be specified multiple times)")
+	serviceCreateCmd.Flags().StringSlice("cors-allowed-headers", nil, "CORS allowed headers (can be specified multiple times)")
+
+	// Auth config create flags
+	authConfigCreateCmd.Flags().String("auth-config-id", "", "Authentication configuration ID (required when not using file)")
+	authConfigCreateCmd.Flags().String("auth-type", "", "Authentication type: API_KEY or NONE (required when not using file)")
+	authConfigCreateCmd.Flags().String("application-id", "", "Application ID")
+	authConfigCreateCmd.Flags().StringSlice("api-keys", nil, "API keys (can be specified multiple times)")
+
+	// Route create flags
+	routeCreateCmd.Flags().String("http-method", "", "HTTP method (GET, POST, PUT, DELETE, etc.) (required when not using file)")
+	routeCreateCmd.Flags().String("path", "", "Route path (required when not using file)")
+	routeCreateCmd.Flags().String("description", "", "Route description")
+	routeCreateCmd.Flags().String("execution-mode", "SYNC", "Workflow execution mode (SYNC or ASYNC)")
+	routeCreateCmd.Flags().String("wait-until-tasks", "", "Comma-separated task reference names to wait for")
+	routeCreateCmd.Flags().Bool("workflow-metadata-in-output", false, "Include workflow metadata in output")
+	routeCreateCmd.Flags().String("workflow-name", "", "Workflow name to map to this route (required when not using file)")
+	routeCreateCmd.Flags().Int32("workflow-version", 0, "Workflow version (optional, uses latest if not specified)")
+	routeCreateCmd.Flags().Bool("request-metadata-as-input", false, "Pass request metadata as workflow input")
 
 	// Add to root
 	rootCmd.AddCommand(apiGatewayCmd)

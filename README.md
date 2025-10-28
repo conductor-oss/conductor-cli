@@ -413,6 +413,150 @@ orkes workflow get "<workflow name with spaces>"
 orkes workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
 ```
 
+## API Gateway Management
+
+The API Gateway feature allows you to expose Conductor workflows as REST APIs with authentication, CORS configuration, and route management.
+
+### Service Management
+
+```shell
+# List all API Gateway services
+orkes api-gateway service list
+
+# Get a specific service
+orkes api-gateway service get <service_id>
+
+# Create a service from JSON file
+orkes api-gateway service create service.json
+
+# Create a service using command-line flags
+orkes api-gateway service create \
+  --service-id my-service-id \
+  --name "Display Name" \
+  --path "/my-base-path" \
+  --description "A description of the service" \
+  --enabled \
+  --mcp-enabled \
+  --auth-config-id "token-based" \
+  --cors-allowed-origins "*" \
+  --cors-allowed-methods "GET,POST,PUT,DELETE,PATCH,OPTIONS" \
+  --cors-allowed-headers "*"
+
+# Update a service
+orkes api-gateway service update <service_id> service.json
+
+# Delete a service
+orkes api-gateway service delete <service_id>
+```
+
+**Example service JSON:**
+```json
+{
+  "id": "my-service-id",
+  "name": "Display Name",
+  "path": "/my-base-path",
+  "description": "A description of the service",
+  "enabled": true,
+  "mcpEnabled": true,
+  "authConfigId": "token-based",
+  "corsConfig": {
+    "accessControlAllowOrigin": ["*"],
+    "accessControlAllowMethods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    "accessControlAllowHeaders": ["*"]
+  }
+}
+```
+
+**CORS Configuration Notes:**
+- You can specify multiple values using comma-separated strings: `--cors-allowed-origins "https://example.com,https://another.com"`
+- Or use the flag multiple times: `--cors-allowed-origins "https://example.com" --cors-allowed-origins "https://another.com"`
+
+### Authentication Configuration Management
+
+```shell
+# List all authentication configurations
+orkes api-gateway auth list
+
+# Get a specific auth config
+orkes api-gateway auth get <auth_config_id>
+
+# Create an auth config from JSON file
+orkes api-gateway auth create auth-config.json
+
+# Create an auth config using command-line flags
+orkes api-gateway auth create \
+  --auth-config-id "token-based" \
+  --auth-type "API_KEY" \
+  --application-id "my-app-id" \
+  --api-keys "key1,key2,key3"
+
+# Update an auth config
+orkes api-gateway auth update <auth_config_id> auth-config.json
+
+# Delete an auth config
+orkes api-gateway auth delete <auth_config_id>
+```
+
+**Example auth config JSON:**
+```json
+{
+  "id": "token-based",
+  "authenticationType": "API_KEY",
+  "applicationId": "my-application-id",
+  "apiKeys": ["key1", "key2"]
+}
+```
+
+### Route Management
+
+```shell
+# List all routes for a service
+orkes api-gateway route list <service_id>
+
+# Create a route for a service from JSON file
+orkes api-gateway route create <service_id> route.json
+
+# Create a route using command-line flags
+orkes api-gateway route create my-service \
+  --http-method "GET" \
+  --path "/users/{userId}" \
+  --description "Get user by ID" \
+  --workflow-name "get_user_workflow" \
+  --workflow-version 1 \
+  --execution-mode "SYNC"
+
+# Create a route with additional options
+orkes api-gateway route create my-service \
+  --http-method "POST" \
+  --path "/orders" \
+  --description "Create new order" \
+  --workflow-name "create_order_workflow" \
+  --workflow-version 2 \
+  --execution-mode "ASYNC" \
+  --request-metadata-as-input \
+  --workflow-metadata-in-output
+
+# Update a route
+orkes api-gateway route update <service_id> <route_path> route.json
+
+# Delete a route
+orkes api-gateway route delete <service_id> <http_method> <route_path>
+```
+
+**Example route JSON:**
+```json
+{
+  "path": "/users/{userId}",
+  "httpMethod": "GET",
+  "description": "Get user by ID",
+  "workflowExecutionMode": "SYNC",
+  "mappedWorkflow": {
+    "name": "get_user_workflow",
+    "version": 1
+  }
+}
+```
+
 ## Task Workers
 
 ⚠️ **EXPERIMENTAL FEATURES**
