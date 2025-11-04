@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/fang"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	sdklog "github.com/conductor-sdk/conductor-go/sdk/log"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
-	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/orkes-io/conductor-cli/internal"
 	"github.com/orkes-io/conductor-cli/internal/updater"
 	log "github.com/sirupsen/logrus"
@@ -131,18 +131,7 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context) {
-	cc.Init(&cc.Config{
-		RootCmd:         rootCmd,
-		Headings:        cc.HiWhite + cc.Bold,
-		Commands:        cc.HiBlue + cc.Bold,
-		Example:         cc.White,
-		ExecName:        cc.Bold,
-		Flags:           cc.Bold,
-		NoExtraNewlines: true,
-	})
-
-	err := rootCmd.ExecuteContext(ctx)
-	if err != nil {
+	if err := fang.Execute(ctx, rootCmd); err != nil {
 		os.Exit(1)
 	}
 }
