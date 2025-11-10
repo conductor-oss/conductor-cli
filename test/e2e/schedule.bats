@@ -119,21 +119,21 @@ teardown() {
     run bash -c "./orkes schedule create -c '0 0 * ? * *' -w hello_world 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"--name is required"* ]]
+    echo "$output" | grep -qi -- "--name is required"
 }
 
 @test "10. Create schedule with missing cron flag shows error" {
     run bash -c "./orkes schedule create -n e2e_test -w hello_world 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"--cron is required"* ]]
+    echo "$output" | grep -qi -- "--cron is required"
 }
 
 @test "11. Create schedule with missing workflow flag shows error" {
     run bash -c "./orkes schedule create -n e2e_test -c '0 0 * ? * *' 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"--workflow is required"* ]]
+    echo "$output" | grep -qi -- "--workflow is required"
 }
 
 @test "12. Create duplicate schedule shows error" {
@@ -165,7 +165,7 @@ teardown() {
     run bash -c "./orkes schedule update -n nonexistent -c '0 0 * ? * *' -w hello_world 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
-    [[ "$output" == *"no such schedule"* ]]
+    echo "$output" | grep -qi "no such schedule"
 }
 
 @test "15. Pause schedule" {
