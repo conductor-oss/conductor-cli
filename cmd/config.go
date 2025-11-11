@@ -337,6 +337,14 @@ func interactiveSaveConfig(profileName string) error {
 		configData["auth-token"] = authToken
 	}
 
+	// Preserve cached token fields if they exist in the current config
+	if cachedToken, ok := existingConfig["cached-token"]; ok && cachedToken != "" {
+		configData["cached-token"] = cachedToken
+	}
+	if cachedExpiry, ok := existingConfig["cached-token-expiry"]; ok {
+		configData["cached-token-expiry"] = cachedExpiry
+	}
+
 	data, err := yaml.Marshal(configData)
 	if err != nil {
 		return err
