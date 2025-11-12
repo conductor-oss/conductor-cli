@@ -82,7 +82,14 @@ func getTokenExpiryManual(tokenString string) (int64, error) {
 
 // isTokenExpired checks if a token is expired or will expire soon
 // bufferSeconds is the number of seconds before expiry to consider token expired (for proactive refresh)
+// Returns false for long-lived tokens (expiryUnix == -1)
 func isTokenExpired(expiryUnix int64, bufferSeconds int64) bool {
+	// Long-lived tokens (no expiry claim) never expire
+	if expiryUnix == -1 {
+		return false
+	}
+
+	// Unknown expiry (0) is considered expired
 	if expiryUnix == 0 {
 		return true
 	}
@@ -108,7 +115,7 @@ func validateUserToken(tokenString string) error {
 	}
 
 	if isTokenExpired(expiry, 0) {
-		return fmt.Errorf("your token has expired. Please update your configuration")
+		return fmt.Errorf("your token has expired\nPlease check your authentication settings. Run 'orkes config save' to configure credentials")
 	}
 
 	return nil

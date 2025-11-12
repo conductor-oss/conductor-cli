@@ -86,6 +86,11 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		// Check if parent is config command, which is local only. Skip api client setup
+		if cmd.Parent() != nil && cmd.Parent().Name() == "config" {
+			return nil
+		}
+
 		// Get configuration values from Viper (which handles flags, env vars, and config file)
 		url = viper.GetString("server")
 		key = viper.GetString("auth-key")

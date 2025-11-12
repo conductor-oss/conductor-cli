@@ -67,3 +67,21 @@ setup() {
     [[ "$output" == *"Please check your authentication settings"* ]]
     [[ "$output" == *"orkes config save"* ]]
 }
+
+@test "5. config commands work without valid credentials (local-only operations)" {
+    # Test that config commands don't require API access or valid tokens
+    # These are local file operations and should always work
+
+    # config list should work (lists local config files)
+    run ./orkes config list
+    echo "config list output: $output"
+    echo "config list status: $status"
+    [ "$status" -eq 0 ]
+
+    # config save should work (though we'll skip interactive part)
+    # Just verify the command itself doesn't fail on token validation
+    run bash -c "echo '' | timeout 2 ./orkes config save 2>&1 || true"
+    echo "config save output: $output"
+    # Should not contain token expiration error
+    [[ "$output" != *"your token has expired"* ]]
+}

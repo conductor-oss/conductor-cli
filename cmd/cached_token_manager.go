@@ -17,6 +17,9 @@ import (
 const (
 	// Token expiry buffer: refresh token 5 minutes before it expires
 	tokenExpiryBufferSeconds = 300 // 5 minutes
+
+	// Sentinel value for tokens without expiry (long-lived tokens)
+	noExpiry = -1
 )
 
 // CachedTokenManager manages authentication tokens with caching
@@ -52,13 +55,16 @@ func (m *CachedTokenManager) RefreshToken(httpSettings *settings.HttpSettings, h
 	// Check if we have a valid cached token
 	if m.cachedToken != "" && !isTokenExpired(m.tokenExpiry, tokenExpiryBufferSeconds) {
 		if verbose {
-			timeUntilExpiry := m.tokenExpiry - getCurrentTimeUnix()
-			log.Debugf("Using cached token (expires in %s)", formatDuration(timeUntilExpiry))
+			if m.tokenExpiry == noExpiry {
+				log.Debug("Using cached long-lived token (no expiry)")
+			} else {
+				timeUntilExpiry := m.tokenExpiry - getCurrentTimeUnix()
+				log.Debugf("Using cached token (expires in %s)", formatDuration(timeUntilExpiry))
+			}
 		}
 		return m.cachedToken, nil
 	}
 
-	// Cached token is missing or expired, fetch a new one
 	if verbose {
 		if m.cachedToken == "" {
 			log.Debug("No cached token found, fetching new token...")
@@ -72,15 +78,12 @@ func (m *CachedTokenManager) RefreshToken(httpSettings *settings.HttpSettings, h
 		return "", fmt.Errorf("failed to fetch new token: %w", err)
 	}
 
-	// Parse expiry from new token
 	expiry, err := getTokenExpiry(token)
 	if err != nil {
-		log.Debugf("Warning: could not parse token expiry: %v", err)
-		// Continue anyway - we have a token, just can't cache it optimally
-		expiry = 0
+		log.Debugf("Token does not contain expiry claim - treating as long-lived token")
+		expiry = noExpiry
 	}
 
-	// Update cache
 	m.cachedToken = token
 	m.tokenExpiry = expiry
 
@@ -90,9 +93,13 @@ func (m *CachedTokenManager) RefreshToken(httpSettings *settings.HttpSettings, h
 		log.Debugf("Warning: failed to save cached token: %v", err)
 	}
 
-	if verbose && expiry > 0 {
-		timeUntilExpiry := expiry - getCurrentTimeUnix()
-		log.Debugf("Fetched new token (expires in %s)", formatDuration(timeUntilExpiry))
+	if verbose {
+		if expiry == noExpiry {
+			log.Debug("Fetched new long-lived token (no expiry)")
+		} else if expiry > 0 {
+			timeUntilExpiry := expiry - getCurrentTimeUnix()
+			log.Debugf("Fetched new token (expires in %s)", formatDuration(timeUntilExpiry))
+		}
 	}
 
 	return token, nil
