@@ -86,6 +86,11 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
+		// Check if parent is config command, which is local only. Skip api client setup
+		if cmd.Parent() != nil && cmd.Parent().Name() == "config" {
+			return nil
+		}
+
 		// Get configuration values from Viper (which handles flags, env vars, and config file)
 		url = viper.GetString("server")
 		key = viper.GetString("auth-key")
@@ -110,9 +115,15 @@ var rootCmd = &cobra.Command{
 		}
 
 		log.Debug("Using Server ", url)
-		apiClient := client.NewAPIClient(settings.NewAuthenticationSettings(key, secret), settings.NewHttpSettings(url))
 
+		var apiClient *client.APIClient
+
+		// Priority: auth-token > auth-key/secret
 		if token != "" {
+			if err := validateUserToken(token); err != nil {
+				return err
+			}
+
 			tokenManager := ConfigTokenManager{
 				Token: token,
 			}
@@ -121,6 +132,42 @@ var rootCmd = &cobra.Command{
 				settings.NewHttpSettings(url),
 				nil,
 				tokenManager,
+			)
+		} else if key != "" && secret != "" {
+			cachedToken := viper.GetString("cached-token")
+			cachedExpiry := viper.GetInt64("cached-token-expiry")
+
+			// Determine config path for saving cached token
+			activeProfile := profile
+			if activeProfile == "" {
+				activeProfile = os.Getenv("ORKES_PROFILE")
+			}
+
+			configPath, err := getConfigPath(activeProfile)
+			if err != nil {
+				return fmt.Errorf("failed to get config path: %w", err)
+			}
+
+			tokenManager := NewCachedTokenManager(
+				key,
+				secret,
+				cachedToken,
+				cachedExpiry,
+				configPath,
+				settings.NewHttpSettings(url),
+			)
+
+			apiClient = client.NewAPIClientWithTokenManager(
+				nil,
+				settings.NewHttpSettings(url),
+				nil,
+				tokenManager,
+			)
+		} else {
+			// No authentication configured, create client without credentials
+			apiClient = client.NewAPIClient(
+				settings.NewAuthenticationSettings("", ""),
+				settings.NewHttpSettings(url),
 			)
 		}
 

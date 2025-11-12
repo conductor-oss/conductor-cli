@@ -27,6 +27,11 @@ brew install conductor-oss/conductor-tools/orkes
 
 **Server URL:** `--server <url>` or `CONDUCTOR_SERVER_URL` (default: `http://localhost:8080/api`)
 
+**Token Types:**
+- **JWT tokens with `exp` claim**: Automatically cached and refreshed before expiry (5-minute buffer)
+- **Long-lived tokens without `exp` claim**: Cached indefinitely, never trigger refresh attempts
+- **Expired tokens**: CLI validates token expiry and provides helpful error messages with guidance to run `orkes config save`
+
 ## Profile Management
 
 Manage multiple environments (dev, staging, prod) using profiles.
