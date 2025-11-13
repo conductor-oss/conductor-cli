@@ -616,7 +616,7 @@ func createRoute(cmd *cobra.Command, args []string) error {
 		httpMethod, _ := cmd.Flags().GetString("http-method")
 		path, _ := cmd.Flags().GetString("path")
 		description, _ := cmd.Flags().GetString("description")
-		execMode, _ := cmd.Flags().GetString("execution-mode")
+		execModeFlag, _ := cmd.Flags().GetString("execution-mode")
 		waitUntilTasks, _ := cmd.Flags().GetString("wait-until-tasks")
 		workflowMetadata, _ := cmd.Flags().GetBool("workflow-metadata-in-output")
 		workflowName, _ := cmd.Flags().GetString("workflow-name")
@@ -637,6 +637,15 @@ func createRoute(cmd *cobra.Command, args []string) error {
 		}
 		if workflowName == "" {
 			return fmt.Errorf("--workflow-name is required when not using a file")
+		}
+
+		// Map user-friendly execution mode to SDK constants
+		var execMode gateway.WorkflowExecutionMode
+		switch execModeFlag {
+		case "SYNC":
+			execMode = gateway.ExecutionModeSynchronous
+		case "ASYNC":
+			execMode = gateway.ExecutionModeAsynchronous
 		}
 
 		route = gateway.ApiGatewayRoute{

@@ -4,8 +4,8 @@ github.com/antihax/optional v1.0.0 h1:xK2lYat7ZLaVVcIuj82J8kIro4V6kDe0AUDFboUCwc
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
-github.com/conductor-oss/go-sdk v0.0.0-20251028131231-ee4646b84c99 h1:H1GqRpa9VFCvfCVyIxNasE+0sXe79eje8qcTVGjF+ns=
-github.com/conductor-oss/go-sdk v0.0.0-20251028131231-ee4646b84c99/go.mod h1:Pbu+G5xBem5ljoJq9whU+t8AbnkYeWb/itFposE3yvE=
+github.com/conductor-oss/go-sdk v1.8.0 h1:Yd5YS6ba4GCH2Rwpr42fDMingyKz1MIbvMOBU0i6wGg=
+github.com/conductor-oss/go-sdk v1.8.0/go.mod h1:Pbu+G5xBem5ljoJq9whU+t8AbnkYeWb/itFposE3yvE=
 github.com/cpuguy83/go-md2man/v2 v2.0.1/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
