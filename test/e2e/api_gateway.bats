@@ -310,7 +310,7 @@ EOF
   "httpMethod": "PUT",
   "path": "/update-test",
   "description": "Updated route description",
-  "workflowExecutionMode": "SYNC",
+  "workflowExecutionMode": "SYNCHRONOUS",
   "mappedWorkflow": {
     "name": "$WORKFLOW_NAME",
     "version": 1

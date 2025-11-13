@@ -262,7 +262,7 @@ API Gateway allows exposing Conductor workflows as REST APIs with authentication
 - `--path` - Route path (required when not using file)
 - `--workflow-name` - Workflow name to map to this route (required when not using file)
 - `--workflow-version` - Workflow version (optional, uses latest if not specified)
-- `--execution-mode` - Workflow execution mode: SYNC or ASYNC (default: SYNC)
+- `--execution-mode` - Workflow execution mode: SYNC or ASYNC (default: SYNC). Note: When using JSON files, use full enum values: SYNCHRONOUS or ASYNCHRONOUS
 - `--description` - Route description
 - `--request-metadata-as-input` - Pass request metadata as workflow input
 - `--workflow-metadata-in-output` - Include workflow metadata in output
@@ -658,7 +658,7 @@ orkes api-gateway route delete my-api GET /users
   "path": "/users/{userId}",
   "httpMethod": "GET",
   "description": "Get user by ID",
-  "workflowExecutionMode": "SYNC",
+  "workflowExecutionMode": "SYNCHRONOUS",
   "mappedWorkflow": {
     "name": "get_user_workflow",
     "version": 1
