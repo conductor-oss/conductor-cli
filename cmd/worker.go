@@ -14,17 +14,21 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/antihax/optional"
+	"github.com/conductor-sdk/conductor-go/sdk/authentication"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	"github.com/conductor-sdk/conductor-go/sdk/model"
+	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	"github.com/dop251/goja"
 	"github.com/orkes-io/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -76,11 +80,64 @@ Exit codes:
 		SilenceUsage: true,
 		Example:      "worker exec --type greet_task python worker.py\nworker exec --type greet_task python worker.py --count 5\nworker exec --type greet_task ./worker.sh --verbose",
 	}
+
+	workerRemoteCmd = &cobra.Command{
+		Use:   "remote",
+		Short: "Run a worker from the job-runner registry (EXPERIMENTAL)",
+		Long: `⚠️  EXPERIMENTAL FEATURE - Download and execute a worker from the Orkes Conductor job-runner.
+
+The worker is downloaded from the configured Conductor server and cached locally for
+subsequent runs. Use --refresh to force re-download from the registry.
+
+Supported worker languages:
+  - NODEJS: JavaScript/Node.js workers (executed using built-in JavaScript engine)
+  - PYTHON: Python workers (executed using python3 interpreter)
+
+The worker runs in continuous mode, polling for tasks and executing them in parallel.`,
+		RunE:         runRemoteWorker,
+		SilenceUsage: true,
+		Example:      "orkes worker remote --type greet_task\norkes worker remote --type greet_task --count 5 --refresh\norkes worker remote --type greet_task --worker-id worker-1 --domain prod",
+	}
+
+	workerListRemoteCmd = &cobra.Command{
+		Use:          "list-remote",
+		Short:        "List available workers in the job-runner registry (EXPERIMENTAL)",
+		Long:         `⚠️  EXPERIMENTAL FEATURE - List all available workers in the Orkes Conductor job-runner registry.`,
+		RunE:         listRemoteWorkers,
+		SilenceUsage: true,
+		Example:      "orkes worker list-remote\norkes worker list-remote --namespace production",
+	}
 )
 
 type TaskResult struct {
 	Status string                 `json:"status"`
 	Body   map[string]interface{} `json:"body"`
+}
+
+// WorkerCodeResponse represents the response from the job-runner worker-code API
+type WorkerCodeResponse struct {
+	Id           string    `json:"id"`
+	UserId       string    `json:"userId"`
+	Namespace    string    `json:"namespace"`
+	TaskName     string    `json:"taskName"`
+	Language     string    `json:"language"`
+	Code         string    `json:"code"`
+	Version      int       `json:"version"`
+	Description  string    `json:"description"`
+	Dependencies []string  `json:"dependencies"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	CreatedBy    string    `json:"createdBy"`
+}
+
+// WorkerMetadata represents cached worker metadata
+type WorkerMetadata struct {
+	TaskName     string    `json:"taskName"`
+	Language     string    `json:"language"`
+	Version      int       `json:"version"`
+	WorkerCodeId string    `json:"workerCodeId"`
+	CachedAt     time.Time `json:"cachedAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 func runJsWorker(cmd *cobra.Command, args []string) error {
@@ -99,7 +156,6 @@ func runJsWorker(cmd *cobra.Command, args []string) error {
 	domain, _ := cmd.Flags().GetString("domain")
 	timeout, _ := cmd.Flags().GetInt32("timeout")
 
-	// Read JavaScript file
 	scriptContent, err := os.ReadFile(jsFile)
 	if err != nil {
 		return fmt.Errorf("error reading JavaScript file: %v", err)
@@ -109,7 +165,6 @@ func runJsWorker(cmd *cobra.Command, args []string) error {
 	fmt.Printf("JavaScript file: %s\n", jsFile)
 	fmt.Printf("Worker ID: %s\n", workerId)
 
-	// Continuous polling loop
 	for {
 		opts := &client.TaskResourceApiBatchPollOpts{}
 		if workerId != "" {
@@ -139,7 +194,6 @@ func runJsWorker(cmd *cobra.Command, args []string) error {
 
 		log.Infof("Polled %d task(s)", len(tasks))
 
-		// Process tasks in goroutines
 		var wg sync.WaitGroup
 		for _, task := range tasks {
 			wg.Add(1)
@@ -156,10 +210,8 @@ func runJsWorker(cmd *cobra.Command, args []string) error {
 func processTask(task model.Task, script string, taskClient *client.TaskResourceApiService) {
 	log.Infof("Processing task: %s (workflow: %s)", task.TaskId, task.WorkflowInstanceId)
 
-	// Create Goja VM
 	vm := goja.New()
 
-	// Inject task into $ global object
 	taskJSON, err := json.Marshal(task)
 	if err != nil {
 		log.Errorf("Error marshaling task: %v", err)
@@ -175,7 +227,6 @@ func processTask(task model.Task, script string, taskClient *client.TaskResource
 		return
 	}
 
-	// Set up $ object with task
 	dollarObj := vm.NewObject()
 	err = dollarObj.Set("task", taskObj)
 	if err != nil {
@@ -190,10 +241,8 @@ func processTask(task model.Task, script string, taskClient *client.TaskResource
 		return
 	}
 
-	// Inject utility functions
 	injectUtilities(vm)
 
-	// Execute script
 	result, err := vm.RunString(script)
 	if err != nil {
 		log.Errorf("Error executing script for task %s: %v", task.TaskId, err)
@@ -201,9 +250,7 @@ func processTask(task model.Task, script string, taskClient *client.TaskResource
 		return
 	}
 
-	// Check if script returned a value
 	if result != nil && !goja.IsUndefined(result) && !goja.IsNull(result) {
-		// Try to parse the result as TaskResult
 		resultJSON := result.Export()
 		resultBytes, err := json.Marshal(resultJSON)
 		if err != nil {
@@ -215,19 +262,16 @@ func processTask(task model.Task, script string, taskClient *client.TaskResource
 		var taskResult TaskResult
 		err = json.Unmarshal(resultBytes, &taskResult)
 		if err != nil {
-			// Result is not in expected format, treat as completed with raw result
 			log.Warnf("Script result not in expected format, treating as completed")
 			updateTaskCompleted(taskClient, task, map[string]interface{}{"result": resultJSON})
 			return
 		}
 
-		// Update task with returned status and body
 		if taskResult.Body == nil {
 			taskResult.Body = make(map[string]interface{})
 		}
 		updateTaskWithStatus(taskClient, task, taskResult.Status, taskResult.Body)
 	} else {
-		// No return value, mark as completed
 		updateTaskCompleted(taskClient, task, map[string]interface{}{})
 	}
 }
@@ -340,7 +384,6 @@ func injectUtilities(vm *goja.Runtime) {
 	vm.Set("str", stringObj)
 }
 
-// httpRequest performs HTTP requests from JavaScript
 func httpRequest(method, url string, headers map[string]interface{}, body string) map[string]interface{} {
 	var bodyReader io.Reader
 	if body != "" {
@@ -355,7 +398,6 @@ func httpRequest(method, url string, headers map[string]interface{}, body string
 		}
 	}
 
-	// Set headers
 	for key, value := range headers {
 		if strVal, ok := value.(string); ok {
 			req.Header.Set(key, strVal)
@@ -380,7 +422,6 @@ func httpRequest(method, url string, headers map[string]interface{}, body string
 		}
 	}
 
-	// Try to parse as JSON
 	var jsonBody interface{}
 	if err := json.Unmarshal(respBody, &jsonBody); err == nil {
 		return map[string]interface{}{
@@ -390,7 +431,6 @@ func httpRequest(method, url string, headers map[string]interface{}, body string
 		}
 	}
 
-	// Return as text if not JSON
 	return map[string]interface{}{
 		"status": resp.StatusCode,
 		"text":   string(respBody),
@@ -426,7 +466,6 @@ func execWorker(cmd *cobra.Command, args []string) error {
 
 	taskClient := internal.GetTaskClient()
 
-	// Continuous mode: poll and process in goroutines
 	fmt.Printf("Starting worker for task type: %s\n", taskType)
 	fmt.Printf("Command: %s %v\n", workerCmd, workerArgs)
 	if workerId != "" {
@@ -478,7 +517,6 @@ func execWorker(cmd *cobra.Command, args []string) error {
 func executeExternalWorker(task model.Task, workerCmd string, workerArgs []string, workerId, domain string, execTimeout int32, taskClient *client.TaskResourceApiService) {
 	log.Infof("Processing task: %s (workflow: %s)", task.TaskId, task.WorkflowInstanceId)
 
-	// Marshal task to JSON for stdin
 	taskJSON, err := json.Marshal(task)
 	if err != nil {
 		log.Errorf("Error marshaling task: %v", err)
@@ -486,7 +524,6 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 		return
 	}
 
-	// Execute worker command
 	ctx := context.Background()
 	if execTimeout > 0 {
 		var cancel context.CancelFunc
@@ -505,44 +542,71 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 		execCmd.Env = append(execCmd.Env, "POLL_DOMAIN="+domain)
 	}
 
+	serverUrl := viper.GetString("server")
+	if serverUrl != "" {
+		serverUrl = strings.TrimSuffix(serverUrl, "/")
+		if !strings.HasSuffix(serverUrl, "/api") {
+			serverUrl = serverUrl + "/api"
+		}
+		execCmd.Env = append(execCmd.Env, "CONDUCTOR_SERVER_URL="+serverUrl)
+	}
+
+	authKey := viper.GetString("auth-key")
+	authSecret := viper.GetString("auth-secret")
+	if authKey != "" {
+		execCmd.Env = append(execCmd.Env, "CONDUCTOR_ACCESS_KEY_ID="+authKey)
+	}
+	if authSecret != "" {
+		execCmd.Env = append(execCmd.Env, "CONDUCTOR_ACCESS_KEY_SECRET="+authSecret)
+	}
+
+	authToken := viper.GetString("auth-token")
+	if authToken != "" {
+		execCmd.Env = append(execCmd.Env, "CONDUCTOR_AUTH_TOKEN="+authToken)
+	}
+
 	execCmd.Stdin = bytes.NewReader(taskJSON)
 
 	var stdout, stderr bytes.Buffer
-	execCmd.Stdout = &stdout
-	execCmd.Stderr = &stderr
+	execCmd.Stdout = io.MultiWriter(&stdout, os.Stdout)
+	execCmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
 
 	execErr := execCmd.Run()
 
-	// Parse worker result
 	var result WorkerResult
 	if execErr != nil {
-		// Worker failed with non-zero exit
+		stderrOutput := stderr.String()
+		log.Errorf("Worker execution failed: %v", execErr)
+		if stderrOutput != "" {
+			log.Errorf("Worker stderr:\n%s", stderrOutput)
+		}
+
 		result = WorkerResult{
 			Status: "FAILED",
-			Reason: fmt.Sprintf("worker exec failed: %v; stderr=%s", execErr, stderr.String()),
-			Logs:   []string{stderr.String()},
+			Reason: fmt.Sprintf("worker exec failed: %v", execErr),
+			Logs:   []string{stderrOutput},
 		}
 	} else {
-		// Parse stdout
 		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+			stdoutOutput := stdout.String()
+			log.Errorf("Failed to parse worker output as JSON: %v", err)
+			log.Errorf("Worker stdout:\n%s", stdoutOutput)
+
 			result = WorkerResult{
 				Status: "FAILED",
-				Reason: fmt.Sprintf("invalid worker stdout JSON: %v; raw=%s", err, stdout.String()),
-				Logs:   []string{stdout.String()},
+				Reason: fmt.Sprintf("invalid worker stdout JSON: %v", err),
+				Logs:   []string{stdoutOutput},
 			}
 		}
 	}
 
-	// Validate status
 	switch result.Status {
 	case "COMPLETED", "FAILED", "IN_PROGRESS":
-		// Valid status
 	default:
 		result.Status = "FAILED"
 		result.Reason = fmt.Sprintf("invalid status from worker: %s", result.Status)
 	}
 
-	// Convert status string to TaskResultStatus
 	var status model.TaskResultStatus
 	switch result.Status {
 	case "COMPLETED":
@@ -555,7 +619,6 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 		status = model.FailedTask
 	}
 
-	// Update task with result
 	taskResult := model.TaskResult{
 		TaskId:             task.TaskId,
 		WorkflowInstanceId: task.WorkflowInstanceId,
@@ -584,7 +647,6 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 		taskResult.WorkerId = workerId
 	}
 
-	// Update task
 	_, _, err = taskClient.UpdateTask(context.Background(), &taskResult)
 	if err != nil {
 		log.Errorf("Error updating task %s: %v", task.TaskId, err)
@@ -613,8 +675,491 @@ func updateExecTaskFailed(taskClient *client.TaskResourceApiService, task model.
 	}
 }
 
+func listRemoteWorkers(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
+
+	namespace, _ := cmd.Flags().GetString("namespace")
+	if namespace == "" {
+		namespace = "default"
+	}
+
+	serverUrl := viper.GetString("server")
+	if serverUrl == "" {
+		serverUrl = "http://localhost:8080/api"
+	}
+	serverUrl = strings.TrimSuffix(serverUrl, "/")
+	if !strings.HasSuffix(serverUrl, "/api") {
+		serverUrl = serverUrl + "/api"
+	}
+
+	apiUrl := fmt.Sprintf("%s/worker-code?namespace=%s", serverUrl, namespace)
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if err := addWorkerAuthHeaders(req); err != nil {
+		return fmt.Errorf("failed to add auth headers: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to registry: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 401 {
+		return fmt.Errorf("authentication failed (401 Unauthorized) - verify your credentials")
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to list workers: HTTP %d - %s", resp.StatusCode, string(body))
+	}
+
+	var workers []WorkerCodeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&workers); err != nil {
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(workers) == 0 {
+		fmt.Printf("No workers found in namespace: %s\n", namespace)
+		return nil
+	}
+
+	fmt.Printf("\nAvailable Workers in namespace '%s':\n\n", namespace)
+	fmt.Printf("%-30s %-12s %-10s %-50s\n", "TASK NAME", "LANGUAGE", "VERSION", "DESCRIPTION")
+	fmt.Println(strings.Repeat("-", 105))
+
+	for _, worker := range workers {
+		description := worker.Description
+		if len(description) > 47 {
+			description = description[:47] + "..."
+		}
+		fmt.Printf("%-30s %-12s %-10d %-50s\n",
+			worker.TaskName,
+			worker.Language,
+			worker.Version,
+			description)
+	}
+
+	fmt.Printf("\nTotal: %d workers\n", len(workers))
+	return nil
+}
+
+func runRemoteWorker(cmd *cobra.Command, args []string) error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("Not supported in OSS Conductor")
+	}
+
+	taskType, _ := cmd.Flags().GetString("type")
+	if taskType == "" {
+		return fmt.Errorf("--type flag is required")
+	}
+
+	refresh, _ := cmd.Flags().GetBool("refresh")
+
+	// Get or download worker code
+	workerFile, language, err := getRemoteWorker(taskType, refresh)
+	if err != nil {
+		return fmt.Errorf("failed to get worker: %w", err)
+	}
+
+	// Execute based on language
+	switch language {
+	case "NODEJS":
+		return executeJsWorkerFromFile(cmd, workerFile, taskType)
+	case "PYTHON":
+		return executePythonWorkerFromFile(cmd, workerFile, taskType)
+	default:
+		return fmt.Errorf("unsupported worker language: %s (supported: NODEJS, PYTHON)", language)
+	}
+}
+
+func getRemoteWorker(taskName string, refresh bool) (string, string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	cacheDir := filepath.Join(homeDir, ".conductor-cli", "workers", taskName)
+	metadataFile := filepath.Join(cacheDir, ".metadata.json")
+
+	if !refresh {
+		if metadata, err := loadMetadata(metadataFile); err == nil {
+			workerFile := getWorkerFile(cacheDir, metadata.Language)
+			if fileExists(workerFile) {
+				log.Infof("Using cached worker '%s' (version %d)", taskName, metadata.Version)
+				return workerFile, metadata.Language, nil
+			}
+		}
+	}
+
+	log.Infof("Downloading worker '%s' from registry...", taskName)
+
+	serverUrl := viper.GetString("server")
+	if serverUrl == "" {
+		serverUrl = "http://localhost:8080/api"
+	}
+	serverUrl = strings.TrimSuffix(serverUrl, "/")
+	if !strings.HasSuffix(serverUrl, "/api") {
+		serverUrl = serverUrl + "/api"
+	}
+	apiUrl := fmt.Sprintf("%s/worker-code/by-name/%s", serverUrl, taskName)
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	if err := addWorkerAuthHeaders(req); err != nil {
+		return "", "", fmt.Errorf("failed to add auth headers: %w", err)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to connect to registry: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return "", "", fmt.Errorf("worker '%s' not found in registry", taskName)
+	}
+	if resp.StatusCode == 401 {
+		return "", "", fmt.Errorf("authentication failed (401 Unauthorized) - verify your credentials")
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", "", fmt.Errorf("failed to download worker: HTTP %d - %s", resp.StatusCode, string(body))
+	}
+
+	var response WorkerCodeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return "", "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if err := os.MkdirAll(cacheDir, 0700); err != nil {
+		return "", "", fmt.Errorf("failed to create cache directory: %w", err)
+	}
+
+	workerFile := getWorkerFile(cacheDir, response.Language)
+	if err := os.WriteFile(workerFile, []byte(response.Code), 0600); err != nil {
+		return "", "", fmt.Errorf("failed to save worker code: %w", err)
+	}
+
+	metadata := WorkerMetadata{
+		TaskName:     response.TaskName,
+		Language:     response.Language,
+		Version:      response.Version,
+		WorkerCodeId: response.Id,
+		CachedAt:     time.Now(),
+		UpdatedAt:    response.UpdatedAt,
+	}
+	metadataJson, _ := json.MarshalIndent(metadata, "", "  ")
+	os.WriteFile(metadataFile, metadataJson, 0600)
+
+	log.Infof("Worker downloaded successfully (version %d)", response.Version)
+
+	if response.Language == "PYTHON" {
+		log.Infof("Setting up Python environment and installing dependencies...")
+		if err := setupPythonEnvironment(cacheDir, response.Dependencies); err != nil {
+			log.Warnf("Failed to set up Python environment: %v", err)
+			log.Warnf("You may need to manually install Python dependencies")
+		} else {
+			log.Infof("Python environment ready")
+		}
+	}
+
+	return workerFile, response.Language, nil
+}
+
+func addWorkerAuthHeaders(req *http.Request) error {
+	authToken := viper.GetString("auth-token")
+	if authToken != "" {
+		req.Header.Set("X-Authorization", authToken)
+		return nil
+	}
+
+	cachedToken := viper.GetString("cached-token")
+	if cachedToken != "" {
+		req.Header.Set("X-Authorization", cachedToken)
+		return nil
+	}
+
+	authKey := viper.GetString("auth-key")
+	authSecret := viper.GetString("auth-secret")
+	if authKey != "" && authSecret != "" {
+		token, err := exchangeKeySecretForToken(authKey, authSecret)
+		if err != nil {
+			return fmt.Errorf("failed to get token from key+secret: %w", err)
+		}
+		req.Header.Set("X-Authorization", token)
+		return nil
+	}
+
+	return nil
+}
+
+func exchangeKeySecretForToken(key, secret string) (string, error) {
+	serverUrl := viper.GetString("server")
+	if serverUrl == "" {
+		serverUrl = "http://localhost:8080/api"
+	}
+
+	serverUrl = strings.TrimSuffix(serverUrl, "/")
+	if !strings.HasSuffix(serverUrl, "/api") {
+		serverUrl = serverUrl + "/api"
+	}
+
+	httpSettings := settings.NewHttpSettings(serverUrl)
+	authSettings := settings.NewAuthenticationSettings(key, secret)
+
+	tokenResponse, _, err := authentication.GetToken(*authSettings, httpSettings, &http.Client{Timeout: 30 * time.Second})
+	if err != nil {
+		return "", fmt.Errorf("authentication failed: %w", err)
+	}
+
+	return tokenResponse.Token, nil
+}
+
+func getWorkerFile(cacheDir, language string) string {
+	ext := map[string]string{
+		"NODEJS": ".js",
+		"PYTHON": ".py",
+		"JAVA":   ".java",
+		"GO":     ".go",
+	}
+	extension := ext[language]
+	if extension == "" {
+		extension = ".txt"
+	}
+	return filepath.Join(cacheDir, "worker"+extension)
+}
+
+func loadMetadata(metadataFile string) (*WorkerMetadata, error) {
+	data, err := os.ReadFile(metadataFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var metadata WorkerMetadata
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return nil, err
+	}
+
+	return &metadata, nil
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func executeJsWorkerFromFile(cmd *cobra.Command, workerFile, taskType string) error {
+	count, _ := cmd.Flags().GetInt32("count")
+	workerId, _ := cmd.Flags().GetString("worker-id")
+	domain, _ := cmd.Flags().GetString("domain")
+	timeout, _ := cmd.Flags().GetInt32("timeout")
+
+	scriptContent, err := os.ReadFile(workerFile)
+	if err != nil {
+		return fmt.Errorf("error reading worker file: %v", err)
+	}
+
+	log.Infof("Starting JavaScript worker for task type: %s", taskType)
+	if workerId != "" {
+		log.Infof("Worker ID: %s", workerId)
+	}
+
+	for {
+		opts := &client.TaskResourceApiBatchPollOpts{}
+		if workerId != "" {
+			opts.Workerid = optional.NewString(workerId)
+		}
+		if domain != "" {
+			opts.Domain = optional.NewString(domain)
+		}
+		if count > 0 {
+			opts.Count = optional.NewInt32(count)
+		}
+		if timeout > 0 {
+			opts.Timeout = optional.NewInt32(timeout)
+		}
+
+		taskClient := internal.GetTaskClient()
+		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
+		if err != nil {
+			log.Errorf("Error polling tasks: %v", err)
+			continue
+		}
+
+		if len(tasks) == 0 {
+			log.Debug("No tasks available")
+			continue
+		}
+
+		log.Infof("Polled %d task(s)", len(tasks))
+
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			wg.Add(1)
+			go func(t model.Task) {
+				defer wg.Done()
+				processTask(t, string(scriptContent), taskClient)
+			}(task)
+		}
+
+		wg.Wait()
+	}
+}
+
+func setupPythonEnvironment(cacheDir string, dependencies []string) error {
+	venvDir := filepath.Join(cacheDir, "venv")
+	requirementsFile := filepath.Join(cacheDir, "requirements.txt")
+
+	allDependencies := append([]string{"conductor-python"}, dependencies...)
+
+	venvExists := fileExists(venvDir)
+	requirementsExists := fileExists(requirementsFile)
+
+	var existingRequirements []string
+	if requirementsExists {
+		data, err := os.ReadFile(requirementsFile)
+		if err == nil {
+			existingRequirements = strings.Split(strings.TrimSpace(string(data)), "\n")
+		}
+	}
+
+	requirementsChanged := !equalStringSlices(allDependencies, existingRequirements)
+
+	requirementsContent := strings.Join(allDependencies, "\n")
+	if err := os.WriteFile(requirementsFile, []byte(requirementsContent), 0644); err != nil {
+		return fmt.Errorf("failed to write requirements.txt: %w", err)
+	}
+
+	if !venvExists {
+		log.Infof("Creating Python virtual environment...")
+		log.Debugf("Running: python3 -m venv %s", venvDir)
+		createVenvCmd := exec.Command("python3", "-m", "venv", venvDir)
+		createVenvCmd.Dir = cacheDir
+		if output, err := createVenvCmd.CombinedOutput(); err != nil {
+			log.Errorf("Failed to create venv. Output:\n%s", string(output))
+			return fmt.Errorf("failed to create venv: %w", err)
+		}
+		log.Infof("Virtual environment created successfully")
+	}
+
+	if !venvExists || requirementsChanged {
+		log.Infof("Installing dependencies: %v", allDependencies)
+
+		pipPath := filepath.Join(venvDir, "bin", "pip")
+		if !fileExists(pipPath) {
+			return fmt.Errorf("pip not found in venv: %s", pipPath)
+		}
+
+		log.Debugf("Running: %s install -r %s", pipPath, requirementsFile)
+		installCmd := exec.Command(pipPath, "install", "-r", requirementsFile)
+		installCmd.Dir = cacheDir
+
+		output, err := installCmd.CombinedOutput()
+		log.Debugf("Pip output:\n%s", string(output))
+
+		if err != nil {
+			log.Errorf("Failed to install dependencies. Pip output:\n%s", string(output))
+			return fmt.Errorf("failed to install dependencies: %w", err)
+		}
+
+		log.Infof("Dependencies installed successfully")
+	} else {
+		log.Debugf("Virtual environment already configured, skipping dependency installation")
+	}
+
+	return nil
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func executePythonWorkerFromFile(cmd *cobra.Command, workerFile, taskType string) error {
+	count, _ := cmd.Flags().GetInt32("count")
+	workerId, _ := cmd.Flags().GetString("worker-id")
+	domain, _ := cmd.Flags().GetString("domain")
+	execTimeout, _ := cmd.Flags().GetInt32("timeout")
+
+	pythonCmd := "python3"
+	cacheDir := filepath.Dir(workerFile)
+	venvPython := filepath.Join(cacheDir, "venv", "bin", "python")
+
+	if fileExists(venvPython) {
+		pythonCmd = venvPython
+		log.Infof("Using virtual environment Python: %s", venvPython)
+	} else {
+		log.Infof("Using system Python: python3")
+	}
+
+	log.Infof("Starting Python worker for task type: %s", taskType)
+	if workerId != "" {
+		log.Infof("Worker ID: %s", workerId)
+	}
+
+	taskClient := internal.GetTaskClient()
+
+	for {
+		opts := &client.TaskResourceApiBatchPollOpts{}
+		if workerId != "" {
+			opts.Workerid = optional.NewString(workerId)
+		}
+		if domain != "" {
+			opts.Domain = optional.NewString(domain)
+		}
+		if count > 0 {
+			opts.Count = optional.NewInt32(count)
+		}
+		if execTimeout > 0 {
+			opts.Timeout = optional.NewInt32(execTimeout)
+		}
+
+		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
+		if err != nil {
+			log.Errorf("Error polling tasks: %v", err)
+			continue
+		}
+
+		if len(tasks) == 0 {
+			log.Debug("No tasks available")
+			continue
+		}
+
+		log.Infof("Polled %d task(s)", len(tasks))
+
+		// Process tasks in parallel goroutines
+		var wg sync.WaitGroup
+		for _, task := range tasks {
+			wg.Add(1)
+			go func(t model.Task) {
+				defer wg.Done()
+				executeExternalWorker(t, pythonCmd, []string{workerFile}, workerId, domain, execTimeout, taskClient)
+			}(task)
+		}
+
+		wg.Wait()
+	}
+}
+
 func init() {
-	// Worker JS flags
 	workerJsCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerJsCmd.MarkFlagRequired("type")
 	workerJsCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
@@ -622,7 +1167,6 @@ func init() {
 	workerJsCmd.Flags().String("domain", "", "Domain")
 	workerJsCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
 
-	// Worker exec flags
 	workerExecCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerExecCmd.MarkFlagRequired("type")
 	workerExecCmd.Flags().String("worker-id", "", "Worker ID")
@@ -631,7 +1175,19 @@ func init() {
 	workerExecCmd.Flags().Int32("exec-timeout", 0, "Execution timeout in seconds (0 = no timeout)")
 	workerExecCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 
+	workerRemoteCmd.Flags().String("type", "", "Task type to poll for (required)")
+	workerRemoteCmd.MarkFlagRequired("type")
+	workerRemoteCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
+	workerRemoteCmd.Flags().String("worker-id", "", "Worker ID")
+	workerRemoteCmd.Flags().String("domain", "", "Domain")
+	workerRemoteCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
+	workerRemoteCmd.Flags().Bool("refresh", false, "Force refresh worker from registry (ignore cache)")
+
+	workerListRemoteCmd.Flags().String("namespace", "default", "Namespace to list workers from")
+
 	workerCmd.AddCommand(workerJsCmd)
 	workerCmd.AddCommand(workerExecCmd)
+	workerCmd.AddCommand(workerRemoteCmd)
+	workerCmd.AddCommand(workerListRemoteCmd)
 	rootCmd.AddCommand(workerCmd)
 }
