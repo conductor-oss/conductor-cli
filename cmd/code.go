@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultTemplateRepo = "mp-orkes/cli-templates"
+	defaultTemplateRepo = "conductor-oss/cli-templates"
 )
 
 type TemplatesConfig struct {
