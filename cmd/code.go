@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	defaultTemplateURL = "https://raw.githubusercontent.com/conductor-oss/cli-templates/main"
+	defaultTemplateURL = "https://d2ozrtblsovn5m.cloudfront.net"
 )
 
 func getTemplateBaseURL() string {
