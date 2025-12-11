@@ -259,7 +259,7 @@ func interactiveSaveConfig(profileName string) error {
 
 	templateURLDefault := existingConfig["template-url"]
 	if templateURLDefault == "" {
-		templateURLDefault = "https://raw.githubusercontent.com/conductor-oss/cli-templates/main"
+		templateURLDefault = "https://d2ozrtblsovn5m.cloudfront.net"
 	}
 	fmt.Fprintf(os.Stdout, "Template repo URL [%s]: ", templateURLDefault)
 	templateURLInput, _ := reader.ReadString('\n')
