@@ -13,45 +13,18 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 )
 
 const (
-	defaultTemplateRepo = "conductor-oss/cli-templates"
+	defaultTemplateURL = "https://raw.githubusercontent.com/conductor-oss/cli-templates/main"
 )
 
-type TemplatesConfig struct {
-	Repo string `yaml:"repo"`
-}
-
-func getTemplateRepo() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return defaultTemplateRepo
-	}
-
-	configPath := filepath.Join(home, ".conductor-cli", "templates.yaml")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		// File doesn't exist, use default
-		return defaultTemplateRepo
-	}
-
-	var config TemplatesConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return defaultTemplateRepo
-	}
-
-	if config.Repo == "" {
-		return defaultTemplateRepo
-	}
-
-	return config.Repo
-}
-
 func getTemplateBaseURL() string {
-	repo := getTemplateRepo()
-	return fmt.Sprintf("https://raw.githubusercontent.com/%s/main", repo)
+	templateURL := viper.GetString("template-url")
+	if templateURL != "" {
+		return templateURL
+	}
+	return defaultTemplateURL
 }
 
 func getListURL() string {
