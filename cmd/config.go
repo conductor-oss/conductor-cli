@@ -257,6 +257,18 @@ func interactiveSaveConfig(profileName string) error {
 		serverType = serverTypeInput
 	}
 
+	templateURLDefault := existingConfig["template-url"]
+	if templateURLDefault == "" {
+		templateURLDefault = "https://raw.githubusercontent.com/conductor-oss/cli-templates/main"
+	}
+	fmt.Fprintf(os.Stdout, "Template repo URL [%s]: ", templateURLDefault)
+	templateURLInput, _ := reader.ReadString('\n')
+	templateURLInput = strings.TrimSpace(templateURLInput)
+	templateURL := templateURLDefault
+	if templateURLInput != "" {
+		templateURL = templateURLInput
+	}
+
 	// Prompt for auth method
 	fmt.Fprintf(os.Stdout, "\nAuthentication method:\n")
 	fmt.Fprintf(os.Stdout, "  1. API Key + Secret\n")
@@ -326,6 +338,7 @@ func interactiveSaveConfig(profileName string) error {
 	configData := make(map[string]interface{})
 	configData["server"] = server
 	configData["server-type"] = serverType
+	configData["template-url"] = templateURL
 
 	if authKey != "" {
 		configData["auth-key"] = authKey
@@ -350,7 +363,7 @@ func interactiveSaveConfig(profileName string) error {
 		return err
 	}
 
-	return os.WriteFile(configPath, data, 0600) // 0600 for security (credentials)
+	return os.WriteFile(configPath, data, 0600)
 }
 
 var ErrTooLong = errors.New("input exceeds limit")
