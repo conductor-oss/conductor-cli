@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
 
@@ -333,6 +334,27 @@ func generateFromTemplate(templatePath, templateName, projectName string) error 
 				attrValue = projectName // Default to project name
 			}
 			fileContent = strings.ReplaceAll(fileContent, "_"+field.Name+"_", attrValue)
+		}
+
+		serverURL := viper.GetString("server")
+		if serverURL != "" {
+			fileContent = strings.ReplaceAll(fileContent, "_server_url_", serverURL)
+			fileContent = strings.ReplaceAll(fileContent, "_server_", serverURL)
+		}
+
+		authKey := viper.GetString("auth-key")
+		if authKey != "" {
+			fileContent = strings.ReplaceAll(fileContent, "_auth_key_", authKey)
+		}
+
+		authSecret := viper.GetString("auth-secret")
+		if authSecret != "" {
+			fileContent = strings.ReplaceAll(fileContent, "_auth_secret_", authSecret)
+		}
+
+		authToken := viper.GetString("auth-token")
+		if authToken != "" {
+			fileContent = strings.ReplaceAll(fileContent, "_auth_token_", authToken)
 		}
 
 		// Write file
