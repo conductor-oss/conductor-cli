@@ -67,6 +67,7 @@ type Field struct {
 type BoilerPlateFile struct {
 	Name   string  `json:"name"`
 	Fields []Field `json:"fields"`
+	Mode   string  `json:"mode,omitempty"`
 }
 
 type BoilerPlate struct {
@@ -357,8 +358,24 @@ func generateFromTemplate(templatePath, templateName, projectName string) error 
 			fileContent = strings.ReplaceAll(fileContent, "_auth_token_", authToken)
 		}
 
-		// Write file
-		if err := os.WriteFile(projectName+"/"+file.Name, []byte(fileContent), 0644); err != nil {
+		filePath := filepath.Join(projectName, file.Name)
+		fileDir := filepath.Dir(filePath)
+		if err := os.MkdirAll(fileDir, 0755); err != nil {
+			os.RemoveAll(projectName)
+			return fmt.Errorf("failed to create directory for %s: %w", file.Name, err)
+		}
+
+		fileMode := os.FileMode(0644)
+		if file.Mode != "" {
+			parsedMode, err := strconv.ParseUint(file.Mode, 8, 32)
+			if err != nil {
+				os.RemoveAll(projectName)
+				return fmt.Errorf("invalid mode %s for file %s: %w", file.Mode, file.Name, err)
+			}
+			fileMode = os.FileMode(parsedMode)
+		}
+
+		if err := os.WriteFile(filePath, []byte(fileContent), fileMode); err != nil {
 			os.RemoveAll(projectName)
 			return fmt.Errorf("failed to write file %s: %w", file.Name, err)
 		}
