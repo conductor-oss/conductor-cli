@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cbroglie/mustache"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -241,6 +242,42 @@ func interactiveCodeGenerate(cmd *cobra.Command, args []string) error {
 	return generateFromTemplate(selectedTemplate.Path, selectedTemplate.Name, projectName)
 }
 
+func buildTemplateContext(fields []Field, reader *bufio.Reader) (map[string]interface{}, error) {
+	context := make(map[string]interface{})
+
+	for _, field := range fields {
+		fmt.Printf("  %s ", field.Prompt)
+		attrValue, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, fmt.Errorf("failed to read input for %s: %w", field.Name, err)
+		}
+		context[field.Name] = strings.TrimSpace(attrValue)
+	}
+
+	serverURL := viper.GetString("server")
+	if serverURL != "" {
+		context["server_url"] = serverURL
+		context["server"] = serverURL
+	}
+
+	authKey := viper.GetString("auth-key")
+	if authKey != "" {
+		context["auth_key"] = authKey
+	}
+
+	authSecret := viper.GetString("auth-secret")
+	if authSecret != "" {
+		context["auth_secret"] = authSecret
+	}
+
+	authToken := viper.GetString("auth-token")
+	if authToken != "" {
+		context["auth_token"] = authToken
+	}
+
+	return context, nil
+}
+
 func generateFromTemplate(templatePath, templateName, projectName string) error {
 	var boilerplate BoilerPlate
 	baseURL := getTemplateBaseURL()
@@ -299,37 +336,19 @@ func generateFromTemplate(templatePath, templateName, projectName string) error 
 
 		fileContent := string(bodyFile)
 
-		// Prompt for field values
-		for _, field := range file.Fields {
-			fmt.Printf("  %s ", field.Prompt)
-			attrValue, _ := reader.ReadString('\n')
-			attrValue = strings.TrimSpace(attrValue)
-			if attrValue == "" {
-				attrValue = projectName // Default to project name
-			}
-			fileContent = strings.ReplaceAll(fileContent, "_"+field.Name+"_", attrValue)
+		context, err := buildTemplateContext(file.Fields, reader)
+		if err != nil {
+			os.RemoveAll(projectName)
+			return fmt.Errorf("failed to build template context: %w", err)
 		}
 
-		serverURL := viper.GetString("server")
-		if serverURL != "" {
-			fileContent = strings.ReplaceAll(fileContent, "_server_url_", serverURL)
-			fileContent = strings.ReplaceAll(fileContent, "_server_", serverURL)
+		renderedContent, err := mustache.Render(fileContent, context)
+		if err != nil {
+			os.RemoveAll(projectName)
+			return fmt.Errorf("failed to render template %s: %w", file.Name, err)
 		}
 
-		authKey := viper.GetString("auth-key")
-		if authKey != "" {
-			fileContent = strings.ReplaceAll(fileContent, "_auth_key_", authKey)
-		}
-
-		authSecret := viper.GetString("auth-secret")
-		if authSecret != "" {
-			fileContent = strings.ReplaceAll(fileContent, "_auth_secret_", authSecret)
-		}
-
-		authToken := viper.GetString("auth-token")
-		if authToken != "" {
-			fileContent = strings.ReplaceAll(fileContent, "_auth_token_", authToken)
-		}
+		fileContent = renderedContent
 
 		filePath := filepath.Join(projectName, file.Name)
 		fileDir := filepath.Dir(filePath)
