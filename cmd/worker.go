@@ -48,13 +48,13 @@ var (
 		Example:      "orkes worker js --type my_task worker.js",
 	}
 
-	workerExecCmd = &cobra.Command{
-		Use:   "exec <command> [args...]",
-		Short: "Poll and execute tasks using an external command",
-		Long: `Continuously poll for tasks and execute them using an external command.
+	workerStdioCmd = &cobra.Command{
+		Use:   "stdio <command> [args...]",
+		Short: "Poll tasks and execute command via stdin/stdout",
+		Long: `CLI polls tasks and executes the command. The task is passed in the standard input and the result is expected in the standard output.
 
 The worker runs in continuous mode, polling for tasks and executing them in
-parallel goroutines (similar to JavaScript workers).
+parallel goroutines.
 
 The task JSON is passed to the command via stdin. The command should read the task
 from stdin and write a result JSON to stdout.
@@ -78,7 +78,7 @@ Exit codes:
   non-zero: Failure (task marked as FAILED)`,
 		RunE:         execWorker,
 		SilenceUsage: true,
-		Example:      "worker exec --type greet_task python worker.py\nworker exec --type greet_task python worker.py --count 5\nworker exec --type greet_task ./worker.sh --verbose",
+		Example:      "worker stdio --type greet_task python worker.py\nworker stdio --type greet_task python worker.py --count 5\nworker stdio --type greet_task ./worker.sh --verbose",
 	}
 
 	workerRemoteCmd = &cobra.Command{
@@ -463,6 +463,7 @@ func execWorker(cmd *cobra.Command, args []string) error {
 	pollTimeout, _ := cmd.Flags().GetInt32("poll-timeout")
 	execTimeout, _ := cmd.Flags().GetInt32("exec-timeout")
 	count, _ := cmd.Flags().GetInt32("count")
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	taskClient := internal.GetTaskClient()
 
@@ -506,7 +507,7 @@ func execWorker(cmd *cobra.Command, args []string) error {
 			wg.Add(1)
 			go func(t model.Task) {
 				defer wg.Done()
-				executeExternalWorker(t, workerCmd, workerArgs, workerId, domain, execTimeout, taskClient)
+				executeExternalWorker(t, workerCmd, workerArgs, workerId, domain, execTimeout, verbose, taskClient)
 			}(task)
 		}
 
@@ -514,7 +515,7 @@ func execWorker(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func executeExternalWorker(task model.Task, workerCmd string, workerArgs []string, workerId, domain string, execTimeout int32, taskClient *client.TaskResourceApiService) {
+func executeExternalWorker(task model.Task, workerCmd string, workerArgs []string, workerId, domain string, execTimeout int32, verbose bool, taskClient *client.TaskResourceApiService) {
 	log.Infof("Processing task: %s (workflow: %s)", task.TaskId, task.WorkflowInstanceId)
 
 	taskJSON, err := json.Marshal(task)
@@ -522,6 +523,12 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 		log.Errorf("Error marshaling task: %v", err)
 		updateExecTaskFailed(taskClient, task, workerId, fmt.Sprintf("error marshaling task: %v", err))
 		return
+	}
+
+	if verbose {
+		fmt.Println("=== Task Input ===")
+		fmt.Println(string(taskJSON))
+		fmt.Println("==================")
 	}
 
 	ctx := context.Background()
@@ -583,7 +590,7 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 
 		result = WorkerResult{
 			Status: "FAILED",
-			Reason: fmt.Sprintf("worker exec failed: %v", execErr),
+			Reason: fmt.Sprintf("worker execution failed: %v", execErr),
 			Logs:   []string{stderrOutput},
 		}
 	} else {
@@ -597,6 +604,19 @@ func executeExternalWorker(task model.Task, workerCmd string, workerArgs []strin
 				Reason: fmt.Sprintf("invalid worker stdout JSON: %v", err),
 				Logs:   []string{stdoutOutput},
 			}
+		}
+	}
+
+	if verbose {
+		resultJSON, _ := json.MarshalIndent(result, "", "  ")
+		if result.Status == "FAILED" {
+			fmt.Println("=== Task Result (Error) ===")
+			fmt.Println(string(resultJSON))
+			fmt.Println("===========================")
+		} else {
+			fmt.Println("=== Task Result ===")
+			fmt.Println(string(resultJSON))
+			fmt.Println("===================")
 		}
 	}
 
@@ -1151,7 +1171,7 @@ func executePythonWorkerFromFile(cmd *cobra.Command, workerFile, taskType string
 			wg.Add(1)
 			go func(t model.Task) {
 				defer wg.Done()
-				executeExternalWorker(t, pythonCmd, []string{workerFile}, workerId, domain, execTimeout, taskClient)
+				executeExternalWorker(t, pythonCmd, []string{workerFile}, workerId, domain, execTimeout, false, taskClient)
 			}(task)
 		}
 
@@ -1167,13 +1187,14 @@ func init() {
 	workerJsCmd.Flags().String("domain", "", "Domain")
 	workerJsCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
 
-	workerExecCmd.Flags().String("type", "", "Task type to poll for (required)")
-	workerExecCmd.MarkFlagRequired("type")
-	workerExecCmd.Flags().String("worker-id", "", "Worker ID")
-	workerExecCmd.Flags().String("domain", "", "Domain")
-	workerExecCmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
-	workerExecCmd.Flags().Int32("exec-timeout", 0, "Execution timeout in seconds (0 = no timeout)")
-	workerExecCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
+	workerStdioCmd.Flags().String("type", "", "Task type to poll for (required)")
+	workerStdioCmd.MarkFlagRequired("type")
+	workerStdioCmd.Flags().String("worker-id", "", "Worker ID")
+	workerStdioCmd.Flags().String("domain", "", "Domain")
+	workerStdioCmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
+	workerStdioCmd.Flags().Int32("exec-timeout", 0, "Execution timeout in seconds (0 = no timeout)")
+	workerStdioCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
+	workerStdioCmd.Flags().Bool("verbose", false, "Print task and result JSON to stdout")
 
 	workerRemoteCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerRemoteCmd.MarkFlagRequired("type")
@@ -1186,7 +1207,7 @@ func init() {
 	workerListRemoteCmd.Flags().String("namespace", "default", "Namespace to list workers from")
 
 	workerCmd.AddCommand(workerJsCmd)
-	workerCmd.AddCommand(workerExecCmd)
+	workerCmd.AddCommand(workerStdioCmd)
 	workerCmd.AddCommand(workerRemoteCmd)
 	workerCmd.AddCommand(workerListRemoteCmd)
 	rootCmd.AddCommand(workerCmd)
