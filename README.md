@@ -557,34 +557,36 @@ orkes api-gateway route delete <service_id> <http_method> <route_path>
 }
 ```
 
-## Task Workers
+## Workers
 
 ⚠️ **EXPERIMENTAL FEATURES**
 
-The CLI supports two types of task workers for processing Conductor tasks:
+The CLI supports two types of workers for processing Conductor tasks:
 
-### Generic Workers (Any Language)
+### Stdio Workers
 
-Execute tasks using external programs written in **any language** (Python, Node.js, Go, Rust, shell scripts, etc.). The CLI polls for tasks and passes them to your worker via stdin/stdout.
+Execute tasks using external programs written in **any language** (Python, Node.js, Go, Rust, shell scripts, etc.). 
+
+The CLI polls for tasks and passes them to your worker via stdin/stdout.
 
 **Best for:** Complex logic, heavy dependencies, full language ecosystem access
 
-👉 **[Complete Generic Worker Documentation →](WORKER_EXEC.md)**
+👉 **[Complete Stdio Worker Documentation →](WORKER_STDIO.md)**
 
 **Quick example:**
 ```bash
 # Run a Python worker (continuous polling with parallel execution)
-orkes worker exec --type greet_task python3 worker.py
+orkes worker stdio --type greet_task python3 worker.py
 
 # Poll multiple tasks per batch for higher throughput
-orkes worker exec --type greet_task python3 worker.py --count 5
+orkes worker stdio --type greet_task python3 worker.py --count 5
 ```
 
 ### JavaScript Workers (Built-in)
 
 Execute tasks using **JavaScript** scripts with built-in utilities (HTTP, crypto, string functions). No external dependencies needed.
 
-**Best for:** Lightweight tasks, quick scripts, HTTP integrations
+**Best for:** Prototyping, Lightweight tasks, quick scripts, HTTP integrations
 
 👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
 
