@@ -76,6 +76,29 @@ func isEnterpriseServer() bool {
 	return strings.ToUpper(serverType) == "ENTERPRISE"
 }
 
+// localOnlyCommands are the top-level commands that run entirely on the local
+// machine and therefore need no API client (and no server configuration).
+var localOnlyCommands = map[string]bool{
+	"config": true,
+	"server": true,
+	"code":   true,
+	"update": true,
+}
+
+// isLocalOnlyCommand reports whether cmd belongs to a local-only command tree.
+// Matching is anchored to the top-level command so that same-named subcommands
+// elsewhere (e.g. "schedule update") still get an API client.
+func isLocalOnlyCommand(cmd *cobra.Command) bool {
+	topLevel := cmd
+	for topLevel.Parent() != nil && topLevel.Parent().Parent() != nil {
+		topLevel = topLevel.Parent()
+	}
+	if topLevel.Parent() == nil {
+		return false // cmd is the root command itself
+	}
+	return localOnlyCommands[topLevel.Name()]
+}
+
 var rootCmd = &cobra.Command{
 	Use:     NAME,
 	Short:   "conductor",
@@ -101,8 +124,8 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// Check if parent is config or server command, which are local only. Skip api client setup
-		if cmd.Parent() != nil && (cmd.Parent().Name() == "config" || cmd.Parent().Name() == "server") {
+		// Skip API client setup for local-only commands
+		if isLocalOnlyCommand(cmd) {
 			return nil
 		}
 
