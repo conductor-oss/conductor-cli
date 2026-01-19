@@ -114,7 +114,7 @@ jobs:
       if: "!contains(steps.get_version.outputs.VERSION, '-')"
       uses: actions/checkout@v4
       with:
-        repository: conductor-oss/homebrew-conductor-tools
+        repository: conductor-oss/homebrew-conductor
         token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         path: homebrew-tap
 

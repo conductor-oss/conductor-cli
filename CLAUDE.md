@@ -10,7 +10,7 @@ Orkes CLI (`orkes`) is a command-line tool for managing Netflix Conductor workfl
 
 ```bash
 # Homebrew (macOS/Linux)
-brew install conductor-oss/conductor-tools/orkes
+brew install conductor-oss/conductor/orkes
 
 # Manual download from: https://github.com/conductor-oss/conductor-cli/releases
 ```
