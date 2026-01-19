@@ -180,11 +180,15 @@ var rootCmd = &cobra.Command{
 func Execute(ctx context.Context) {
 	cc.Init(&cc.Config{
 		RootCmd:         rootCmd,
-		Headings:        cc.HiWhite + cc.Bold,
-		Commands:        cc.HiBlue + cc.Bold,
-		Example:         cc.White,
-		ExecName:        cc.Bold,
-		Flags:           cc.Bold,
+		Headings:        cc.Red + cc.Bold,
+		Commands:        cc.Red + cc.Bold,
+		CmdShortDescr:   cc.None,
+		ExecName:        cc.Red + cc.Bold,
+		Flags:           cc.Red + cc.Bold,
+		FlagsDataType:   cc.Red,
+		FlagsDescr:      cc.None,
+		Aliases:         cc.Red + cc.Bold,
+		Example:         cc.Italic,
 		NoExtraNewlines: true,
 	})
 
