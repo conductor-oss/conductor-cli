@@ -16,16 +16,36 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 
 ### Using Homebrew (macOS/Linux)
 
+**First time installation:**
 ```bash
+# Add the Conductor tap (one-time setup)
 brew tap conductor-oss/conductor
+
+# Install the CLI
 brew install orkes
 ```
 
-Or in one line:
-
+Or install directly in one line:
 ```bash
 brew install conductor-oss/conductor/orkes
 ```
+
+**After tapping, future updates are simple:**
+```bash
+brew upgrade orkes
+```
+
+<details>
+<summary><b>Migrating from old tap (conductor-tools)?</b></summary>
+
+If you previously installed from `conductor-oss/conductor-tools`, migrate to the new tap:
+
+```bash
+brew uninstall orkes
+brew untap conductor-oss/conductor-tools
+brew install conductor-oss/conductor/orkes
+```
+</details>
 
 ### Using npm
 
