@@ -86,8 +86,11 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// Check if parent is config command, which is local only. Skip api client setup
-		if cmd.Parent() != nil && cmd.Parent().Name() == "config" {
+		// Skip API client setup for local-only commands
+		if cmd.Parent() != nil && (cmd.Parent().Name() == "config" || cmd.Parent().Name() == "code") {
+			return nil
+		}
+		if cmd.Name() == "update" || cmd.Name() == "code" {
 			return nil
 		}
 
