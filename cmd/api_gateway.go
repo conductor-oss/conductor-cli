@@ -168,15 +168,15 @@ func listServices(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
 	}
 
-	complete, _ := cmd.Flags().GetBool("complete")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 
 	gatewayClient := getGatewayClient()
 	services, _, err := gatewayClient.GetAllServices(context.Background())
 	if err != nil {
-		return fmt.Errorf("error listing services: %v", err)
+		return parseAPIError(err, "Failed to list services")
 	}
 
-	if complete {
+	if jsonOutput {
 		data, err := json.MarshalIndent(services, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling services: %v", err)
@@ -366,15 +366,15 @@ func listAuthConfigs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
 	}
 
-	complete, _ := cmd.Flags().GetBool("complete")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 
 	gatewayClient := getGatewayClient()
 	authConfigs, _, err := gatewayClient.GetAllAuthConfigs(context.Background())
 	if err != nil {
-		return fmt.Errorf("error listing auth configs: %v", err)
+		return parseAPIError(err, "Failed to list auth configs")
 	}
 
-	if complete {
+	if jsonOutput {
 		data, err := json.MarshalIndent(authConfigs, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling auth configs: %v", err)
@@ -535,16 +535,16 @@ func listRoutes(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(errAPIGatewayEnterpriseOnly)
 	}
 
-	complete, _ := cmd.Flags().GetBool("complete")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
 	serviceId := args[0]
 
 	gatewayClient := getGatewayClient()
 	routes, _, err := gatewayClient.GetRoutes(context.Background(), serviceId)
 	if err != nil {
-		return fmt.Errorf("error listing routes: %v", err)
+		return parseAPIError(err, fmt.Sprintf("Failed to list routes for service '%s'", serviceId))
 	}
 
-	if complete {
+	if jsonOutput {
 		data, err := json.MarshalIndent(routes, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling routes: %v", err)
@@ -761,9 +761,9 @@ func init() {
 	)
 
 	// Add flags
-	serviceListCmd.Flags().Bool("complete", false, "Print complete JSON output")
-	authConfigListCmd.Flags().Bool("complete", false, "Print complete JSON output")
-	routeListCmd.Flags().Bool("complete", false, "Print complete JSON output")
+	serviceListCmd.Flags().Bool("json", false, "Print complete JSON output")
+	authConfigListCmd.Flags().Bool("json", false, "Print complete JSON output")
+	routeListCmd.Flags().Bool("json", false, "Print complete JSON output")
 
 	// Service create flags
 	serviceCreateCmd.Flags().String("service-id", "", "Service ID (required when not using file)")

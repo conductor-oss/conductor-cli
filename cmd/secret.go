@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -245,7 +246,7 @@ func putSecret(cmd *cobra.Command, args []string) error {
 		stat, _ := os.Stdin.Stat()
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
 			// Reading from pipe
-			data, err := os.ReadFile("/dev/stdin")
+			data, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("error reading from stdin: %v", err)
 			}

@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/conductor-sdk/conductor-go/sdk/model"
-	"github.com/orkes-io/conductor-cli/internal"
-	"github.com/spf13/cobra"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/conductor-sdk/conductor-go/sdk/model"
+	"github.com/orkes-io/conductor-cli/internal"
+	"github.com/spf13/cobra"
 )
 
 var webhookCmd = &cobra.Command{
@@ -136,7 +138,7 @@ func delete(cmd *cobra.Command, args []string) error {
 		stat, _ := os.Stdin.Stat()
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
 			// Reading from pipe
-			data, err := os.ReadFile("/dev/stdin")
+			data, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("error reading from stdin: %v", err)
 			}
@@ -155,10 +157,10 @@ func delete(cmd *cobra.Command, args []string) error {
 	webhookClient := internal.GetWebhooksConfigClient()
 	_, err := webhookClient.DeleteWebhook(context.Background(), id)
 	if err != nil {
-		return err
+		return parseAPIError(err, fmt.Sprintf("Failed to delete webhook '%s'", id))
 	}
 
-	fmt.Printf("Webhook %s deleted successfully\n", id)
+	fmt.Printf("Webhook '%s' deleted successfully\n", id)
 	return nil
 }
 
@@ -177,7 +179,10 @@ func get(cmd *cobra.Command, args []string) error {
 		return parseAPIError(err, fmt.Sprintf("Failed to get webhook '%s'", args[0]))
 	}
 
-	data, _ := json.MarshalIndent(webhook, "", "   ")
+	data, err := json.MarshalIndent(webhook, "", "   ")
+	if err != nil {
+		return fmt.Errorf("error marshaling webhook: %v", err)
+	}
 	fmt.Println(string(data))
 	return nil
 }
@@ -239,7 +244,7 @@ func create(cmd *cobra.Command, args []string) error {
 		// Reading from stdin (pipe)
 		stat, _ := os.Stdin.Stat()
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
-			data, err = os.ReadFile("/dev/stdin")
+			data, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("error reading from stdin: %v", err)
 			}
@@ -255,10 +260,13 @@ func create(cmd *cobra.Command, args []string) error {
 	webhookClient := internal.GetWebhooksConfigClient()
 	result, _, err := webhookClient.CreateWebhook(context.Background(), webhookConfig)
 	if err != nil {
-		return fmt.Errorf("error creating webhook: %v", err)
+		return parseAPIError(err, "Failed to create webhook")
 	}
 
-	data, _ = json.MarshalIndent(result, "", "   ")
+	data, err = json.MarshalIndent(result, "", "   ")
+	if err != nil {
+		return fmt.Errorf("error marshaling webhook: %v", err)
+	}
 	fmt.Println(string(data))
 	return nil
 }
@@ -290,7 +298,7 @@ func updateWebhook(cmd *cobra.Command, args []string) error {
 		stat, _ := os.Stdin.Stat()
 		if (stat.Mode() & os.ModeCharDevice) == 0 {
 			// Reading from pipe
-			data, err = os.ReadFile("/dev/stdin")
+			data, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				return fmt.Errorf("error reading from stdin: %v", err)
 			}
@@ -308,10 +316,13 @@ func updateWebhook(cmd *cobra.Command, args []string) error {
 	webhookClient := internal.GetWebhooksConfigClient()
 	result, _, err := webhookClient.UpdateWebhook(context.Background(), webhookConfig, id)
 	if err != nil {
-		return fmt.Errorf("error updating webhook: %v", err)
+		return parseAPIError(err, fmt.Sprintf("Failed to update webhook '%s'", id))
 	}
 
-	data, _ = json.MarshalIndent(result, "", "   ")
+	data, err = json.MarshalIndent(result, "", "   ")
+	if err != nil {
+		return fmt.Errorf("error marshaling webhook: %v", err)
+	}
 	fmt.Println(string(data))
 	return nil
 }

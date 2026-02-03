@@ -78,8 +78,8 @@ func (s *UpdateState) Save() error {
 		return err
 	}
 
-	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	// Create config directory if it doesn't exist (0700 for security - contains credentials)
+	if err := os.MkdirAll(configDir, 0700); err != nil {
 		return err
 	}
 

@@ -270,7 +270,10 @@ func getWorkflowMetadata(cmd *cobra.Command, args []string) error {
 		return parseAPIError(err, errorMsg)
 	}
 
-	bytes, _ := json.MarshalIndent(metadata, "", "   ")
+	bytes, err := json.MarshalIndent(metadata, "", "   ")
+	if err != nil {
+		return fmt.Errorf("error marshaling workflow: %v", err)
+	}
 	fmt.Println(string(bytes))
 	return nil
 }
@@ -297,11 +300,17 @@ func getAllWorkflowMetadata(cmd *cobra.Command, args []string) error {
 	for i, data := range metadata {
 		if regex != nil {
 			if regex.Match([]byte(data.Name)) {
-				bytes, _ := json.MarshalIndent(data, "", "   ")
+				bytes, err := json.MarshalIndent(data, "", "   ")
+				if err != nil {
+					return fmt.Errorf("error marshaling workflow '%s': %v", data.Name, err)
+				}
 				fmt.Println(string(bytes))
 			}
 		} else {
-			bytes, _ := json.MarshalIndent(data, "", "   ")
+			bytes, err := json.MarshalIndent(data, "", "   ")
+			if err != nil {
+				return fmt.Errorf("error marshaling workflow '%s': %v", data.Name, err)
+			}
 			fmt.Println(string(bytes))
 		}
 		if i < len(metadata)-1 {
@@ -400,7 +409,8 @@ func createWorkflowMetadata(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	err = registerWorkflow(data, true)
+	force, _ := cmd.Flags().GetBool("force")
+	err = registerWorkflow(data, force)
 	return err
 }
 
@@ -595,7 +605,6 @@ func parseAPIError(err error, defaultMsg string) error {
 func read() []byte {
 	var b bytes.Buffer
 	in := bufio.NewReader(os.Stdin)
-	defer os.Stdin.Close()
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
@@ -611,27 +620,12 @@ func read() []byte {
 }
 
 func readString() string {
-	var b bytes.Buffer
-	in := bufio.NewReader(os.Stdin)
-	defer os.Stdin.Close()
-	for {
-		line, err := in.ReadString('\n')
-		if err != nil {
-			// If we have a partial line (no newline at EOF), include it
-			if len(line) > 0 {
-				b.WriteString(line)
-			}
-			break
-		}
-		b.WriteString(line)
-	}
-	return b.String()
+	return string(read())
 }
 
 func readLines() []string {
 	var lines = make([]string, 0)
 	in := bufio.NewReader(os.Stdin)
-	defer os.Stdin.Close()
 	for {
 		line, err := in.ReadString('\n')
 		if err != nil {
@@ -729,8 +723,8 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 
 	count, _ := cmd.Flags().GetInt32("count")
 	if count > 1000 {
-		//fmt.Println("count exceeds max allowed 1000.  Will only show the first 1000 matching results")
-		//count = 1000
+		fmt.Fprintln(os.Stderr, "Warning: count exceeds max allowed 1000. Will only show the first 1000 matching results")
+		count = 1000
 	} else if count == 0 {
 		count = 10
 	}
@@ -1278,7 +1272,10 @@ func updateWorkflowState(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error updating workflow state for %s: %v", workflowId, err)
 	}
 
-	data, _ := json.MarshalIndent(workflow, "", "   ")
+	data, err := json.MarshalIndent(workflow, "", "   ")
+	if err != nil {
+		return fmt.Errorf("error marshaling workflow state: %v", err)
+	}
 	fmt.Println(string(data))
 	return nil
 }

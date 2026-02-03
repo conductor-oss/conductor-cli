@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"github.com/spf13/cobra"
 	"io"
 	"net/http"
 	"os"
@@ -14,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/cobra"
+	_ "github.com/spf13/cobra"
 )
 
 const (

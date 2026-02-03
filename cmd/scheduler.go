@@ -5,16 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
+	"text/tabwriter"
+	"time"
+
 	"github.com/antihax/optional"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	"github.com/conductor-sdk/conductor-go/sdk/model"
 	"github.com/orkes-io/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"os"
-	"strings"
-	"text/tabwriter"
-	"time"
 )
 
 var schedulerCmd = &cobra.Command{
@@ -176,7 +177,10 @@ func getSchedule(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return parseAPIError(err, fmt.Sprintf("Failed to get schedule '%s'", args[i]))
 		}
-		bytes, _ := json.MarshalIndent(schedule, "", "   ")
+		bytes, err := json.MarshalIndent(schedule, "", "   ")
+		if err != nil {
+			return fmt.Errorf("error marshaling schedule '%s': %v", args[i], err)
+		}
 		fmt.Println(string(bytes))
 	}
 	return nil
@@ -203,7 +207,7 @@ func deleteSchedule(cmd *cobra.Command, args []string) error {
 
 		_, _, err := schedulerClient.DeleteSchedule(context.Background(), name)
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to delete schedule '%s'", name))
 		}
 		fmt.Printf("Schedule '%s' deleted successfully\n", name)
 	}
@@ -223,8 +227,9 @@ func pauseSchedule(cmd *cobra.Command, args []string) error {
 	for i := 0; i < len(args); i++ {
 		_, _, err := schedulerClient.PauseSchedule(context.Background(), args[i])
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to pause schedule '%s'", args[i]))
 		}
+		fmt.Printf("Schedule '%s' paused successfully\n", args[i])
 	}
 	return nil
 }
@@ -242,8 +247,9 @@ func resumeSchedule(cmd *cobra.Command, args []string) error {
 	for i := 0; i < len(args); i++ {
 		_, _, err := schedulerClient.ResumeSchedule(context.Background(), args[i])
 		if err != nil {
-			return err
+			return parseAPIError(err, fmt.Sprintf("Failed to resume schedule '%s'", args[i]))
 		}
+		fmt.Printf("Schedule '%s' resumed successfully\n", args[i])
 	}
 	return nil
 }
@@ -282,16 +288,14 @@ func searchScheduledExecutions(cmd *cobra.Command, args []string) error {
 		Query:    optional.NewString(query),
 		Sort:     optional.NewString("startTime:DESC"),
 	}
-	for i := 0; i < len(args); i++ {
-		results, _, err := schedulerClient.SearchV2(context.Background(), &searchOpts)
-		if err != nil {
-			return err
-		}
-		items := results.Results
-		for _, item := range items {
-			execTime := time.UnixMilli(item.ExecutionTime).Format(time.UnixDate)
-			fmt.Println(strings.Join([]string{item.State, item.WorkflowName, execTime, item.WorkflowId, item.Reason}, ","))
-		}
+	results, _, err := schedulerClient.SearchV2(context.Background(), &searchOpts)
+	if err != nil {
+		return parseAPIError(err, "Failed to search scheduled executions")
+	}
+	items := results.Results
+	for _, item := range items {
+		execTime := time.UnixMilli(item.ExecutionTime).Format(time.UnixDate)
+		fmt.Println(strings.Join([]string{item.State, item.WorkflowName, execTime, item.WorkflowId, item.Reason}, ","))
 	}
 	return nil
 }
@@ -404,13 +408,19 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 		return errors.New("a schedule already exists by this name " + request.Name + ". " +
 			"(hint: use update command to update the existing schedule) ")
 	}
-	if update {
-
-	}
 	_, _, err = schedulerClient.SaveSchedule(context.Background(), request)
 	if err != nil {
-		return err
+		action := "create"
+		if update {
+			action = "update"
+		}
+		return parseAPIError(err, fmt.Sprintf("Failed to %s schedule '%s'", action, request.Name))
 	}
+	action := "created"
+	if update {
+		action = "updated"
+	}
+	fmt.Printf("Schedule '%s' %s successfully\n", request.Name, action)
 	return nil
 }
 
@@ -418,8 +428,6 @@ func init() {
 	rootCmd.AddCommand(schedulerCmd)
 
 	listSchedulerCmd.Flags().BoolP("json", "j", false, "Print full json")
-	listSchedulerCmd.Flags().BoolP("cron", "c", false, "Print cron expression")
-	listSchedulerCmd.Flags().BoolP("pretty", "p", false, "Print formatted json")
 
 	createSchedulerCmd.Flags().StringP("name", "n", "", "Name of the schedule (required)")
 	createSchedulerCmd.Flags().StringP("cron", "c", "", "Cron expression (required)")

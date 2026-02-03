@@ -173,7 +173,10 @@ func getTask(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return parseAPIError(err, fmt.Sprintf("Failed to get task '%s'", taskType))
 	}
-	bytes, _ := json.MarshalIndent(task, "", "   ")
+	bytes, err := json.MarshalIndent(task, "", "   ")
+	if err != nil {
+		return fmt.Errorf("error marshaling task: %v", err)
+	}
 	fmt.Println(string(bytes))
 	return nil
 }
