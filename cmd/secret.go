@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -43,16 +57,16 @@ var (
 		RunE:         putSecret,
 		SilenceUsage: true,
 		Example: `  # Put secret with value as argument
-  orkes secret put db_password mySecretValue
+  conductor secret put db_password mySecretValue
 
   # Put secret with value from flag
-  orkes secret put db_password --value mySecretValue
+  conductor secret put db_password --value mySecretValue
 
   # Put secret from stdin
-  echo "mySecretValue" | orkes secret put db_password
+  echo "mySecretValue" | conductor secret put db_password
 
   # Put secret from file
-  cat secret.txt | orkes secret put db_password`,
+  cat secret.txt | conductor secret put db_password`,
 	}
 
 	deleteSecretCmd = &cobra.Command{
@@ -85,10 +99,10 @@ var (
 		RunE:         tagAdd,
 		SilenceUsage: true,
 		Example: `  # Add single tag
-  orkes secret tag-add db_password --tag env:prod
+  conductor secret tag-add db_password --tag env:prod
 
   # Add multiple tags
-  orkes secret tag-add db_password --tag env:prod --tag team:backend`,
+  conductor secret tag-add db_password --tag env:prod --tag team:backend`,
 	}
 
 	tagDeleteCmd = &cobra.Command{
@@ -97,10 +111,10 @@ var (
 		RunE:         tagDelete,
 		SilenceUsage: true,
 		Example: `  # Delete single tag
-  orkes secret tag-delete db_password --tag env:prod
+  conductor secret tag-delete db_password --tag env:prod
 
   # Delete multiple tags
-  orkes secret tag-delete db_password --tag env:prod --tag team:backend`,
+  conductor secret tag-delete db_password --tag env:prod --tag team:backend`,
 	}
 
 	cacheClearCmd = &cobra.Command{
@@ -110,13 +124,13 @@ var (
 		RunE:         cacheClear,
 		SilenceUsage: true,
 		Example: `  # Clear local cache
-  orkes secret cache-clear --local
+  conductor secret cache-clear --local
 
   # Clear Redis cache
-  orkes secret cache-clear --redis
+  conductor secret cache-clear --redis
 
   # Clear both caches
-  orkes secret cache-clear`,
+  conductor secret cache-clear`,
 	}
 )
 

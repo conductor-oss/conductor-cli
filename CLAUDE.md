@@ -1,16 +1,16 @@
-# Orkes CLI - AI Assistant Reference
+# Conductor CLI - AI Assistant Reference
 
-> Optimized reference for LLMs and AI assistants using the Orkes Conductor CLI.
+> Optimized reference for LLMs and AI assistants using the Conductor CLI.
 
 ## Quick Overview
 
-Orkes CLI (`orkes`) is a command-line tool for managing Netflix Conductor workflows, executions, tasks, webhooks, and schedules. It connects to Conductor server instances for workflow orchestration.
+Conductor CLI (`conductor`) is a command-line tool for managing Netflix Conductor workflows, executions, tasks, webhooks, and schedules. It connects to Conductor server instances for workflow orchestration.
 
 ## Installation
 
 ```bash
 # Homebrew (macOS/Linux)
-brew install conductor-oss/conductor/orkes
+brew install conductor-oss/conductor/conductor
 
 # Manual download from: https://github.com/conductor-oss/conductor-cli/releases
 ```
@@ -30,7 +30,7 @@ brew install conductor-oss/conductor/orkes
 **Token Types:**
 - **JWT tokens with `exp` claim**: Automatically cached and refreshed before expiry (5-minute buffer)
 - **Long-lived tokens without `exp` claim**: Cached indefinitely, never trigger refresh attempts
-- **Expired tokens**: CLI validates token expiry and provides helpful error messages with guidance to run `orkes config save`
+- **Expired tokens**: CLI validates token expiry and provides helpful error messages with guidance to run `conductor config save`
 
 ## Profile Management
 
@@ -38,12 +38,12 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 | Operation | Command | Result |
 |-----------|---------|--------|
-| **Save default profile** | `orkes --server <url> --auth-token <token> --save-config workflow list` | Creates `~/.conductor-cli/config.yaml` |
-| **Save named profile** | `orkes --server <url> --auth-token <token> --save-config=prod workflow list` | Creates `~/.conductor-cli/config-prod.yaml` |
-| **Use profile (flag)** | `orkes --profile prod workflow list` | Loads `config-prod.yaml` |
-| **Use profile (env)** | `ORKES_PROFILE=prod orkes workflow list` | Loads `config-prod.yaml` |
+| **Save default profile** | `conductor --server <url> --auth-token <token> --save-config workflow list` | Creates `~/.conductor-cli/config.yaml` |
+| **Save named profile** | `conductor --server <url> --auth-token <token> --save-config=prod workflow list` | Creates `~/.conductor-cli/config-prod.yaml` |
+| **Use profile (flag)** | `conductor --profile prod workflow list` | Loads `config-prod.yaml` |
+| **Use profile (env)** | `CONDUCTOR_PROFILE=prod conductor workflow list` | Loads `config-prod.yaml` |
 
-**Precedence:** `--profile` flag > `ORKES_PROFILE` env var > default config
+**Precedence:** `--profile` flag > `CONDUCTOR_PROFILE` env var > default config
 
 **Profile directory:** `~/.conductor-cli/`
 - `config.yaml` - default profile
@@ -57,28 +57,28 @@ Manage multiple environments (dev, staging, prod) using profiles.
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | **Definition Management** | | | | |
-| `workflow list` | List all workflows | None | `--json` | `orkes workflow list` |
-| `workflow get <name>` | Get workflow definition | workflow name | | `orkes workflow get my_workflow` |
-| `workflow get <name> <version>` | Get specific version | name, version | | `orkes workflow get my_workflow 2` |
-| `workflow create <file>` | Create/register workflow | JSON file path | `--force` | `orkes workflow create workflow.json --force` |
-| `workflow update <file>` | Update workflow | JSON file path | | `orkes workflow update workflow.json` |
-| `workflow delete <name> <version>` | Delete workflow definition | name, version | | `orkes workflow delete my_workflow 1` |
+| `workflow list` | List all workflows | None | `--json` | `conductor workflow list` |
+| `workflow get <name>` | Get workflow definition | workflow name | | `conductor workflow get my_workflow` |
+| `workflow get <name> <version>` | Get specific version | name, version | | `conductor workflow get my_workflow 2` |
+| `workflow create <file>` | Create/register workflow | JSON file path | `--force` | `conductor workflow create workflow.json --force` |
+| `workflow update <file>` | Update workflow | JSON file path | | `conductor workflow update workflow.json` |
+| `workflow delete <name> <version>` | Delete workflow definition | name, version | | `conductor workflow delete my_workflow 1` |
 | **Execution Management** | | | | |
-| `workflow start --workflow <name>` | Start workflow async | None | `--input`, `--file`, `--version`, `--correlation`, `--sync` | `orkes workflow start --workflow my_workflow` |
-| `workflow start --sync` | Start and wait for completion | None | `--workflow`, `--input`, `--file`, `--wait-until` | `orkes workflow start --workflow my_workflow --sync` |
-| `workflow status <id>` | Get execution status | workflow ID | | `orkes workflow status abc-123` |
-| `workflow get-execution <id>` | Get full execution details | workflow ID | `--complete` | `orkes workflow get-execution abc-123` |
-| `workflow search` | Search executions | None | `--workflow`, `--status`, `--count`, `--start-time-after`, `--start-time-before`, `--json` | `orkes workflow search --workflow my_workflow --status FAILED` |
-| `workflow terminate <id>` | Terminate execution | workflow ID | | `orkes workflow terminate abc-123` |
-| `workflow pause <id>` | Pause execution | workflow ID | | `orkes workflow pause abc-123` |
-| `workflow resume <id>` | Resume paused execution | workflow ID | | `orkes workflow resume abc-123` |
-| `workflow delete-execution <id>` | Delete execution | workflow ID | `--archive` | `orkes workflow delete-execution abc-123` |
-| `workflow restart <id>` | Restart completed workflow | workflow ID | `--use-latest` | `orkes workflow restart abc-123` |
-| `workflow retry <id>` | Retry last failed task | workflow ID | `--resume-subworkflow-tasks` | `orkes workflow retry abc-123` |
-| `workflow rerun <id>` | Rerun from failed task | workflow ID | `--task-id`, `--correlation-id`, `--task-input`, `--workflow-input` | `orkes workflow rerun abc-123` |
-| `workflow skip-task <id> <ref>` | Skip a task | workflow ID, task ref | `--task-input`, `--task-output` | `orkes workflow skip-task abc-123 task1` |
-| `workflow jump <id> <ref>` | Jump to task | workflow ID, task ref | `--task-input` | `orkes workflow jump abc-123 task2` |
-| `workflow update-state <id>` | Update workflow state | workflow ID | `--request-id`, `--wait-until-task-ref`, `--variables`, `--task-updates` | `orkes workflow update-state abc-123 --variables '{"key":"value"}'` |
+| `workflow start --workflow <name>` | Start workflow async | None | `--input`, `--file`, `--version`, `--correlation`, `--sync` | `conductor workflow start --workflow my_workflow` |
+| `workflow start --sync` | Start and wait for completion | None | `--workflow`, `--input`, `--file`, `--wait-until` | `conductor workflow start --workflow my_workflow --sync` |
+| `workflow status <id>` | Get execution status | workflow ID | | `conductor workflow status abc-123` |
+| `workflow get-execution <id>` | Get full execution details | workflow ID | `--complete` | `conductor workflow get-execution abc-123` |
+| `workflow search` | Search executions | None | `--workflow`, `--status`, `--count`, `--start-time-after`, `--start-time-before`, `--json` | `conductor workflow search --workflow my_workflow --status FAILED` |
+| `workflow terminate <id>` | Terminate execution | workflow ID | | `conductor workflow terminate abc-123` |
+| `workflow pause <id>` | Pause execution | workflow ID | | `conductor workflow pause abc-123` |
+| `workflow resume <id>` | Resume paused execution | workflow ID | | `conductor workflow resume abc-123` |
+| `workflow delete-execution <id>` | Delete execution | workflow ID | `--archive` | `conductor workflow delete-execution abc-123` |
+| `workflow restart <id>` | Restart completed workflow | workflow ID | `--use-latest` | `conductor workflow restart abc-123` |
+| `workflow retry <id>` | Retry last failed task | workflow ID | `--resume-subworkflow-tasks` | `conductor workflow retry abc-123` |
+| `workflow rerun <id>` | Rerun from failed task | workflow ID | `--task-id`, `--correlation-id`, `--task-input`, `--workflow-input` | `conductor workflow rerun abc-123` |
+| `workflow skip-task <id> <ref>` | Skip a task | workflow ID, task ref | `--task-input`, `--task-output` | `conductor workflow skip-task abc-123 task1` |
+| `workflow jump <id> <ref>` | Jump to task | workflow ID, task ref | `--task-input` | `conductor workflow jump abc-123 task2` |
+| `workflow update-state <id>` | Update workflow state | workflow ID | `--request-id`, `--wait-until-task-ref`, `--variables`, `--task-updates` | `conductor workflow update-state abc-123 --variables '{"key":"value"}'` |
 
 **Flags:**
 - `--force` - Overwrite existing workflow when creating
@@ -96,16 +96,16 @@ Columns: NAME, VERSION, DESCRIPTION
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | **Definition Management** | | | | |
-| `task list` | List all task definitions | None | `--json` | `orkes task list` |
-| `task get <task_type>` | Get task definition | task type | | `orkes task get my_task` |
-| `task create <file>` | Create task definition | JSON file | | `orkes task create task.json` |
-| `task update <file>` | Update task definition | JSON file | | `orkes task update task.json` |
-| `task delete <task_type>` | Delete task definition | task type | | `orkes task delete my_task` |
+| `task list` | List all task definitions | None | `--json` | `conductor task list` |
+| `task get <task_type>` | Get task definition | task type | | `conductor task get my_task` |
+| `task create <file>` | Create task definition | JSON file | | `conductor task create task.json` |
+| `task update <file>` | Update task definition | JSON file | | `conductor task update task.json` |
+| `task delete <task_type>` | Delete task definition | task type | | `conductor task delete my_task` |
 | **Execution Management** | | | | |
-| `task poll <type>` | Batch poll for tasks | task type | `--count`, `--worker-id`, `--domain`, `--timeout` | `orkes task poll my_task --count 5` |
-| `task update-execution` | Update task by ref name | None | `--workflow-id`, `--task-ref-name`, `--status`, `--output`, `--worker-id` | `orkes task update-execution --workflow-id abc --task-ref-name task1 --status COMPLETED` |
-| `task signal` | Signal task async | None | `--workflow-id`, `--status`, `--output` | `orkes task signal --workflow-id abc --status COMPLETED` |
-| `task signal-sync` | Signal task sync | None | `--workflow-id`, `--status`, `--output` | `orkes task signal-sync --workflow-id abc --status COMPLETED` |
+| `task poll <type>` | Batch poll for tasks | task type | `--count`, `--worker-id`, `--domain`, `--timeout` | `conductor task poll my_task --count 5` |
+| `task update-execution` | Update task by ref name | None | `--workflow-id`, `--task-ref-name`, `--status`, `--output`, `--worker-id` | `conductor task update-execution --workflow-id abc --task-ref-name task1 --status COMPLETED` |
+| `task signal` | Signal task async | None | `--workflow-id`, `--status`, `--output` | `conductor task signal --workflow-id abc --status COMPLETED` |
+| `task signal-sync` | Signal task sync | None | `--workflow-id`, `--status`, `--output` | `conductor task signal-sync --workflow-id abc --status COMPLETED` |
 
 **Flags:**
 - `--json` - Output complete JSON instead of table (applies to list command)
@@ -117,9 +117,9 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
-| `config save` | Interactively save configuration | None | `--profile` | `orkes config save` or `orkes config save --profile production` |
-| `config list` | List all configuration profiles | None | None | `orkes config list` |
-| `config delete [profile]` | Delete configuration file | None | `--profile`, `-y` | `orkes config delete production` or `orkes config delete --profile production -y` |
+| `config save` | Interactively save configuration | None | `--profile` | `conductor config save` or `conductor config save --profile production` |
+| `config list` | List all configuration profiles | None | None | `conductor config list` |
+| `config delete [profile]` | Delete configuration file | None | `--profile`, `-y` | `conductor config delete production` or `conductor config delete --profile production -y` |
 
 **Notes:**
 - `config save`: Interactive prompts for server URL, server type, and authentication method. Press Enter to keep existing values. Use `--profile <name>` to save to a named profile (e.g., `config-production.yaml`). Without it, saves to default `config.yaml`.
@@ -130,11 +130,11 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
-| `webhook list` | List webhooks | None | `--json` | `orkes webhook list` |
-| `webhook get <id>` | Get webhook details | webhook ID | | `orkes webhook get webhook-id` |
-| `webhook create` | Create webhook | name, source-platform, verifier | | `orkes webhook create --name hook1 --source-platform Custom --verifier HEADER_BASED` |
-| `webhook update <id>` | Update webhook | webhook ID, file | | `orkes webhook update id --file webhook.json` |
-| `webhook delete <id>` | Delete webhook | webhook ID | | `orkes webhook delete webhook-id` |
+| `webhook list` | List webhooks | None | `--json` | `conductor webhook list` |
+| `webhook get <id>` | Get webhook details | webhook ID | | `conductor webhook get webhook-id` |
+| `webhook create` | Create webhook | name, source-platform, verifier | | `conductor webhook create --name hook1 --source-platform Custom --verifier HEADER_BASED` |
+| `webhook update <id>` | Update webhook | webhook ID, file | | `conductor webhook update id --file webhook.json` |
+| `webhook delete <id>` | Delete webhook | webhook ID | | `conductor webhook delete webhook-id` |
 
 **Flags:**
 - `--json` - Output complete JSON instead of table (applies to list command)
@@ -146,12 +146,12 @@ Columns: NAME, WEBHOOK ID, WORKFLOWS, URL
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
-| `schedule list` | List schedules | None | `--json` | `orkes schedule list` |
-| `schedule get <name>` | Get schedule details | schedule name | | `orkes schedule get my_schedule` |
-| `schedule create <file>` | Create schedule | JSON file | | `orkes schedule create schedule.json` |
-| `schedule delete <name>` | Delete schedule | schedule name | | `orkes schedule delete my_schedule` |
-| `schedule pause <name>` | Pause schedule | schedule name | | `orkes schedule pause my_schedule` |
-| `schedule resume <name>` | Resume schedule | schedule name | | `orkes schedule resume my_schedule` |
+| `schedule list` | List schedules | None | `--json` | `conductor schedule list` |
+| `schedule get <name>` | Get schedule details | schedule name | | `conductor schedule get my_schedule` |
+| `schedule create <file>` | Create schedule | JSON file | | `conductor schedule create schedule.json` |
+| `schedule delete <name>` | Delete schedule | schedule name | | `conductor schedule delete my_schedule` |
+| `schedule pause <name>` | Pause schedule | schedule name | | `conductor schedule pause my_schedule` |
+| `schedule resume <name>` | Resume schedule | schedule name | | `conductor schedule resume my_schedule` |
 
 **Flags:**
 - `--json` - Output complete JSON instead of table (applies to list command)
@@ -166,17 +166,17 @@ Secret management for storing and managing sensitive configuration values like A
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | **Secret Management** | | | | |
-| `secret list` | List all secrets | None | `--with-tags`, `--json` | `orkes secret list` |
-| `secret get <key>` | Get secret value | secret key | `--show-value` | `orkes secret get db_password` |
-| `secret put <key> [value]` | Create/update secret | secret key | `--value` | `orkes secret put db_password mySecret` |
-| `secret delete <key>` | Delete secret | secret key | | `orkes secret delete db_password` |
-| `secret exists <key>` | Check if secret exists | secret key | | `orkes secret exists db_password` |
+| `secret list` | List all secrets | None | `--with-tags`, `--json` | `conductor secret list` |
+| `secret get <key>` | Get secret value | secret key | `--show-value` | `conductor secret get db_password` |
+| `secret put <key> [value]` | Create/update secret | secret key | `--value` | `conductor secret put db_password mySecret` |
+| `secret delete <key>` | Delete secret | secret key | | `conductor secret delete db_password` |
+| `secret exists <key>` | Check if secret exists | secret key | | `conductor secret exists db_password` |
 | **Tag Management** | | | | |
-| `secret tag-list <key>` | List tags for secret | secret key | `--json` | `orkes secret tag-list db_password` |
-| `secret tag-add <key>` | Add tags to secret | secret key | `--tag` (repeatable) | `orkes secret tag-add db_password --tag env:prod` |
-| `secret tag-delete <key>` | Delete tags from secret | secret key | `--tag` (repeatable) | `orkes secret tag-delete db_password --tag env:prod` |
+| `secret tag-list <key>` | List tags for secret | secret key | `--json` | `conductor secret tag-list db_password` |
+| `secret tag-add <key>` | Add tags to secret | secret key | `--tag` (repeatable) | `conductor secret tag-add db_password --tag env:prod` |
+| `secret tag-delete <key>` | Delete tags from secret | secret key | `--tag` (repeatable) | `conductor secret tag-delete db_password --tag env:prod` |
 | **Cache Management** | | | | |
-| `secret cache-clear` | Clear secrets cache | None | `--local`, `--redis` | `orkes secret cache-clear --local` |
+| `secret cache-clear` | Clear secrets cache | None | `--local`, `--redis` | `conductor secret cache-clear --local` |
 
 **Flags:**
 - `--with-tags` - Include tags in list output (applies to list command)
@@ -203,16 +203,16 @@ Columns: KEY, VALUE, TYPE
 **Input Methods (secret put):**
 ```bash
 # Method 1: Value as argument
-orkes secret put my_secret "secret_value"
+conductor secret put my_secret "secret_value"
 
 # Method 2: Value via flag
-orkes secret put my_secret --value "secret_value"
+conductor secret put my_secret --value "secret_value"
 
 # Method 3: Value from stdin
-echo "secret_value" | orkes secret put my_secret
+echo "secret_value" | conductor secret put my_secret
 
 # Method 4: Value from file
-cat secret.txt | orkes secret put my_secret
+cat secret.txt | conductor secret put my_secret
 ```
 
 ### API Gateway Commands
@@ -222,22 +222,22 @@ API Gateway allows exposing Conductor workflows as REST APIs with authentication
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | **Service Management** | | | | |
-| `api-gateway service list` | List all services | None | `--complete` | `orkes api-gateway service list` |
-| `api-gateway service get <id>` | Get service details | service ID | | `orkes api-gateway service get my-service` |
-| `api-gateway service create [file]` | Create service | None (file optional) | `--service-id`, `--name`, `--path`, `--description`, `--enabled`, `--mcp-enabled`, `--auth-config-id`, `--cors-allowed-origins`, `--cors-allowed-methods`, `--cors-allowed-headers` | `orkes api-gateway service create service.json` |
-| `api-gateway service update <id> <file>` | Update service | service ID, JSON file | | `orkes api-gateway service update my-service service.json` |
-| `api-gateway service delete <id>` | Delete service | service ID | | `orkes api-gateway service delete my-service` |
+| `api-gateway service list` | List all services | None | `--complete` | `conductor api-gateway service list` |
+| `api-gateway service get <id>` | Get service details | service ID | | `conductor api-gateway service get my-service` |
+| `api-gateway service create [file]` | Create service | None (file optional) | `--service-id`, `--name`, `--path`, `--description`, `--enabled`, `--mcp-enabled`, `--auth-config-id`, `--cors-allowed-origins`, `--cors-allowed-methods`, `--cors-allowed-headers` | `conductor api-gateway service create service.json` |
+| `api-gateway service update <id> <file>` | Update service | service ID, JSON file | | `conductor api-gateway service update my-service service.json` |
+| `api-gateway service delete <id>` | Delete service | service ID | | `conductor api-gateway service delete my-service` |
 | **Auth Configuration Management** | | | | |
-| `api-gateway auth list` | List auth configs | None | `--complete` | `orkes api-gateway auth list` |
-| `api-gateway auth get <id>` | Get auth config | auth config ID | | `orkes api-gateway auth get token-based` |
-| `api-gateway auth create [file]` | Create auth config | None (file optional) | `--auth-config-id`, `--auth-type`, `--application-id`, `--api-keys` | `orkes api-gateway auth create auth.json` |
-| `api-gateway auth update <id> <file>` | Update auth config | auth config ID, JSON file | | `orkes api-gateway auth update token-based auth.json` |
-| `api-gateway auth delete <id>` | Delete auth config | auth config ID | | `orkes api-gateway auth delete token-based` |
+| `api-gateway auth list` | List auth configs | None | `--complete` | `conductor api-gateway auth list` |
+| `api-gateway auth get <id>` | Get auth config | auth config ID | | `conductor api-gateway auth get token-based` |
+| `api-gateway auth create [file]` | Create auth config | None (file optional) | `--auth-config-id`, `--auth-type`, `--application-id`, `--api-keys` | `conductor api-gateway auth create auth.json` |
+| `api-gateway auth update <id> <file>` | Update auth config | auth config ID, JSON file | | `conductor api-gateway auth update token-based auth.json` |
+| `api-gateway auth delete <id>` | Delete auth config | auth config ID | | `conductor api-gateway auth delete token-based` |
 | **Route Management** | | | | |
-| `api-gateway route list <service_id>` | List routes for service | service ID | `--complete` | `orkes api-gateway route list my-service` |
-| `api-gateway route create <service_id> [file]` | Create route | service ID (file optional) | `--http-method`, `--path`, `--workflow-name`, `--workflow-version`, `--execution-mode`, `--description`, `--request-metadata-as-input`, `--workflow-metadata-in-output`, `--wait-until-tasks` | `orkes api-gateway route create my-service route.json` |
-| `api-gateway route update <service_id> <path> <file>` | Update route | service ID, route path, JSON file | | `orkes api-gateway route update my-service /users route.json` |
-| `api-gateway route delete <service_id> <method> <path>` | Delete route | service ID, HTTP method, route path | | `orkes api-gateway route delete my-service GET /users` |
+| `api-gateway route list <service_id>` | List routes for service | service ID | `--complete` | `conductor api-gateway route list my-service` |
+| `api-gateway route create <service_id> [file]` | Create route | service ID (file optional) | `--http-method`, `--path`, `--workflow-name`, `--workflow-version`, `--execution-mode`, `--description`, `--request-metadata-as-input`, `--workflow-metadata-in-output`, `--wait-until-tasks` | `conductor api-gateway route create my-service route.json` |
+| `api-gateway route update <service_id> <path> <file>` | Update route | service ID, route path, JSON file | | `conductor api-gateway route update my-service /users route.json` |
+| `api-gateway route delete <service_id> <method> <path>` | Delete route | service ID, HTTP method, route path | | `conductor api-gateway route delete my-service GET /users` |
 
 **Service Create Flags:**
 - `--service-id` - Service ID (required when not using file)
@@ -281,9 +281,9 @@ Columns: METHOD, PATH, WORKFLOW, VERSION, EXECUTION MODE, DESCRIPTION
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `update` | Update CLI to latest version | `orkes update` |
-| `--version` | Show CLI version | `orkes --version` |
-| `--help` | Show help | `orkes --help` or `orkes workflow --help` |
+| `update` | Update CLI to latest version | `conductor update` |
+| `--version` | Show CLI version | `conductor --version` |
+| `--help` | Show help | `conductor --help` or `conductor workflow --help` |
 
 ## Exit Codes
 
@@ -309,9 +309,9 @@ Columns: METHOD, PATH, WORKFLOW, VERSION, EXECUTION MODE, DESCRIPTION
 
 **Important:** To parse output reliably, redirect stderr to `/dev/null` to suppress update notifications and warnings:
 ```bash
-orkes workflow list 2>/dev/null
-orkes task list --json 2>/dev/null
-WORKFLOW_ID=$(orkes workflow start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+conductor workflow list 2>/dev/null
+conductor task list --json 2>/dev/null
+WORKFLOW_ID=$(conductor workflow start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 ```
 
 ## Input Format
@@ -322,7 +322,7 @@ Workflows can accept input data in two ways:
 
 **1. Inline JSON (--input flag):**
 ```bash
-orkes workflow start --workflow my_workflow --input '{"key":"value","count":42}'
+conductor workflow start --workflow my_workflow --input '{"key":"value","count":42}'
 ```
 
 **2. JSON File (--file flag):**
@@ -337,7 +337,7 @@ orkes workflow start --workflow my_workflow --input '{"key":"value","count":42}'
 }
 
 # Start with file
-orkes workflow start --workflow my_workflow --file input.json
+conductor workflow start --workflow my_workflow --file input.json
 ```
 
 ### Workflow Definition Format
@@ -359,7 +359,7 @@ Workflow definitions are JSON files with structure:
 }
 ```
 
-See [Conductor documentation](https://orkes.io/content) for complete workflow definition schema.
+See [Conductor documentation](https://conductor.io/content) for complete workflow definition schema.
 
 ## Common Patterns
 
@@ -367,59 +367,59 @@ See [Conductor documentation](https://orkes.io/content) for complete workflow de
 
 ```bash
 # Save production profile
-orkes --server https://prod.conductor.io/api \
+conductor --server https://prod.conductor.io/api \
      --auth-token prod-token-123 \
      --save-config=production \
      workflow list
 
 # Deploy workflow
-orkes --profile production workflow create workflow.json --force
+conductor --profile production workflow create workflow.json --force
 ```
 
 ### 2. Start and monitor execution
 
 ```bash
 # Start workflow and capture ID
-WORKFLOW_ID=$(orkes workflow start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}')
+WORKFLOW_ID=$(conductor workflow start --workflow my_workflow 2>/dev/null | grep -oE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}')
 
 # Start with input data
-WORKFLOW_ID=$(orkes workflow start --workflow my_workflow --input '{"orderId":"12345","customerId":"cust_001"}' 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+WORKFLOW_ID=$(conductor workflow start --workflow my_workflow --input '{"orderId":"12345","customerId":"cust_001"}' 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 
 # Start with input from file
-WORKFLOW_ID=$(orkes workflow start --workflow my_workflow --file input.json 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+WORKFLOW_ID=$(conductor workflow start --workflow my_workflow --file input.json 2>/dev/null | grep -oE '[a-f0-9-]{36}')
 
 # Check status
-orkes workflow status "$WORKFLOW_ID"
+conductor workflow status "$WORKFLOW_ID"
 
 # Get full details
-orkes workflow get-execution "$WORKFLOW_ID"
+conductor workflow get-execution "$WORKFLOW_ID"
 ```
 
 ### 3. Multi-environment workflow
 
 ```bash
 # Deploy to dev
-ORKES_PROFILE=dev orkes workflow create workflow.json --force
+CONDUCTOR_PROFILE=dev conductor workflow create workflow.json --force
 
 # Test in dev
-ORKES_PROFILE=dev orkes workflow start --workflow my_workflow
+CONDUCTOR_PROFILE=dev conductor workflow start --workflow my_workflow
 
 # Deploy to prod after testing
-ORKES_PROFILE=prod orkes workflow create workflow.json --force
+CONDUCTOR_PROFILE=prod conductor workflow create workflow.json --force
 ```
 
 ### 4. Handle workflow failure
 
 ```bash
 # Check status
-STATUS=$(orkes workflow status "$WORKFLOW_ID" 2>/dev/null)
+STATUS=$(conductor workflow status "$WORKFLOW_ID" 2>/dev/null)
 
 if [ "$STATUS" = "FAILED" ]; then
   # Retry failed task
-  orkes workflow retry "$WORKFLOW_ID"
+  conductor workflow retry "$WORKFLOW_ID"
 
   # Or rerun from failed point
-  orkes workflow rerun "$WORKFLOW_ID"
+  conductor workflow rerun "$WORKFLOW_ID"
 fi
 ```
 
@@ -427,17 +427,17 @@ fi
 
 ```bash
 # Find running workflows
-orkes workflow search --workflow my_workflow --status RUNNING
+conductor workflow search --workflow my_workflow --status RUNNING
 
 # Terminate specific execution
-orkes workflow terminate "$WORKFLOW_ID"
+conductor workflow terminate "$WORKFLOW_ID"
 ```
 
 ### 6. Create and test webhook
 
 ```bash
 # Create webhook
-orkes webhook create \
+conductor webhook create \
   --name my_webhook \
   --source-platform Custom \
   --verifier HEADER_BASED \
@@ -445,30 +445,30 @@ orkes webhook create \
   --receiver-workflows my_workflow:1
 
 # List webhooks to verify
-orkes webhook list
+conductor webhook list
 ```
 
 ### 7. Manage workflow versions
 
 ```bash
 # Get latest version
-orkes workflow get my_workflow
+conductor workflow get my_workflow
 
 # Get specific version
-orkes workflow get my_workflow 2
+conductor workflow get my_workflow 2
 
 # Delete old version
-orkes workflow delete my_workflow 1
+conductor workflow delete my_workflow 1
 ```
 
 ### 8. Poll and process tasks
 
 ```bash
 # Poll for tasks
-orkes task poll my_task_type --count 10 --worker-id worker1
+conductor task poll my_task_type --count 10 --worker-id worker1
 
 # Update task status
-orkes task update-execution \
+conductor task update-execution \
   --workflow-id "$WORKFLOW_ID" \
   --task-ref-name my_task \
   --status COMPLETED \
@@ -479,15 +479,15 @@ orkes task update-execution \
 
 ```bash
 # Find failed executions for a workflow
-orkes workflow search --workflow my_workflow --status FAILED --count 50
+conductor workflow search --workflow my_workflow --status FAILED --count 50
 
 # Find executions within time range
-orkes workflow search --workflow my_workflow \
+conductor workflow search --workflow my_workflow \
   --start-time-after "2025-01-01" \
   --start-time-before "2025-01-31"
 
 # Combine filters
-orkes workflow search --workflow my_workflow \
+conductor workflow search --workflow my_workflow \
   --status RUNNING \
   --start-time-after "2025-01-01 10:00:00" \
   --count 100
@@ -504,57 +504,57 @@ orkes workflow search --workflow my_workflow \
 
 ```bash
 # Create a secret from command line
-orkes secret put db_password mySecretPassword123
+conductor secret put db_password mySecretPassword123
 
 # Create a secret from environment variable
-orkes secret put api_key --value "$MY_API_KEY"
+conductor secret put api_key --value "$MY_API_KEY"
 
 # Create a secret from file (without exposing value in command history)
-cat secret.txt | orkes secret put encryption_key
+cat secret.txt | conductor secret put encryption_key
 
 # List all secrets (keys only)
-orkes secret list
+conductor secret list
 
 # List secrets with tags
-orkes secret list --with-tags
+conductor secret list --with-tags
 
 # Get secret value (requires explicit flag for security)
-orkes secret get db_password --show-value
+conductor secret get db_password --show-value
 
 # Check if secret exists
-orkes secret exists db_password
+conductor secret exists db_password
 
 # Add tags to organize secrets
-orkes secret tag-add db_password --tag env:prod --tag team:backend --tag type:database
+conductor secret tag-add db_password --tag env:prod --tag team:backend --tag type:database
 
 # List tags for a secret
-orkes secret tag-list db_password
+conductor secret tag-list db_password
 
 # Delete specific tags
-orkes secret tag-delete db_password --tag env:prod
+conductor secret tag-delete db_password --tag env:prod
 
 # Delete a secret (requires confirmation)
-orkes secret delete old_api_key
+conductor secret delete old_api_key
 
 # Delete without confirmation
-orkes secret delete old_api_key -y
+conductor secret delete old_api_key -y
 
 # Clear caches after secret rotation
-orkes secret cache-clear --local
-orkes secret cache-clear --redis
+conductor secret cache-clear --local
+conductor secret cache-clear --redis
 
 # Clear both caches at once
-orkes secret cache-clear
+conductor secret cache-clear
 ```
 
 ### 11. Create and manage API Gateway services
 
 ```bash
 # Create service from JSON file
-orkes api-gateway service create service.json
+conductor api-gateway service create service.json
 
 # Create service using flags
-orkes api-gateway service create \
+conductor api-gateway service create \
   --service-id my-api \
   --name "My API Service" \
   --path "/api/v1" \
@@ -566,10 +566,10 @@ orkes api-gateway service create \
   --cors-allowed-headers "*"
 
 # List all services
-orkes api-gateway service list
+conductor api-gateway service list
 
 # Get service details
-orkes api-gateway service get my-api
+conductor api-gateway service get my-api
 ```
 
 **Example service JSON:**
@@ -594,20 +594,20 @@ orkes api-gateway service get my-api
 
 ```bash
 # Create auth config from file
-orkes api-gateway auth create auth-config.json
+conductor api-gateway auth create auth-config.json
 
 # Create auth config using flags
-orkes api-gateway auth create \
+conductor api-gateway auth create \
   --auth-config-id "token-based" \
   --auth-type "API_KEY" \
   --application-id "my-app-id" \
   --api-keys "key1,key2,key3"
 
 # List auth configs
-orkes api-gateway auth list
+conductor api-gateway auth list
 
 # Get specific auth config
-orkes api-gateway auth get token-based
+conductor api-gateway auth get token-based
 ```
 
 **Example auth config JSON:**
@@ -624,10 +624,10 @@ orkes api-gateway auth get token-based
 
 ```bash
 # Create a route from JSON
-orkes api-gateway route create my-api route.json
+conductor api-gateway route create my-api route.json
 
 # Create a route using flags
-orkes api-gateway route create my-service \
+conductor api-gateway route create my-service \
   --http-method "GET" \
   --path "/users/{userId}" \
   --description "Get user by ID" \
@@ -636,7 +636,7 @@ orkes api-gateway route create my-service \
   --execution-mode "SYNC"
 
 # Create async route with metadata
-orkes api-gateway route create my-service \
+conductor api-gateway route create my-service \
   --http-method "POST" \
   --path "/orders" \
   --description "Create order" \
@@ -646,10 +646,10 @@ orkes api-gateway route create my-service \
   --workflow-metadata-in-output
 
 # List routes for a service
-orkes api-gateway route list my-api
+conductor api-gateway route list my-api
 
 # Delete a route
-orkes api-gateway route delete my-api GET /users
+conductor api-gateway route delete my-api GET /users
 ```
 
 **Example route JSON:**
@@ -708,13 +708,13 @@ auth-secret: your-secret
 
 ## Best Practices for LLM Usage
 
-1. **Always redirect stderr** when parsing output: `orkes command 2>/dev/null`
+1. **Always redirect stderr** when parsing output: `conductor command 2>/dev/null`
 2. **Extract workflow IDs** using: `grep -oE '[a-f0-9-]{36}'`
 3. **Check exit codes** for error handling: `if [ $? -eq 0 ]; then ...`
 4. **Use profiles** for multi-environment operations
-5. **Quote workflow names** with spaces: `orkes workflow get "my workflow"`
+5. **Quote workflow names** with spaces: `conductor workflow get "my workflow"`
 6. **Use --force flag** when updating workflows to overwrite
-7. **Save profiles once** then use `ORKES_PROFILE` env var for cleaner commands
+7. **Save profiles once** then use `CONDUCTOR_PROFILE` env var for cleaner commands
 
 ## Auto-Update Feature
 
@@ -722,12 +722,12 @@ The CLI checks for updates every 24 hours and notifies when a new version is ava
 
 ```
 ⚠ A new version is available: v0.0.12 (current: v0.0.11)
-Run 'orkes update' to download it or update with your package manager.
+Run 'conductor update' to download it or update with your package manager.
 ```
 
 Update to latest version:
 ```bash
-orkes update
+conductor update
 ```
 
 **Note:** Update notifications are written to stderr and won't interfere with command output.

@@ -19,7 +19,7 @@ Your JavaScript file **must** define a `workflow()` function that returns an obj
 ## Creating a JavaScript Workflow
 
 ```bash
-orkes workflow create workflow.js --js
+conductor workflow create workflow.js --js
 ```
 
 The `--js` flag tells the CLI to process the file as JavaScript.
@@ -118,7 +118,7 @@ If you don't provide a `taskReferenceName`, it will be automatically generated f
 
 ## How It Works
 
-When you run `orkes workflow create workflow.js --js`, the CLI:
+When you run `conductor workflow create workflow.js --js`, the CLI:
 
 1. Loads your JavaScript file
 2. Executes the `workflow()` function in a JavaScript VM (goja)
@@ -141,7 +141,7 @@ When you run `orkes workflow create workflow.js --js`, the CLI:
 To update an existing JavaScript workflow:
 
 ```bash
-orkes workflow update workflow.js --js
+conductor workflow update workflow.js --js
 ```
 
 ## Tips

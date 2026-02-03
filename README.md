@@ -2,9 +2,9 @@
 
 [Conductor](https://www.conductor-oss.org/) is the leading open-source orchestration platform allowing developers to build highly scalable distributed applications.
 
-Check out the [official documentation for Conductor](https://orkes.io/content).
+Check out the [official documentation for Conductor](https://conductor.io/content).
 
-This repository provides a CLI for the Orkes Conductor Server.
+This repository provides a CLI for the Conductor Conductor Server.
 
 ## ⭐ Conductor OSS
 
@@ -22,17 +22,17 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 brew tap conductor-oss/conductor
 
 # Install the CLI
-brew install orkes
+brew install conductor
 ```
 
 Or install directly in one line:
 ```bash
-brew install conductor-oss/conductor/orkes
+brew install conductor-oss/conductor/conductor
 ```
 
 **After tapping, future updates are simple:**
 ```bash
-brew upgrade orkes
+brew upgrade conductor
 ```
 
 <details>
@@ -41,9 +41,9 @@ brew upgrade orkes
 If you previously installed from `conductor-oss/conductor-tools`, migrate to the new tap:
 
 ```bash
-brew uninstall orkes
+brew uninstall conductor
 brew untap conductor-oss/conductor-tools
-brew install conductor-oss/conductor/orkes
+brew install conductor-oss/conductor/conductor
 ```
 </details>
 
@@ -52,7 +52,7 @@ brew install conductor-oss/conductor/orkes
 If you have Node.js installed:
 
 ```bash
-npm install -g @io-orkes/conductor-cli
+npm install -g @io-conductor/conductor-cli
 ```
 
 This will automatically download and install the appropriate binary for your platform.
@@ -83,24 +83,24 @@ INSTALL_DIR=$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/conduc
 
 Download the appropriate binary for your platform from the [releases page](https://github.com/conductor-oss/conductor-cli/releases):
 
-- **Linux amd64**: `orkes_linux_amd64`
-- **Linux arm64**: `orkes_linux_arm64`
-- **macOS amd64**: `orkes_darwin_amd64`
-- **macOS arm64**: `orkes_darwin_arm64`
-- **Windows amd64**: `orkes_windows_amd64.exe`
-- **Windows arm64**: `orkes_windows_arm64.exe`
+- **Linux amd64**: `conductor_linux_amd64`
+- **Linux arm64**: `conductor_linux_arm64`
+- **macOS amd64**: `conductor_darwin_amd64`
+- **macOS arm64**: `conductor_darwin_arm64`
+- **Windows amd64**: `conductor_windows_amd64.exe`
+- **Windows arm64**: `conductor_windows_arm64.exe`
 
 Then make it executable and move it to your PATH:
 
 ```bash
-chmod +x orkes_*
-mv orkes_* /usr/local/bin/orkes
+chmod +x conductor_*
+mv conductor_* /usr/local/bin/conductor
 ```
 
 ### Verify Installation
 
 ```bash
-orkes --version
+conductor --version
 ```
 
 ### Shell Completion
@@ -110,7 +110,7 @@ Enable tab completion for commands, flags, and arguments:
 **Zsh (macOS default):**
 ```bash
 # One-time setup
-orkes completion zsh > $(brew --prefix)/share/zsh/site-functions/_orkes
+conductor completion zsh > $(brew --prefix)/share/zsh/site-functions/_conductor
 
 # Restart your shell or run:
 source ~/.zshrc
@@ -119,25 +119,25 @@ source ~/.zshrc
 **Bash:**
 ```bash
 # Linux
-orkes completion bash > /etc/bash_completion.d/orkes
+conductor completion bash > /etc/bash_completion.d/conductor
 
 # macOS
-orkes completion bash > $(brew --prefix)/etc/bash_completion.d/orkes
+conductor completion bash > $(brew --prefix)/etc/bash_completion.d/conductor
 
 # Then restart your shell
 ```
 
 **Fish:**
 ```bash
-orkes completion fish > ~/.config/fish/completions/orkes.fish
+conductor completion fish > ~/.config/fish/completions/conductor.fish
 ```
 
 **PowerShell:**
 ```powershell
-orkes completion powershell | Out-String | Invoke-Expression
+conductor completion powershell | Out-String | Invoke-Expression
 ```
 
-After installing, you'll get tab completion when typing `orkes <TAB>`.
+After installing, you'll get tab completion when typing `conductor <TAB>`.
 
 ## Configuration
 
@@ -147,17 +147,17 @@ The CLI connects to your Conductor server and can optionally persist configurati
 
 The CLI supports two types of Conductor servers:
 
-- **Enterprise (Orkes Conductor)** (default): Requires server URL and authentication credentials
+- **Enterprise (Conductor Conductor)** (default): Requires server URL and authentication credentials
 - **OSS Conductor**: Open-source Conductor - requires only server URL, no authentication
 
 Use the `--server-type` flag to specify your server type (defaults to `Enterprise`):
 
 ```bash
-# Enterprise/Orkes Conductor (default)
-orkes --server https://developer.orkescloud.com --auth-token your-token workflow list
+# Enterprise/Conductor Conductor (default)
+conductor --server https://developer.conductorcloud.com --auth-token your-token workflow list
 
 # OSS Conductor
-orkes --server http://localhost:8080/api --server-type OSS workflow list
+conductor --server http://localhost:8080/api --server-type OSS workflow list
 ```
 
 ### Saving Your Configuration
@@ -173,10 +173,10 @@ If a configuration already exists, you can press Enter to keep existing values (
 
 ```bash
 # Run interactive configuration
-orkes config save
+conductor config save
 
 # Example interaction:
-# Server URL [http://localhost:8080/api]: https://developer.orkescloud.com
+# Server URL [http://localhost:8080/api]: https://developer.conductorcloud.com
 # Server type (OSS/Enterprise) [Enterprise]: ← Press Enter to keep
 #
 # Authentication method:
@@ -192,10 +192,10 @@ orkes config save
 When a configuration file already exists, the interactive prompts show your current values. Press Enter to keep them:
 
 ```bash
-orkes config save
+conductor config save
 
 # Example with existing config:
-# Server URL [https://developer.orkescloud.com]: ← Press Enter to keep
+# Server URL [https://developer.conductorcloud.com]: ← Press Enter to keep
 # Server type (OSS/Enterprise) [Enterprise]: ← Press Enter to keep
 #
 # Authentication method:
@@ -211,20 +211,20 @@ You can still save configuration non-interactively by providing flags:
 
 ```bash
 # Enterprise with auth token (default server type)
-orkes --server https://developer.orkescloud.com --auth-token your-token config save
+conductor --server https://developer.conductorcloud.com --auth-token your-token config save
 
 # Enterprise with API key + secret
-orkes --server https://developer.orkescloud.com --auth-key your-key --auth-secret your-secret config save
+conductor --server https://developer.conductorcloud.com --auth-key your-key --auth-secret your-secret config save
 
 # OSS Conductor
-orkes --server http://localhost:8080/api --server-type OSS config save
+conductor --server http://localhost:8080/api --server-type OSS config save
 ```
 
 Once saved, you can run commands without providing flags:
 
 ```bash
 # After saving config, simply run:
-orkes workflow list
+conductor workflow list
 ```
 
 **Note:** Server URLs can be provided with or without `/api` suffix (e.g., `http://localhost:8080` or `http://localhost:8080/api`).
@@ -239,26 +239,26 @@ Use the `--profile` flag with `config save` to create named profiles. The comman
 
 ```bash
 # Interactively configure development profile
-orkes config save --profile dev
+conductor config save --profile dev
 
 # Interactively configure staging profile
-orkes config save --profile staging
+conductor config save --profile staging
 
 # Interactively configure production profile
-orkes config save --profile production
+conductor config save --profile production
 ```
 
 You can also use the non-interactive method with flags:
 
 ```bash
 # Save Enterprise staging environment (default server type)
-orkes --server https://staging.example.com --auth-token staging-token --profile staging config save
+conductor --server https://staging.example.com --auth-token staging-token --profile staging config save
 
 # Save Enterprise production environment
-orkes --server https://prod.example.com --auth-token prod-token --profile production config save
+conductor --server https://prod.example.com --auth-token prod-token --profile production config save
 
 # Save local OSS development environment
-orkes --server http://localhost:8080/api --server-type OSS --profile dev config save
+conductor --server http://localhost:8080/api --server-type OSS --profile dev config save
 ```
 
 **Using Profiles:**
@@ -267,14 +267,14 @@ Switch between environments by specifying the profile:
 
 ```bash
 # Using --profile flag
-orkes --profile production workflow list
+conductor --profile production workflow list
 
-# Using ORKES_PROFILE environment variable
-export ORKES_PROFILE=production
-orkes workflow list
+# Using CONDUCTOR_PROFILE environment variable
+export CONDUCTOR_PROFILE=production
+conductor workflow list
 
 # Flag takes precedence over environment variable
-ORKES_PROFILE=staging orkes --profile production workflow list  # Uses production
+CONDUCTOR_PROFILE=staging conductor --profile production workflow list  # Uses production
 ```
 
 **Profile File Structure:**
@@ -291,7 +291,7 @@ ORKES_PROFILE=staging orkes --profile production workflow list  # Uses productio
 
 ```bash
 # List all configuration profiles
-orkes config list
+conductor config list
 ```
 
 This shows:
@@ -302,13 +302,13 @@ This shows:
 
 ```bash
 # Delete default config (with confirmation prompt)
-orkes config delete
+conductor config delete
 
 # Delete named profile
-orkes config delete production
+conductor config delete production
 
 # Delete without confirmation using -y flag
-orkes config delete production -y
+conductor config delete production -y
 ```
 
 **Profile Error Handling:**
@@ -316,7 +316,7 @@ orkes config delete production -y
 If you reference a profile that doesn't exist, you'll get a clear error:
 
 ```bash
-orkes --profile nonexistent workflow list
+conductor --profile nonexistent workflow list
 # Error: Profile 'nonexistent' doesn't exist (expected file: ~/.conductor-cli/config-nonexistent.yaml)
 ```
 
@@ -334,13 +334,13 @@ You can override saved configuration by providing flags directly:
 
 ```bash
 # Override server URL for a single command
-orkes --server http://different-server:8080/api workflow list
+conductor --server http://different-server:8080/api workflow list
 
 # Use different auth token temporarily
-orkes --auth-token temporary-token workflow list
+conductor --auth-token temporary-token workflow list
 
 # Use OSS server type
-orkes --server http://localhost:8080/api --server-type OSS workflow list
+conductor --server http://localhost:8080/api --server-type OSS workflow list
 ```
 
 ### Environment Variables
@@ -361,7 +361,7 @@ export CONDUCTOR_AUTH_SECRET=your-api-secret
 export CONDUCTOR_SERVER_TYPE=OSS
 
 # Profile selection
-export ORKES_PROFILE=production
+export CONDUCTOR_PROFILE=production
 ```
 
 #### Disabling Colored Output
@@ -380,14 +380,14 @@ Configuration files use YAML format and are stored in `~/.conductor-cli/`:
 
 ```yaml
 # Example config.yaml for Enterprise with auth token (default)
-server: https://developer.orkescloud.com/api
+server: https://developer.conductorcloud.com/api
 auth-token: your-auth-token
 verbose: false
 ```
 
 ```yaml
 # Example config.yaml for Enterprise with API key + secret
-server: https://developer.orkescloud.com/api
+server: https://developer.conductorcloud.com/api
 auth-key: your-api-key
 auth-secret: your-api-secret
 verbose: false
@@ -408,29 +408,29 @@ verbose: false
 You can also specify a custom config file location:
 
 ```bash
-orkes --config /path/to/my-config.yaml workflow list
+conductor --config /path/to/my-config.yaml workflow list
 ```
 
 ## Workflow Metadata Management
 
 ```shell
 # List the workflows on the server
-orkes workflow list
+conductor workflow list
 
 # Get the workflows definition - fetches the latest version
-orkes workflow get <workflowname>
+conductor workflow get <workflowname>
 
 # or you can specify a version
-orkes workflow get <workflowname> <version>
+conductor workflow get <workflowname> <version>
 
 # You can use quotes for workflow name if the name contains spaces, comma or special characters
-orkes workflow get "<workflow name with spaces>"
+conductor workflow get "<workflow name with spaces>"
 
 ```
 ### Create a workflow
 ```shell
 # Register a workflow stored in the file
-orkes workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
+conductor workflow create /path/to/workflow_definition.json --force # use --force to overwrite existing
 ```
 
 ## API Gateway Management
@@ -441,16 +441,16 @@ The API Gateway feature allows you to expose Conductor workflows as REST APIs wi
 
 ```shell
 # List all API Gateway services
-orkes api-gateway service list
+conductor api-gateway service list
 
 # Get a specific service
-orkes api-gateway service get <service_id>
+conductor api-gateway service get <service_id>
 
 # Create a service from JSON file
-orkes api-gateway service create service.json
+conductor api-gateway service create service.json
 
 # Create a service using command-line flags
-orkes api-gateway service create \
+conductor api-gateway service create \
   --service-id my-service-id \
   --name "Display Name" \
   --path "/my-base-path" \
@@ -463,10 +463,10 @@ orkes api-gateway service create \
   --cors-allowed-headers "*"
 
 # Update a service
-orkes api-gateway service update <service_id> service.json
+conductor api-gateway service update <service_id> service.json
 
 # Delete a service
-orkes api-gateway service delete <service_id>
+conductor api-gateway service delete <service_id>
 ```
 
 **Example service JSON:**
@@ -495,26 +495,26 @@ orkes api-gateway service delete <service_id>
 
 ```shell
 # List all authentication configurations
-orkes api-gateway auth list
+conductor api-gateway auth list
 
 # Get a specific auth config
-orkes api-gateway auth get <auth_config_id>
+conductor api-gateway auth get <auth_config_id>
 
 # Create an auth config from JSON file
-orkes api-gateway auth create auth-config.json
+conductor api-gateway auth create auth-config.json
 
 # Create an auth config using command-line flags
-orkes api-gateway auth create \
+conductor api-gateway auth create \
   --auth-config-id "token-based" \
   --auth-type "API_KEY" \
   --application-id "my-app-id" \
   --api-keys "key1,key2,key3"
 
 # Update an auth config
-orkes api-gateway auth update <auth_config_id> auth-config.json
+conductor api-gateway auth update <auth_config_id> auth-config.json
 
 # Delete an auth config
-orkes api-gateway auth delete <auth_config_id>
+conductor api-gateway auth delete <auth_config_id>
 ```
 
 **Example auth config JSON:**
@@ -531,13 +531,13 @@ orkes api-gateway auth delete <auth_config_id>
 
 ```shell
 # List all routes for a service
-orkes api-gateway route list <service_id>
+conductor api-gateway route list <service_id>
 
 # Create a route for a service from JSON file
-orkes api-gateway route create <service_id> route.json
+conductor api-gateway route create <service_id> route.json
 
 # Create a route using command-line flags
-orkes api-gateway route create my-service \
+conductor api-gateway route create my-service \
   --http-method "GET" \
   --path "/users/{userId}" \
   --description "Get user by ID" \
@@ -546,7 +546,7 @@ orkes api-gateway route create my-service \
   --execution-mode "SYNC"
 
 # Create a route with additional options
-orkes api-gateway route create my-service \
+conductor api-gateway route create my-service \
   --http-method "POST" \
   --path "/orders" \
   --description "Create new order" \
@@ -557,10 +557,10 @@ orkes api-gateway route create my-service \
   --workflow-metadata-in-output
 
 # Update a route
-orkes api-gateway route update <service_id> <route_path> route.json
+conductor api-gateway route update <service_id> <route_path> route.json
 
 # Delete a route
-orkes api-gateway route delete <service_id> <http_method> <route_path>
+conductor api-gateway route delete <service_id> <http_method> <route_path>
 ```
 
 **Example route JSON:**
@@ -596,10 +596,10 @@ The CLI polls for tasks and passes them to your worker via stdin/stdout.
 **Quick example:**
 ```bash
 # Run a Python worker (continuous polling with parallel execution)
-orkes worker stdio --type greet_task python3 worker.py
+conductor worker stdio --type greet_task python3 worker.py
 
 # Poll multiple tasks per batch for higher throughput
-orkes worker stdio --type greet_task python3 worker.py --count 5
+conductor worker stdio --type greet_task python3 worker.py --count 5
 ```
 
 ### JavaScript Workers (Built-in)
@@ -613,14 +613,14 @@ Execute tasks using **JavaScript** scripts with built-in utilities (HTTP, crypto
 **Quick example:**
 ```bash
 # Run a JavaScript worker
-orkes worker js --type greet_task worker.js
+conductor worker js --type greet_task worker.js
 ```
 
 ### Remote Workers (Registry-based)
 
-⚠️ **EXPERIMENTAL** - Download and execute workers directly from your Orkes Conductor instance without managing local files.
+⚠️ **EXPERIMENTAL** - Download and execute workers directly from your Conductor Conductor instance without managing local files.
 
-Remote workers are stored in the Orkes Conductor job-runner registry and can be generated using the AI Assistant in your Orkes instance. Once created, workers are automatically downloaded, cached locally, and executed with all dependencies installed.
+Remote workers are stored in the Conductor Conductor job-runner registry and can be generated using the AI Assistant in your Conductor instance. Once created, workers are automatically downloaded, cached locally, and executed with all dependencies installed.
 
 **Best for:** Team collaboration, centralized worker management, zero local setup
 
@@ -633,28 +633,28 @@ Remote workers are stored in the Orkes Conductor job-runner registry and can be 
 
 **Quick examples:**
 ```bash
-# List available workers in your Orkes instance
-orkes worker list-remote
+# List available workers in your Conductor instance
+conductor worker list-remote
 
 # Run a remote worker (downloads and caches automatically)
-orkes worker remote --type greet_task
+conductor worker remote --type greet_task
 
 # Force refresh to get latest version
-orkes worker remote --type greet_task --refresh
+conductor worker remote --type greet_task --refresh
 
 # Run with batch processing for higher throughput
-orkes worker remote --type greet_task --count 10
+conductor worker remote --type greet_task --count 10
 ```
 
 **How it works:**
-1. Create workers using the AI Assistant in your Orkes Conductor instance
+1. Create workers using the AI Assistant in your Conductor Conductor instance
 2. Workers are stored in the job-runner registry with all metadata and dependencies
 3. CLI downloads worker code on first run and sets up the environment automatically
 4. Subsequent runs use the cached worker for instant startup
 5. Python workers get an isolated virtual environment with dependencies installed
 6. Workers authenticate automatically using your CLI configuration
 
-**Note:** Remote workers must exist in your Orkes Conductor instance. Currently, workers are generated by the AI Assistant feature in Orkes Conductor.
+**Note:** Remote workers must exist in your Conductor Conductor instance. Currently, workers are generated by the AI Assistant feature in Conductor Conductor.
 
 ## Exit Codes
 
@@ -667,7 +667,7 @@ The CLI uses standard exit codes for error handling:
 
 **Example usage in scripts:**
 ```bash
-if orkes execution start --workflow my_workflow; then
+if conductor execution start --workflow my_workflow; then
     echo "Workflow started successfully"
 else
     echo "Failed to start workflow" >&2

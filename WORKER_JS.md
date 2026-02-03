@@ -2,7 +2,7 @@
 
 ⚠️ **EXPERIMENTAL FEATURE** - This feature is experimental and may change in future releases.
 
-The `orkes worker js` command allows you to run JavaScript workers that poll for tasks and execute custom JavaScript code to process them.
+The `conductor worker js` command allows you to run JavaScript workers that poll for tasks and execute custom JavaScript code to process them.
 
 ## Overview
 
@@ -15,7 +15,7 @@ The JavaScript worker:
 ## Usage
 
 ```bash
-orkes worker js --type <task_type> <js_file>
+conductor worker js --type <task_type> <js_file>
 ```
 
 ### Required Arguments
@@ -33,7 +33,7 @@ orkes worker js --type <task_type> <js_file>
 ### Example
 
 ```bash
-orkes worker js --type process_order --worker-id worker1 --count 5 worker.js
+conductor worker js --type process_order --worker-id worker1 --count 5 worker.js
 ```
 
 ## JavaScript Worker Script
@@ -342,7 +342,7 @@ The worker processes multiple tasks in parallel using goroutines. Each task is e
 
 ```bash
 # Poll 10 tasks at a time and process them in parallel
-orkes worker js --type my_task --count 10 worker.js
+conductor worker js --type my_task --count 10 worker.js
 ```
 
 ## Continuous Polling
@@ -359,7 +359,7 @@ The worker logs important events at the Go level:
 
 Use `--verbose` flag for debug logging:
 ```bash
-orkes --verbose worker js --type my_task worker.js
+conductor --verbose worker js --type my_task worker.js
 ```
 
 **Note:** JavaScript scripts cannot use `console.log()` - logging is handled by the Go worker process.

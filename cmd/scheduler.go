@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -76,16 +90,16 @@ var (
 		RunE:         createSchedule,
 		SilenceUsage: true,
 		Example: `  # Create from JSON file
-  orkes schedule create schedule.json
+  conductor schedule create schedule.json
 
   # Create using flags
-  orkes schedule create -n my_schedule -c "0 0 * ? * *" -w hello_world
+  conductor schedule create -n my_schedule -c "0 0 * ? * *" -w hello_world
 
   # With input
-  orkes schedule create -n daily_task -c "0 0 * ? * *" -w my_workflow -i '{"key":"value"}'
+  conductor schedule create -n daily_task -c "0 0 * ? * *" -w my_workflow -i '{"key":"value"}'
 
   # Create paused schedule
-  orkes schedule create -n my_schedule -c "0 0 * ? * *" -w hello_world -p`,
+  conductor schedule create -n my_schedule -c "0 0 * ? * *" -w hello_world -p`,
 	}
 
 	updateSchedulerCmd = &cobra.Command{
@@ -95,13 +109,13 @@ var (
 		RunE:         updateSchedule,
 		SilenceUsage: true,
 		Example: `  # Update from JSON file
-  orkes schedule update schedule.json
+  conductor schedule update schedule.json
 
   # Update using flags
-  orkes schedule update -n my_schedule -c "0 0 12 ? * *" -w hello_world
+  conductor schedule update -n my_schedule -c "0 0 12 ? * *" -w hello_world
 
   # Update with new input
-  orkes schedule update -n my_schedule -c "0 0 * ? * *" -w my_workflow -i '{"updated":"data"}'`,
+  conductor schedule update -n my_schedule -c "0 0 * ? * *" -w my_workflow -i '{"updated":"data"}'`,
 	}
 )
 

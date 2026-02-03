@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -8,6 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
+	"net/http"
+	neturl "net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -25,6 +42,7 @@ import (
 	"github.com/orkes-io/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var workflowCmd = &cobra.Command{
@@ -561,7 +579,7 @@ func parseAPIError(err error, defaultMsg string) error {
 				if message == "" {
 					message = "Authentication failed"
 				}
-				return fmt.Errorf("%s\nPlease check your authentication settings. Run 'orkes config save' to configure credentials", message)
+				return fmt.Errorf("%s\nPlease check your authentication settings. Run 'conductor config save' to configure credentials", message)
 			}
 
 			if errorResponse.Message != "" {
@@ -718,9 +736,72 @@ func parseTimeToEpochMillis(timeStr string) (int64, error) {
 	return 0, fmt.Errorf("unable to parse time '%s'. Supported formats: YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, MM/DD/YYYY, epoch milliseconds", timeStr)
 }
 
-func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
+// debugSearchWorkflows makes a raw HTTP request to debug server response
+func debugSearchWorkflows(freeText, query string, count int32) error {
+	serverURL := viper.GetString("server")
+	if serverURL == "" {
+		serverURL = "http://localhost:8080/api"
+	}
+	serverURL = strings.TrimSuffix(serverURL, "/")
+	if !strings.HasSuffix(serverURL, "/api") {
+		serverURL = serverURL + "/api"
+	}
 
-	workflowClient := internal.GetWorkflowClient()
+	// Build URL with query parameters
+	params := neturl.Values{}
+	params.Set("start", "0")
+	params.Set("size", strconv.Itoa(int(count)))
+	params.Set("freeText", freeText)
+	params.Set("sort", "startTime:DESC")
+	if query != "" {
+		params.Set("query", query)
+	}
+
+	searchURL := fmt.Sprintf("%s/workflow/search?%s", serverURL, params.Encode())
+	fmt.Printf("DEBUG: Request URL: %s\n\n", searchURL)
+
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add auth header if available
+	authToken := viper.GetString("auth-token")
+	if authToken != "" {
+		req.Header.Set("X-Authorization", authToken)
+	}
+	cachedToken := viper.GetString("cached-token")
+	if cachedToken != "" {
+		req.Header.Set("X-Authorization", cachedToken)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	fmt.Printf("DEBUG: Response Status: %d\n\n", resp.StatusCode)
+	fmt.Printf("DEBUG: Raw Response Body:\n%s\n", string(body))
+
+	// Try to pretty print if it's JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(body, &jsonData); err == nil {
+		prettyJSON, _ := json.MarshalIndent(jsonData, "", "  ")
+		fmt.Printf("\nDEBUG: Pretty JSON:\n%s\n", string(prettyJSON))
+	}
+
+	return nil
+}
+
+func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
+	debug, _ := cmd.Flags().GetBool("debug")
 
 	freeText := "*"
 	if len(args) == 1 {
@@ -772,6 +853,13 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 
 	// Combine all query parts with AND
 	query := strings.Join(queryParts, " AND ")
+
+	// Debug mode: make raw HTTP request to see server response
+	if debug {
+		return debugSearchWorkflows(freeText, query, count)
+	}
+
+	workflowClient := internal.GetWorkflowClient()
 
 	searchOpts := client.WorkflowResourceApiSearchOpts{
 		Start:    optional.NewInt32(0),
@@ -1301,6 +1389,7 @@ func init() {
 	searchExecutionCmd.Flags().String("start-time-after", "", "Filter executions started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchExecutionCmd.Flags().String("start-time-before", "", "Filter executions started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchExecutionCmd.Flags().Bool("json", false, "Output complete JSON instead of table")
+	searchExecutionCmd.Flags().Bool("debug", false, "Print raw server response for debugging")
 
 	startExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	startExecutionCmd.Flags().StringP("input", "i", "", "Input json")

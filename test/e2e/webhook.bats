@@ -8,8 +8,8 @@ WEBHOOK_ID=""
 
 setup() {
     # Ensure the CLI binary exists
-    if [ ! -f "./orkes" ]; then
-        echo "ERROR: orkes binary not found. Please build it first."
+    if [ ! -f "./conductor" ]; then
+        echo "ERROR: conductor binary not found. Please build it first."
         exit 1
     fi
 }
@@ -20,7 +20,7 @@ get_webhook_id() {
 }
 
 @test "1. Create webhook using command flags" {
-    run bash -c "./orkes webhook create \
+    run bash -c "./conductor webhook create \
         --name custom_webhook_1 \
         --source-platform Custom \
         --verifier HEADER_BASED \
@@ -43,7 +43,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>&1"
+    run bash -c "./conductor webhook get '$WEBHOOK_ID' 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -57,7 +57,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook list 2>&1"
+    run bash -c "./conductor webhook list 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -70,7 +70,7 @@ get_webhook_id() {
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook list --json 2>&1"
+    run bash -c "./conductor webhook list --json 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -98,7 +98,7 @@ get_webhook_id() {
 }
 EOF
 
-    run bash -c "./orkes webhook update '$WEBHOOK_ID' --file /tmp/webhook_update.json 2>&1"
+    run bash -c "./conductor webhook update '$WEBHOOK_ID' --file /tmp/webhook_update.json 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -110,7 +110,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>&1"
+    run bash -c "./conductor webhook get '$WEBHOOK_ID' 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -124,7 +124,7 @@ EOF
     WEBHOOK_ID=$(cat /tmp/webhook_test_id.txt)
     [ -n "$WEBHOOK_ID" ]
 
-    run bash -c "./orkes webhook delete '$WEBHOOK_ID' -y 2>&1"
+    run bash -c "./conductor webhook delete '$WEBHOOK_ID' -y 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -137,7 +137,7 @@ EOF
     [ -n "$WEBHOOK_ID" ]
 
     # Getting deleted webhook should fail
-    run bash -c "./orkes webhook get '$WEBHOOK_ID' 2>/dev/null"
+    run bash -c "./conductor webhook get '$WEBHOOK_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -ne 0 ]
 }

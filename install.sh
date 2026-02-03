@@ -2,7 +2,7 @@
 set -e
 
 REPO="conductor-oss/conductor-cli"
-BINARY_NAME="orkes"
+BINARY_NAME="conductor"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 
 # Colors for output
@@ -88,19 +88,19 @@ install_binary() {
 verify_installation() {
     if command -v $BINARY_NAME >/dev/null 2>&1; then
         VERSION_OUTPUT=$($BINARY_NAME --version 2>&1 || true)
-        echo "${GREEN}✓ Installation successful!${NC}"
+        echo "${GREEN}Installation successful!${NC}"
         echo "${GREEN}  Version: $VERSION_OUTPUT${NC}"
         echo ""
         echo "Run '${BINARY_NAME} --help' to get started."
     else
-        echo "${YELLOW}⚠ Binary installed but not found in PATH${NC}"
+        echo "${YELLOW}Binary installed but not found in PATH${NC}"
         echo "You may need to add $INSTALL_DIR to your PATH:"
         echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
     fi
 }
 
 main() {
-    echo "${GREEN}Installing Orkes CLI...${NC}"
+    echo "${GREEN}Installing Conductor CLI...${NC}"
     echo ""
 
     detect_os

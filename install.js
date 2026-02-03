@@ -6,7 +6,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const REPO = 'conductor-oss/conductor-cli';
-const BINARY_NAME = 'orkes';
+const BINARY_NAME = 'conductor';
 
 // Detect platform and architecture
 function getPlatform() {
@@ -105,7 +105,7 @@ function downloadBinary(url, dest) {
 
 async function install() {
   try {
-    console.log('Installing Orkes CLI...');
+    console.log('Installing Conductor CLI...');
 
     const { os, arch, isWindows } = getPlatform();
     console.log(`Platform: ${os} ${arch}`);
@@ -137,9 +137,9 @@ async function install() {
       fs.chmodSync(binaryPath, 0o755);
     }
 
-    console.log('✓ Installation successful!');
+    console.log('Installation successful!');
     console.log(`Binary installed at: ${binaryPath}`);
-    console.log(`\nRun 'orkes --version' to verify installation.`);
+    console.log(`\nRun 'conductor --version' to verify installation.`);
   } catch (error) {
     console.error('Installation failed:', error.message);
     process.exit(1);

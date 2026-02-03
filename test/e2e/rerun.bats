@@ -8,8 +8,8 @@ WORKFLOW_ID=""
 
 setup() {
     # Ensure the CLI binary exists
-    if [ ! -f "./orkes" ]; then
-        echo "ERROR: orkes binary not found. Please build it first."
+    if [ ! -f "./conductor" ]; then
+        echo "ERROR: conductor binary not found. Please build it first."
         exit 1
     fi
 }
@@ -20,13 +20,13 @@ get_workflow_id() {
 }
 
 @test "1. Create test workflow definition" {
-    run bash -c "./orkes workflow create '$WORKFLOW_FILE' --force 2>/dev/null"
+    run bash -c "./conductor workflow create '$WORKFLOW_FILE' --force 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 }
 
 @test "2. Start workflow execution" {
-    run bash -c "./orkes workflow start --workflow '$WORKFLOW_NAME' 2>/dev/null"
+    run bash -c "./conductor workflow start --workflow '$WORKFLOW_NAME' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -44,7 +44,7 @@ get_workflow_id() {
 
     # Wait up to 10 seconds for workflow to complete
     for i in {1..10}; do
-        run bash -c "./orkes workflow status '$WORKFLOW_ID' 2>/dev/null"
+        run bash -c "./conductor workflow status '$WORKFLOW_ID' 2>/dev/null"
         echo "Attempt $i: Status = $output"
 
         if [ "$output" = "COMPLETED" ]; then
@@ -61,7 +61,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/rerun_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes workflow get-execution '$WORKFLOW_ID' 2>/dev/null"
+    run bash -c "./conductor workflow get-execution '$WORKFLOW_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -73,7 +73,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/rerun_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes workflow rerun '$WORKFLOW_ID' 2>&1"
+    run bash -c "./conductor workflow rerun '$WORKFLOW_ID' 2>&1"
     echo "Output: $output"
     echo "Status: $status"
     [ "$status" -eq 0 ]
@@ -97,7 +97,7 @@ get_workflow_id() {
 
     # Wait up to 10 seconds for rerun workflow to complete
     for i in {1..10}; do
-        run bash -c "./orkes workflow status '$WORKFLOW_ID' 2>/dev/null"
+        run bash -c "./conductor workflow status '$WORKFLOW_ID' 2>/dev/null"
         echo "Attempt $i: Rerun status = $output"
 
         if [ "$output" = "COMPLETED" ]; then
@@ -114,7 +114,7 @@ get_workflow_id() {
     WORKFLOW_ID=$(cat /tmp/rerun_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
-    run bash -c "./orkes workflow delete-execution '$WORKFLOW_ID' -y 2>/dev/null"
+    run bash -c "./conductor workflow delete-execution '$WORKFLOW_ID' -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"deleted successfully"* ]]
@@ -122,7 +122,7 @@ get_workflow_id() {
 }
 
 @test "8. Cleanup - Delete workflow definition" {
-    run bash -c "./orkes workflow delete '$WORKFLOW_NAME' 1 -y 2>/dev/null"
+    run bash -c "./conductor workflow delete '$WORKFLOW_NAME' 1 -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"deleted successfully"* ]]
