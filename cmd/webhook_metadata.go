@@ -81,56 +81,80 @@ func list(cmd *cobra.Command, args []string) error {
 
 	webhookClient := internal.GetWebhooksConfigClient()
 	webhooks, _, err := webhookClient.GetAllWebhook(context.Background())
-	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if err != nil {
 		return parseAPIError(err, "Failed to list webhooks")
 	}
 
-	if jsonOutput {
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+
+	switch outputFormat {
+	case OutputFormatJSON:
 		data, err := json.MarshalIndent(webhooks, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling webhooks: %v", err)
 		}
 		fmt.Println(string(data))
-		return nil
+	case OutputFormatCSV:
+		csvWriter := NewCSVWriter()
+		csvWriter.WriteHeader("NAME", "WEBHOOK ID", "WORKFLOWS", "URL")
+		for _, webhook := range webhooks {
+			workflows := []string{}
+			if webhook.WorkflowsToStart != nil {
+				for wf := range webhook.WorkflowsToStart {
+					workflows = append(workflows, wf)
+				}
+			}
+			if webhook.ReceiverWorkflowNamesToVersions != nil {
+				for wf := range webhook.ReceiverWorkflowNamesToVersions {
+					workflows = append(workflows, wf)
+				}
+			}
+			workflowStr := strings.Join(workflows, "; ")
+			webhookURL := fmt.Sprintf("/api/webhook/%s", webhook.Id)
+			csvWriter.WriteRow(webhook.Name, webhook.Id, workflowStr, webhookURL)
+		}
+		csvWriter.Flush()
+	default:
+		// Print as table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "NAME\tWEBHOOK ID\tWORKFLOWS\tURL")
+		for _, webhook := range webhooks {
+			// Get workflow names from both fields
+			workflows := []string{}
+			if webhook.WorkflowsToStart != nil {
+				for wf := range webhook.WorkflowsToStart {
+					workflows = append(workflows, wf)
+				}
+			}
+			if webhook.ReceiverWorkflowNamesToVersions != nil {
+				for wf := range webhook.ReceiverWorkflowNamesToVersions {
+					workflows = append(workflows, wf)
+				}
+			}
+
+			workflowStr := "-"
+			if len(workflows) > 0 {
+				workflowStr = strings.Join(workflows, ", ")
+				if len(workflowStr) > 30 {
+					workflowStr = workflowStr[:27] + "..."
+				}
+			}
+
+			// Construct webhook URL (standard Conductor webhook URL format)
+			webhookURL := fmt.Sprintf("/api/webhook/%s", webhook.Id)
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				webhook.Name,
+				webhook.Id,
+				workflowStr,
+				webhookURL,
+			)
+		}
+		w.Flush()
 	}
-
-	// Print as table
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tWEBHOOK ID\tWORKFLOWS\tURL")
-	for _, webhook := range webhooks {
-		// Get workflow names from both fields
-		workflows := []string{}
-		if webhook.WorkflowsToStart != nil {
-			for wf := range webhook.WorkflowsToStart {
-				workflows = append(workflows, wf)
-			}
-		}
-		if webhook.ReceiverWorkflowNamesToVersions != nil {
-			for wf := range webhook.ReceiverWorkflowNamesToVersions {
-				workflows = append(workflows, wf)
-			}
-		}
-
-		workflowStr := "-"
-		if len(workflows) > 0 {
-			workflowStr = strings.Join(workflows, ", ")
-			if len(workflowStr) > 30 {
-				workflowStr = workflowStr[:27] + "..."
-			}
-		}
-
-		// Construct webhook URL (standard Conductor webhook URL format)
-		webhookURL := fmt.Sprintf("/api/webhook/%s", webhook.Id)
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			webhook.Name,
-			webhook.Id,
-			workflowStr,
-			webhookURL,
-		)
-	}
-	w.Flush()
 
 	return nil
 }
@@ -370,7 +394,9 @@ func parseHeaderMap(input string) map[string]string {
 func init() {
 	rootCmd.AddCommand(webhookCmd)
 
-	listWebHookMetadataCmd.Flags().Bool("json", false, "print json")
+	listWebHookMetadataCmd.Flags().Bool("json", false, "Output as JSON")
+	listWebHookMetadataCmd.Flags().Bool("csv", false, "Output as CSV")
+	listWebHookMetadataCmd.MarkFlagsMutuallyExclusive("json", "csv")
 
 	createWebHookMetadataCmd.Flags().String("name", "", "Webhook name")
 	createWebHookMetadataCmd.Flags().String("file", "", "JSON file containing webhook configuration")

@@ -125,52 +125,79 @@ func listSchedules(cmd *cobra.Command, args []string) error {
 	}
 
 	schedulerClient := internal.GetSchedulerClient()
-	var workflowName optional.String
+	var workflowNameOpt optional.String
 	if len(args) == 1 {
-		workflowName = optional.NewString(args[0])
+		workflowNameOpt = optional.NewString(args[0])
 	}
-	options := client.SchedulerResourceApiGetAllSchedulesOpts{WorkflowName: workflowName}
+	options := client.SchedulerResourceApiGetAllSchedulesOpts{WorkflowName: workflowNameOpt}
 	schedules, _, err := schedulerClient.GetAllSchedules(context.Background(), &options)
-	jsonOutput, _ := cmd.Flags().GetBool("json")
 	if err != nil {
 		return parseAPIError(err, "Failed to list schedules")
 	}
 
-	if jsonOutput {
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+
+	switch outputFormat {
+	case OutputFormatJSON:
 		data, err := json.MarshalIndent(schedules, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling schedules: %v", err)
 		}
 		fmt.Println(string(data))
-		return nil
-	}
-
-	// Print as table
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tCRON\tWORKFLOW\tSTATUS\tCREATED TIME")
-	for _, schedule := range schedules {
-		status := "active"
-		if schedule.Paused {
-			status = "paused"
+	case OutputFormatCSV:
+		csvWriter := NewCSVWriter()
+		csvWriter.WriteHeader("NAME", "CRON", "WORKFLOW", "STATUS", "CREATED TIME")
+		for _, schedule := range schedules {
+			status := "active"
+			if schedule.Paused {
+				status = "paused"
+			}
+			workflowName := schedule.StartWorkflowRequest.Name
+			createdTime := ""
+			if schedule.CreateTime > 0 {
+				t := time.UnixMilli(schedule.CreateTime)
+				createdTime = t.Format("2006-01-02 15:04:05")
+			}
+			csvWriter.WriteRow(
+				schedule.Name,
+				schedule.CronExpression,
+				workflowName,
+				status,
+				createdTime,
+			)
 		}
-		workflowName := schedule.StartWorkflowRequest.Name
+		csvWriter.Flush()
+	default:
+		// Print as table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "NAME\tCRON\tWORKFLOW\tSTATUS\tCREATED TIME")
+		for _, schedule := range schedules {
+			status := "active"
+			if schedule.Paused {
+				status = "paused"
+			}
+			workflowName := schedule.StartWorkflowRequest.Name
 
-		// Format create time
-		createdTime := "-"
-		if schedule.CreateTime > 0 {
-			t := time.UnixMilli(schedule.CreateTime)
-			createdTime = t.Format("2006-01-02 15:04:05")
+			// Format create time
+			createdTime := "-"
+			if schedule.CreateTime > 0 {
+				t := time.UnixMilli(schedule.CreateTime)
+				createdTime = t.Format("2006-01-02 15:04:05")
+			}
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+				schedule.Name,
+				schedule.CronExpression,
+				workflowName,
+				status,
+				createdTime,
+			)
 		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			schedule.Name,
-			schedule.CronExpression,
-			workflowName,
-			status,
-			createdTime,
-		)
+		w.Flush()
 	}
-	w.Flush()
 
 	return nil
 }
@@ -431,9 +458,9 @@ func createOrUpdateSchedule(update bool, cmd *cobra.Command, args []string) erro
 func init() {
 	rootCmd.AddCommand(schedulerCmd)
 
-	listSchedulerCmd.Flags().BoolP("json", "j", false, "Print full json")
-	listSchedulerCmd.Flags().BoolP("cron", "c", false, "Print cron expression")
-	listSchedulerCmd.Flags().BoolP("pretty", "p", false, "Print formatted json")
+	listSchedulerCmd.Flags().BoolP("json", "j", false, "Output as JSON")
+	listSchedulerCmd.Flags().Bool("csv", false, "Output as CSV")
+	listSchedulerCmd.MarkFlagsMutuallyExclusive("json", "csv")
 
 	createSchedulerCmd.Flags().StringP("name", "n", "", "Name of the schedule (required)")
 	createSchedulerCmd.Flags().StringP("cron", "c", "", "Cron expression (required)")

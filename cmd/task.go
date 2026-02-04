@@ -114,7 +114,10 @@ var (
 )
 
 func listTasks(cmd *cobra.Command, args []string) error {
-	jsonOutput, _ := cmd.Flags().GetBool("json")
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
 
 	metadataClient := internal.GetMetadataClient()
 	tasks, _, err := metadataClient.GetTaskDefs(context.Background())
@@ -122,56 +125,76 @@ func listTasks(cmd *cobra.Command, args []string) error {
 		return parseAPIError(err, "Failed to list tasks")
 	}
 
-	if jsonOutput {
+	switch outputFormat {
+	case OutputFormatJSON:
 		data, err := json.MarshalIndent(tasks, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling tasks: %v", err)
 		}
 		fmt.Println(string(data))
-		return nil
+	case OutputFormatCSV:
+		csvWriter := NewCSVWriter()
+		csvWriter.WriteHeader("NAME", "EXECUTABLE", "DESCRIPTION", "OWNER", "TIMEOUT POLICY", "TIMEOUT (s)", "RETRY COUNT", "RESPONSE TIMEOUT (s)")
+		for _, task := range tasks {
+			executable := "no"
+			if task.ExecutionNameSpace != "" || task.OwnerApp != "" {
+				executable = "yes"
+			}
+			csvWriter.WriteRow(
+				task.Name,
+				executable,
+				task.Description,
+				task.OwnerEmail,
+				task.TimeoutPolicy,
+				fmt.Sprintf("%d", task.TimeoutSeconds),
+				fmt.Sprintf("%d", task.RetryCount),
+				fmt.Sprintf("%d", task.ResponseTimeoutSeconds),
+			)
+		}
+		csvWriter.Flush()
+	default:
+		// Print as table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "NAME\tEXECUTABLE\tDESCRIPTION\tOWNER\tTIMEOUT POLICY\tTIMEOUT (s)\tRETRY COUNT\tRESPONSE TIMEOUT (s)")
+		for _, task := range tasks {
+			// Determine if task is executable (has executionNameSpace or ownerApp)
+			executable := "no"
+			if task.ExecutionNameSpace != "" || task.OwnerApp != "" {
+				executable = "yes"
+			}
+
+			description := task.Description
+			if description == "" {
+				description = "-"
+			}
+			// Truncate long descriptions
+			if len(description) > 30 {
+				description = description[:27] + "..."
+			}
+
+			ownerEmail := task.OwnerEmail
+			if ownerEmail == "" {
+				ownerEmail = "-"
+			}
+
+			timeoutPolicy := task.TimeoutPolicy
+			if timeoutPolicy == "" {
+				timeoutPolicy = "-"
+			}
+
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\n",
+				task.Name,
+				executable,
+				description,
+				ownerEmail,
+				timeoutPolicy,
+				task.TimeoutSeconds,
+				task.RetryCount,
+				task.ResponseTimeoutSeconds,
+			)
+		}
+		w.Flush()
 	}
-
-	// Print as table
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tEXECUTABLE\tDESCRIPTION\tOWNER\tTIMEOUT POLICY\tTIMEOUT (s)\tRETRY COUNT\tRESPONSE TIMEOUT (s)")
-	for _, task := range tasks {
-		// Determine if task is executable (has executionNameSpace or ownerApp)
-		executable := "no"
-		if task.ExecutionNameSpace != "" || task.OwnerApp != "" {
-			executable = "yes"
-		}
-
-		description := task.Description
-		if description == "" {
-			description = "-"
-		}
-		// Truncate long descriptions
-		if len(description) > 30 {
-			description = description[:27] + "..."
-		}
-
-		ownerEmail := task.OwnerEmail
-		if ownerEmail == "" {
-			ownerEmail = "-"
-		}
-
-		timeoutPolicy := task.TimeoutPolicy
-		if timeoutPolicy == "" {
-			timeoutPolicy = "-"
-		}
-
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\n",
-			task.Name,
-			executable,
-			description,
-			ownerEmail,
-			timeoutPolicy,
-			task.TimeoutSeconds,
-			task.RetryCount,
-			task.ResponseTimeoutSeconds,
-		)
-	}
-	w.Flush()
 
 	return nil
 }
@@ -504,7 +527,9 @@ func init() {
 	rootCmd.AddCommand(taskCmd)
 
 	// Definition management flags
-	listTaskMetadataCmd.Flags().Bool("json", false, "Print complete JSON output")
+	listTaskMetadataCmd.Flags().Bool("json", false, "Output as JSON")
+	listTaskMetadataCmd.Flags().Bool("csv", false, "Output as CSV")
+	listTaskMetadataCmd.MarkFlagsMutuallyExclusive("json", "csv")
 
 	// Execution management flags
 	taskUpdateExecutionCmd.Flags().String("workflow-id", "", "Workflow ID (required)")
