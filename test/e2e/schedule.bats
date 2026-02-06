@@ -40,12 +40,12 @@ teardown() {
     [[ "$output" == *"e2e_test_schedule"* ]]
 }
 
-@test "3. List with cron flag shows schedule name and cron expression" {
+@test "3. List with csv flag shows schedule name and cron expression" {
     # Create schedule
     ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
 
-    # List with cron flag
-    run bash -c "./conductor schedule list --cron 2>/dev/null"
+    # List with csv flag
+    run bash -c "./conductor schedule list --csv 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"e2e_test_schedule"* ]]
