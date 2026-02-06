@@ -18,7 +18,7 @@ The `worker stdio` command continuously polls for tasks and executes them in par
 ## Usage
 
 ```bash
-orkes worker stdio --type <task_type> <command> [args...]
+conductor worker stdio --type <task_type> <command> [args...]
 ```
 
 **Flags:**
@@ -96,16 +96,16 @@ Run the worker:
 
 ```bash
 # Start worker for 'greet_task'
-orkes worker stdio --type greet_task python3 worker.py
+conductor worker stdio --type greet_task python3 worker.py
 
 # Poll multiple tasks per batch (poll 5 tasks at a time)
-orkes worker stdio --type greet_task python3 worker.py --count 5
+conductor worker stdio --type greet_task python3 worker.py --count 5
 
 # With worker ID and domain
-orkes worker stdio --type greet_task python3 worker.py --worker-id worker-1 --domain production
+conductor worker stdio --type greet_task python3 worker.py --worker-id worker-1 --domain production
 
 # With execution timeout (30 seconds per task)
-orkes worker stdio --type greet_task python3 worker.py --exec-timeout 30
+conductor worker stdio --type greet_task python3 worker.py --exec-timeout 30
 ```
 
 ## Example: Shell Script Worker
@@ -146,7 +146,7 @@ The worker automatically runs in continuous mode:
 
 ```bash
 # Poll 10 tasks at a time and process them in parallel
-orkes worker stdio --type greet_task python3 worker.py --count 10
+conductor worker stdio --type greet_task python3 worker.py --count 10
 ```
 
 ## Error Handling

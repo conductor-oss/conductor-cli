@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -28,7 +42,7 @@ var (
 	Date    = "unknown"
 )
 
-var NAME = "orkes"
+var NAME = "conductor"
 
 var (
 	cfgFile    string
@@ -63,7 +77,7 @@ func isEnterpriseServer() bool {
 
 var rootCmd = &cobra.Command{
 	Use:     NAME,
-	Short:   "orkes",
+	Short:   "conductor",
 	Long:    "CLI for Conductor",
 	Version: fmt.Sprintf("%s (commit: %s, built: %s)", Version, Commit, Date),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -82,7 +96,7 @@ var rootCmd = &cobra.Command{
 			// Show notification if update is available
 			if shouldNotify, latestVersion := updater.ShouldNotifyUpdate(Version); shouldNotify {
 				fmt.Fprintf(os.Stderr, "\n⚠ A new version is available: %s (current: %s)\n", latestVersion, Version)
-				fmt.Fprintf(os.Stderr, "Run 'orkes update' to download it or update with your package manager.\n\n")
+				fmt.Fprintf(os.Stderr, "Run 'conductor update' to download it or update with your package manager.\n\n")
 			}
 		}
 
@@ -140,7 +154,7 @@ var rootCmd = &cobra.Command{
 			// Determine config path for saving cached token
 			activeProfile := profile
 			if activeProfile == "" {
-				activeProfile = os.Getenv("ORKES_PROFILE")
+				activeProfile = os.Getenv("CONDUCTOR_PROFILE")
 			}
 
 			configPath, err := getConfigPath(activeProfile)
@@ -210,10 +224,10 @@ func initConfig() {
 		viper.AddConfigPath(configDir)
 		viper.SetConfigType("yaml")
 
-		// Determine which profile to use: --profile flag takes precedence over ORKES_PROFILE env var
+		// Determine which profile to use: --profile flag takes precedence over CONDUCTOR_PROFILE env var
 		activeProfile := profile
 		if activeProfile == "" {
-			activeProfile = os.Getenv("ORKES_PROFILE")
+			activeProfile = os.Getenv("CONDUCTOR_PROFILE")
 		}
 
 		// Use profile-specific config if profile is set
@@ -312,7 +326,7 @@ func init() {
 	rootCmd.PersistentFlags().String("server-type", "OSS", "Server type: OSS or Enterprise (can also be set via CONDUCTOR_SERVER_TYPE)")
 
 	// Profile and config management flags
-	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a specific profile (loads config-<profile>.yaml, can also be set via ORKES_PROFILE)")
+	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "use a specific profile (loads config-<profile>.yaml, can also be set via CONDUCTOR_PROFILE)")
 
 	// Other flags
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print verbose logs")

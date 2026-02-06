@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -33,10 +47,10 @@ If a configuration already exists, you can press Enter to keep existing values.
 
 Examples:
   # Interactively save to default config file
-  orkes config save
+  conductor config save
 
   # Interactively save to a named profile
-  orkes config save --profile production
+  conductor config save --profile production
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		profileName := profile
@@ -65,7 +79,7 @@ Shows the default config.yaml and all named profiles (config-<profile>.yaml).
 
 Examples:
   # List all config profiles
-  orkes config list
+  conductor config list
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		home, err := os.UserHomeDir()
@@ -130,16 +144,16 @@ Profile can be specified either as a positional argument or via --profile flag.
 
 Examples:
   # Delete default config file (requires confirmation)
-  orkes config delete
+  conductor config delete
 
   # Delete a named profile using positional argument
-  orkes config delete production
+  conductor config delete production
 
   # Delete a named profile using --profile flag
-  orkes config delete --profile production
+  conductor config delete --profile production
 
   # Delete without confirmation
-  orkes config delete production -y
+  conductor config delete production -y
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		home, err := os.UserHomeDir()

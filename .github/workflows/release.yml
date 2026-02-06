@@ -37,25 +37,25 @@ jobs:
         mkdir -p dist
 
         # Build for Linux amd64
-        GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/orkes_linux_amd64
+        GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/conductor_linux_amd64
 
         # Build for Linux arm64
-        GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/orkes_linux_arm64
+        GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/conductor_linux_arm64
 
         # Build for macOS amd64
-        GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/orkes_darwin_amd64
+        GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/conductor_darwin_amd64
 
         # Build for macOS arm64
-        GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/orkes_darwin_arm64
+        GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/conductor_darwin_arm64
 
         # Build for Windows amd64
-        GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/orkes_windows_amd64.exe
+        GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/conductor_windows_amd64.exe
 
         # Build for Windows arm64
-        GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/orkes_windows_arm64.exe
+        GOOS=windows GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/conductor_windows_arm64.exe
 
         # Make binaries executable
-        chmod +x dist/orkes_*
+        chmod +x dist/conductor_*
 
     - name: Generate changelog
       id: changelog
@@ -80,12 +80,12 @@ jobs:
       with:
         body_path: CHANGELOG.txt
         files: |
-          dist/orkes_linux_amd64
-          dist/orkes_linux_arm64
-          dist/orkes_darwin_amd64
-          dist/orkes_darwin_arm64
-          dist/orkes_windows_amd64.exe
-          dist/orkes_windows_arm64.exe
+          dist/conductor_linux_amd64
+          dist/conductor_linux_arm64
+          dist/conductor_darwin_amd64
+          dist/conductor_darwin_arm64
+          dist/conductor_windows_amd64.exe
+          dist/conductor_windows_arm64.exe
         draft: false
         prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}
       env:
@@ -125,10 +125,10 @@ jobs:
         BREW_VERSION="${VERSION#v}"
 
         # Calculate SHA256 for each binary
-        SHA256_DARWIN_AMD64=$(shasum -a 256 dist/orkes_darwin_amd64 | awk '{print $1}')
-        SHA256_DARWIN_ARM64=$(shasum -a 256 dist/orkes_darwin_arm64 | awk '{print $1}')
-        SHA256_LINUX_AMD64=$(shasum -a 256 dist/orkes_linux_amd64 | awk '{print $1}')
-        SHA256_LINUX_ARM64=$(shasum -a 256 dist/orkes_linux_arm64 | awk '{print $1}')
+        SHA256_DARWIN_AMD64=$(shasum -a 256 dist/conductor_darwin_amd64 | awk '{print $1}')
+        SHA256_DARWIN_ARM64=$(shasum -a 256 dist/conductor_darwin_arm64 | awk '{print $1}')
+        SHA256_LINUX_AMD64=$(shasum -a 256 dist/conductor_linux_amd64 | awk '{print $1}')
+        SHA256_LINUX_ARM64=$(shasum -a 256 dist/conductor_linux_arm64 | awk '{print $1}')
 
         cd homebrew-tap
 
@@ -136,41 +136,41 @@ jobs:
         mkdir -p Formula
 
         # Update formula
-        cat > Formula/orkes.rb << EOF
-        class Orkes < Formula
+        cat > Formula/conductor.rb << EOF
+        class Conductor < Formula
           desc "CLI for Conductor - The leading open-source orchestration platform"
           homepage "https://github.com/conductor-oss/conductor-cli"
           version "$BREW_VERSION"
 
           on_macos do
             if Hardware::CPU.arm?
-              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/orkes_darwin_arm64"
+              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/conductor_darwin_arm64"
               sha256 "$SHA256_DARWIN_ARM64"
             else
-              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/orkes_darwin_amd64"
+              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/conductor_darwin_amd64"
               sha256 "$SHA256_DARWIN_AMD64"
             end
           end
 
           on_linux do
             if Hardware::CPU.arm?
-              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/orkes_linux_arm64"
+              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/conductor_linux_arm64"
               sha256 "$SHA256_LINUX_ARM64"
             else
-              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/orkes_linux_amd64"
+              url "https://github.com/conductor-oss/conductor-cli/releases/download/${VERSION}/conductor_linux_amd64"
               sha256 "$SHA256_LINUX_AMD64"
             end
           end
 
           def install
-            bin.install "orkes_darwin_arm64" => "orkes" if Hardware::CPU.arm? && OS.mac?
-            bin.install "orkes_darwin_amd64" => "orkes" if Hardware::CPU.intel? && OS.mac?
-            bin.install "orkes_linux_arm64" => "orkes" if Hardware::CPU.arm? && OS.linux?
-            bin.install "orkes_linux_amd64" => "orkes" if Hardware::CPU.intel? && OS.linux?
+            bin.install "conductor_darwin_arm64" => "conductor" if Hardware::CPU.arm? && OS.mac?
+            bin.install "conductor_darwin_amd64" => "conductor" if Hardware::CPU.intel? && OS.mac?
+            bin.install "conductor_linux_arm64" => "conductor" if Hardware::CPU.arm? && OS.linux?
+            bin.install "conductor_linux_amd64" => "conductor" if Hardware::CPU.intel? && OS.linux?
           end
 
           test do
-            system "#{bin}/orkes", "--version"
+            system "#{bin}/conductor", "--version"
           end
         end
         EOF
@@ -178,6 +178,35 @@ jobs:
         # Commit and push
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add Formula/orkes.rb
-        git commit -m "Update orkes to $BREW_VERSION"
+        git add Formula/conductor.rb
+        git commit -m "Update conductor to $BREW_VERSION"
         git push
+
+    - name: Update Homebrew Core formula
+      if: "!contains(steps.get_version.outputs.VERSION, '-')"
+      env:
+        HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_CORE_PR_TOKEN }}
+      run: |
+        VERSION="${{ steps.get_version.outputs.VERSION }}"
+        BREW_VERSION="${VERSION#v}"
+
+        # Download source tarball and calculate SHA256
+        curl -sL "https://github.com/conductor-oss/conductor-cli/archive/refs/tags/${VERSION}.tar.gz" -o source.tar.gz
+        SHA256=$(shasum -a 256 source.tar.gz | awk '{print $1}')
+
+        # Install Homebrew (if not present) and bump formula
+        if command -v brew &> /dev/null; then
+          brew update
+        else
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+        fi
+
+        # Create PR to homebrew-core using brew bump-formula-pr
+        # This will automatically create a PR with the updated version and SHA
+        brew bump-formula-pr \
+          --version="${BREW_VERSION}" \
+          --sha256="${SHA256}" \
+          --no-browse \
+          --force \
+          conductor || echo "Note: homebrew-core PR may need manual creation if formula doesn't exist yet"
