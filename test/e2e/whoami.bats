@@ -4,14 +4,14 @@
 
 setup() {
     # Ensure the CLI binary exists
-    if [ ! -f "./orkes" ]; then
-        echo "ERROR: orkes binary not found. Please build it first."
+    if [ ! -f "./conductor" ]; then
+        echo "ERROR: conductor binary not found. Please build it first."
         exit 1
     fi
 }
 
 @test "whoami prints output" {
-    run bash -c "./orkes whoami 2>/dev/null"
+    run bash -c "./conductor whoami 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     # Count lines - should have at least server URL

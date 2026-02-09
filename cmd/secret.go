@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -43,16 +57,16 @@ var (
 		RunE:         putSecret,
 		SilenceUsage: true,
 		Example: `  # Put secret with value as argument
-  orkes secret put db_password mySecretValue
+  conductor secret put db_password mySecretValue
 
   # Put secret with value from flag
-  orkes secret put db_password --value mySecretValue
+  conductor secret put db_password --value mySecretValue
 
   # Put secret from stdin
-  echo "mySecretValue" | orkes secret put db_password
+  echo "mySecretValue" | conductor secret put db_password
 
   # Put secret from file
-  cat secret.txt | orkes secret put db_password`,
+  cat secret.txt | conductor secret put db_password`,
 	}
 
 	deleteSecretCmd = &cobra.Command{
@@ -85,10 +99,10 @@ var (
 		RunE:         tagAdd,
 		SilenceUsage: true,
 		Example: `  # Add single tag
-  orkes secret tag-add db_password --tag env:prod
+  conductor secret tag-add db_password --tag env:prod
 
   # Add multiple tags
-  orkes secret tag-add db_password --tag env:prod --tag team:backend`,
+  conductor secret tag-add db_password --tag env:prod --tag team:backend`,
 	}
 
 	tagDeleteCmd = &cobra.Command{
@@ -97,10 +111,10 @@ var (
 		RunE:         tagDelete,
 		SilenceUsage: true,
 		Example: `  # Delete single tag
-  orkes secret tag-delete db_password --tag env:prod
+  conductor secret tag-delete db_password --tag env:prod
 
   # Delete multiple tags
-  orkes secret tag-delete db_password --tag env:prod --tag team:backend`,
+  conductor secret tag-delete db_password --tag env:prod --tag team:backend`,
 	}
 
 	cacheClearCmd = &cobra.Command{
@@ -110,13 +124,13 @@ var (
 		RunE:         cacheClear,
 		SilenceUsage: true,
 		Example: `  # Clear local cache
-  orkes secret cache-clear --local
+  conductor secret cache-clear --local
 
   # Clear Redis cache
-  orkes secret cache-clear --redis
+  conductor secret cache-clear --redis
 
   # Clear both caches
-  orkes secret cache-clear`,
+  conductor secret cache-clear`,
 	}
 )
 
@@ -127,7 +141,11 @@ func listSecrets(cmd *cobra.Command, args []string) error {
 
 	secretClient := internal.GetSecretsClient()
 	withTags, _ := cmd.Flags().GetBool("with-tags")
-	jsonOutput, _ := cmd.Flags().GetBool("json")
+
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
 
 	ctx := context.Background()
 
@@ -138,33 +156,44 @@ func listSecrets(cmd *cobra.Command, args []string) error {
 			return parseAPIError(err, "Failed to list secrets")
 		}
 
-		if jsonOutput {
+		switch outputFormat {
+		case OutputFormatJSON:
 			data, err := json.MarshalIndent(secrets, "", "  ")
 			if err != nil {
 				return fmt.Errorf("error marshaling secrets: %v", err)
 			}
 			fmt.Println(string(data))
-			return nil
-		}
-
-		// Print as table
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "KEY\tTAGS")
-		for _, secret := range secrets {
-			tagStr := "-"
-			if len(secret.Tags) > 0 {
+		case OutputFormatCSV:
+			csvWriter := NewCSVWriter()
+			csvWriter.WriteHeader("KEY", "TAGS")
+			for _, secret := range secrets {
 				tagPairs := make([]string, 0, len(secret.Tags))
 				for _, tag := range secret.Tags {
 					tagPairs = append(tagPairs, fmt.Sprintf("%s:%s", tag.Key, tag.Value))
 				}
-				tagStr = strings.Join(tagPairs, ", ")
-				if len(tagStr) > 50 {
-					tagStr = tagStr[:47] + "..."
-				}
+				csvWriter.WriteRow(secret.Name, strings.Join(tagPairs, "; "))
 			}
-			fmt.Fprintf(w, "%s\t%s\n", secret.Name, tagStr)
+			csvWriter.Flush()
+		default:
+			// Print as table
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+			fmt.Fprintln(w, "KEY\tTAGS")
+			for _, secret := range secrets {
+				tagStr := "-"
+				if len(secret.Tags) > 0 {
+					tagPairs := make([]string, 0, len(secret.Tags))
+					for _, tag := range secret.Tags {
+						tagPairs = append(tagPairs, fmt.Sprintf("%s:%s", tag.Key, tag.Value))
+					}
+					tagStr = strings.Join(tagPairs, ", ")
+					if len(tagStr) > 50 {
+						tagStr = tagStr[:47] + "..."
+					}
+				}
+				fmt.Fprintf(w, "%s\t%s\n", secret.Name, tagStr)
+			}
+			w.Flush()
 		}
-		w.Flush()
 	} else {
 		// List secret names only
 		secretNames, _, err := secretClient.ListAllSecretNames(ctx)
@@ -172,22 +201,29 @@ func listSecrets(cmd *cobra.Command, args []string) error {
 			return parseAPIError(err, "Failed to list secrets")
 		}
 
-		if jsonOutput {
+		switch outputFormat {
+		case OutputFormatJSON:
 			data, err := json.MarshalIndent(secretNames, "", "  ")
 			if err != nil {
 				return fmt.Errorf("error marshaling secrets: %v", err)
 			}
 			fmt.Println(string(data))
-			return nil
+		case OutputFormatCSV:
+			csvWriter := NewCSVWriter()
+			csvWriter.WriteHeader("KEY")
+			for _, name := range secretNames {
+				csvWriter.WriteRow(name)
+			}
+			csvWriter.Flush()
+		default:
+			// Print as simple list
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+			fmt.Fprintln(w, "KEY")
+			for _, name := range secretNames {
+				fmt.Fprintln(w, name)
+			}
+			w.Flush()
 		}
-
-		// Print as simple list
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "KEY")
-		for _, name := range secretNames {
-			fmt.Fprintln(w, name)
-		}
-		w.Flush()
 	}
 
 	return nil
@@ -335,7 +371,6 @@ func tagList(cmd *cobra.Command, args []string) error {
 	}
 
 	key := args[0]
-	jsonOutput, _ := cmd.Flags().GetBool("json")
 	secretClient := internal.GetSecretsClient()
 
 	ctx := context.Background()
@@ -344,31 +379,43 @@ func tagList(cmd *cobra.Command, args []string) error {
 		return parseAPIError(err, fmt.Sprintf("Failed to get tags for secret '%s'", key))
 	}
 
-	if jsonOutput {
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+
+	switch outputFormat {
+	case OutputFormatJSON:
 		data, err := json.MarshalIndent(tags, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling tags: %v", err)
 		}
 		fmt.Println(string(data))
-		return nil
-	}
-
-	if len(tags) == 0 {
-		fmt.Println("No tags found")
-		return nil
-	}
-
-	// Print as table
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "KEY\tVALUE\tTYPE")
-	for _, tag := range tags {
-		tagType := tag.Type_
-		if tagType == "" {
-			tagType = "-"
+	case OutputFormatCSV:
+		csvWriter := NewCSVWriter()
+		csvWriter.WriteHeader("KEY", "VALUE", "TYPE")
+		for _, tag := range tags {
+			csvWriter.WriteRow(tag.Key, tag.Value, tag.Type_)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", tag.Key, tag.Value, tagType)
+		csvWriter.Flush()
+	default:
+		if len(tags) == 0 {
+			fmt.Println("No tags found")
+			return nil
+		}
+
+		// Print as table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "KEY\tVALUE\tTYPE")
+		for _, tag := range tags {
+			tagType := tag.Type_
+			if tagType == "" {
+				tagType = "-"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", tag.Key, tag.Value, tagType)
+		}
+		w.Flush()
 	}
-	w.Flush()
 
 	return nil
 }
@@ -507,6 +554,8 @@ func init() {
 	// List command flags
 	listSecretsCmd.Flags().Bool("with-tags", false, "Include tags in the output")
 	listSecretsCmd.Flags().Bool("json", false, "Output as JSON")
+	listSecretsCmd.Flags().Bool("csv", false, "Output as CSV")
+	listSecretsCmd.MarkFlagsMutuallyExclusive("json", "csv")
 
 	// Get command flags
 	getSecretCmd.Flags().Bool("show-value", false, "Display the actual secret value")
@@ -516,6 +565,8 @@ func init() {
 
 	// Tag list command flags
 	tagListCmd.Flags().Bool("json", false, "Output as JSON")
+	tagListCmd.Flags().Bool("csv", false, "Output as CSV")
+	tagListCmd.MarkFlagsMutuallyExclusive("json", "csv")
 
 	// Tag add command flags
 	tagAddCmd.Flags().StringArray("tag", []string{}, "Tag in key:value format (repeatable)")

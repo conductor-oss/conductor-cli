@@ -1,3 +1,17 @@
+/*
+ * Copyright 2026 Conductor Authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
+
+
 package cmd
 
 import (
@@ -8,6 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"io"
+	"net/http"
+	neturl "net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -25,6 +42,7 @@ import (
 	"github.com/orkes-io/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var workflowCmd = &cobra.Command{
@@ -202,7 +220,10 @@ var (
 	}
 )
 func listWorkflow(cmd *cobra.Command, args []string) error {
-	jsonOutput, _ := cmd.Flags().GetBool("json")
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
 
 	metadataClient := internal.GetMetadataClient()
 	workflows, _, err := metadataClient.GetAll(context.Background())
@@ -210,34 +231,49 @@ func listWorkflow(cmd *cobra.Command, args []string) error {
 		return parseAPIError(err, "Failed to list workflows")
 	}
 
-	if jsonOutput {
+	switch outputFormat {
+	case OutputFormatJSON:
 		data, err := json.MarshalIndent(workflows, "", "  ")
 		if err != nil {
 			return fmt.Errorf("error marshaling workflows: %v", err)
 		}
 		fmt.Println(string(data))
-		return nil
-	}
-
-	// Print as table
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tVERSION\tDESCRIPTION")
-	for _, workflow := range workflows {
-		description := workflow.Description
-		if description == "" {
-			description = "-"
+	case OutputFormatCSV:
+		csvWriter := NewCSVWriter()
+		csvWriter.WriteHeader("NAME", "VERSION", "DESCRIPTION")
+		for _, workflow := range workflows {
+			description := workflow.Description
+			if description == "" {
+				description = ""
+			}
+			csvWriter.WriteRow(
+				workflow.Name,
+				fmt.Sprintf("%d", workflow.Version),
+				description,
+			)
 		}
-		// Truncate long descriptions
-		if len(description) > 50 {
-			description = description[:47] + "..."
+		csvWriter.Flush()
+	default:
+		// Print as table
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "NAME\tVERSION\tDESCRIPTION")
+		for _, workflow := range workflows {
+			description := workflow.Description
+			if description == "" {
+				description = "-"
+			}
+			// Truncate long descriptions
+			if len(description) > 50 {
+				description = description[:47] + "..."
+			}
+			fmt.Fprintf(w, "%s\t%d\t%s\n",
+				workflow.Name,
+				workflow.Version,
+				description,
+			)
 		}
-		fmt.Fprintf(w, "%s\t%d\t%s\n",
-			workflow.Name,
-			workflow.Version,
-			description,
-		)
+		w.Flush()
 	}
-	w.Flush()
 
 	return nil
 }
@@ -561,7 +597,7 @@ func parseAPIError(err error, defaultMsg string) error {
 				if message == "" {
 					message = "Authentication failed"
 				}
-				return fmt.Errorf("%s\nPlease check your authentication settings. Run 'orkes config save' to configure credentials", message)
+				return fmt.Errorf("%s\nPlease check your authentication settings. Run 'conductor config save' to configure credentials", message)
 			}
 
 			if errorResponse.Message != "" {
@@ -718,9 +754,72 @@ func parseTimeToEpochMillis(timeStr string) (int64, error) {
 	return 0, fmt.Errorf("unable to parse time '%s'. Supported formats: YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, MM/DD/YYYY, epoch milliseconds", timeStr)
 }
 
-func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
+// debugSearchWorkflows makes a raw HTTP request to debug server response
+func debugSearchWorkflows(freeText, query string, count int32) error {
+	serverURL := viper.GetString("server")
+	if serverURL == "" {
+		serverURL = "http://localhost:8080/api"
+	}
+	serverURL = strings.TrimSuffix(serverURL, "/")
+	if !strings.HasSuffix(serverURL, "/api") {
+		serverURL = serverURL + "/api"
+	}
 
-	workflowClient := internal.GetWorkflowClient()
+	// Build URL with query parameters
+	params := neturl.Values{}
+	params.Set("start", "0")
+	params.Set("size", strconv.Itoa(int(count)))
+	params.Set("freeText", freeText)
+	params.Set("sort", "startTime:DESC")
+	if query != "" {
+		params.Set("query", query)
+	}
+
+	searchURL := fmt.Sprintf("%s/workflow/search?%s", serverURL, params.Encode())
+	fmt.Printf("DEBUG: Request URL: %s\n\n", searchURL)
+
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add auth header if available
+	authToken := viper.GetString("auth-token")
+	if authToken != "" {
+		req.Header.Set("X-Authorization", authToken)
+	}
+	cachedToken := viper.GetString("cached-token")
+	if cachedToken != "" {
+		req.Header.Set("X-Authorization", cachedToken)
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	fmt.Printf("DEBUG: Response Status: %d\n\n", resp.StatusCode)
+	fmt.Printf("DEBUG: Raw Response Body:\n%s\n", string(body))
+
+	// Try to pretty print if it's JSON
+	var jsonData interface{}
+	if err := json.Unmarshal(body, &jsonData); err == nil {
+		prettyJSON, _ := json.MarshalIndent(jsonData, "", "  ")
+		fmt.Printf("\nDEBUG: Pretty JSON:\n%s\n", string(prettyJSON))
+	}
+
+	return nil
+}
+
+func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
+	debug, _ := cmd.Flags().GetBool("debug")
 
 	freeText := "*"
 	if len(args) == 1 {
@@ -773,6 +872,13 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 	// Combine all query parts with AND
 	query := strings.Join(queryParts, " AND ")
 
+	// Debug mode: make raw HTTP request to see server response
+	if debug {
+		return debugSearchWorkflows(freeText, query, count)
+	}
+
+	workflowClient := internal.GetWorkflowClient()
+
 	searchOpts := client.WorkflowResourceApiSearchOpts{
 		Start:    optional.NewInt32(0),
 		Size:     optional.NewInt32(count),
@@ -790,34 +896,51 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 		return parseAPIError(err, "Failed to search workflows")
 	}
 
-	jsonOutput, _ := cmd.Flags().GetBool("json")
-	if jsonOutput {
+	outputFormat, err := GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+
+	switch outputFormat {
+	case OutputFormatJSON:
 		data, err := json.MarshalIndent(results, "", "   ")
 		if err != nil {
 			return err
 		}
 		fmt.Println(string(data))
-		return nil
-	}
-
-	// Table output
-	fmt.Printf("%-25s %-38s %-30s %-25s %-15s\n", "START TIME", "WORKFLOW ID", "WORKFLOW NAME", "END TIME", "STATUS")
-	for _, item := range results.Results {
-		startTime := item.StartTime
-		if startTime == "" {
-			startTime = "-"
+	case OutputFormatCSV:
+		csvWriter := NewCSVWriter()
+		csvWriter.WriteHeader("START TIME", "WORKFLOW ID", "WORKFLOW NAME", "END TIME", "STATUS")
+		for _, item := range results.Results {
+			csvWriter.WriteRow(
+				item.StartTime,
+				item.WorkflowId,
+				item.WorkflowType,
+				item.EndTime,
+				item.Status,
+			)
 		}
-		endTime := item.EndTime
-		if endTime == "" {
-			endTime = "-"
+		csvWriter.Flush()
+	default:
+		// Table output
+		fmt.Printf("%-25s %-38s %-30s %-25s %-15s\n", "START TIME", "WORKFLOW ID", "WORKFLOW NAME", "END TIME", "STATUS")
+		for _, item := range results.Results {
+			startTime := item.StartTime
+			if startTime == "" {
+				startTime = "-"
+			}
+			endTime := item.EndTime
+			if endTime == "" {
+				endTime = "-"
+			}
+			fmt.Printf("%-25s %-38s %-30s %-25s %-15s\n",
+				startTime,
+				item.WorkflowId,
+				item.WorkflowType,
+				endTime,
+				item.Status,
+			)
 		}
-		fmt.Printf("%-25s %-38s %-30s %-25s %-15s\n",
-			startTime,
-			item.WorkflowId,
-			item.WorkflowType,
-			endTime,
-			item.Status,
-		)
 	}
 
 	return nil
@@ -1292,7 +1415,9 @@ func init() {
 	createWorkflowMetadataCmd.Flags().Bool("js", false, "Input is javascript file")
 	createWorkflowMetadataCmd.Flags().Bool("json", true, "Input is json file")
 	createWorkflowMetadataCmd.MarkFlagsMutuallyExclusive("js", "json")
-	listWorkflowsMetadataCmd.Flags().Bool("json", false, "Print complete JSON output")
+	listWorkflowsMetadataCmd.Flags().Bool("json", false, "Output as JSON")
+	listWorkflowsMetadataCmd.Flags().Bool("csv", false, "Output as CSV")
+	listWorkflowsMetadataCmd.MarkFlagsMutuallyExclusive("json", "csv")
 
 	// Execution management flags
 	searchExecutionCmd.Flags().Int32P("count", "c", 10, "No of workflow executions to return (max 1000)")
@@ -1300,7 +1425,10 @@ func init() {
 	searchExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	searchExecutionCmd.Flags().String("start-time-after", "", "Filter executions started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchExecutionCmd.Flags().String("start-time-before", "", "Filter executions started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
-	searchExecutionCmd.Flags().Bool("json", false, "Output complete JSON instead of table")
+	searchExecutionCmd.Flags().Bool("json", false, "Output as JSON")
+	searchExecutionCmd.Flags().Bool("csv", false, "Output as CSV")
+	searchExecutionCmd.MarkFlagsMutuallyExclusive("json", "csv")
+	searchExecutionCmd.Flags().Bool("debug", false, "Print raw server response for debugging")
 
 	startExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
 	startExecutionCmd.Flags().StringP("input", "i", "", "Input json")
