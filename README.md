@@ -52,7 +52,7 @@ brew install conductor-oss/conductor/conductor
 If you have Node.js installed:
 
 ```bash
-npm install -g @io-conductor/conductor-cli
+npm install -g @conductor-oss/conductor-cli
 ```
 
 This will automatically download and install the appropriate binary for your platform.

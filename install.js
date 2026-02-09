@@ -3,7 +3,6 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 const REPO = 'conductor-oss/conductor-cli';
 const BINARY_NAME = 'conductor';
@@ -41,65 +40,41 @@ function getPlatform() {
   };
 }
 
-// Get latest release version
-function getLatestVersion() {
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'api.github.com',
-      path: `/repos/${REPO}/releases/latest`,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'conductor-cli-npm-installer'
-      }
-    };
-
-    https.get(options, (res) => {
-      let data = '';
-
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          resolve(json.tag_name);
-        } catch (e) {
-          reject(new Error('Failed to parse release data'));
-        }
-      });
-    }).on('error', (err) => {
-      reject(err);
-    });
-  });
-}
-
-// Download binary
+// Download binary following redirects
 function downloadBinary(url, dest) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
+    const makeRequest = (requestUrl) => {
+      const mod = requestUrl.startsWith('https') ? https : require('http');
+      mod.get(requestUrl, { headers: { 'User-Agent': 'conductor-cli-npm-installer' } }, (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          makeRequest(response.headers.location);
+          return;
+        }
 
-    https.get(url, (response) => {
-      if (response.statusCode === 302 || response.statusCode === 301) {
-        // Follow redirect
-        return downloadBinary(response.headers.location, dest).then(resolve).catch(reject);
-      }
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to download: ${response.statusCode}`));
+          return;
+        }
 
-      if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download: ${response.statusCode}`));
-        return;
-      }
+        const file = fs.createWriteStream(dest);
+        response.pipe(file);
 
-      response.pipe(file);
+        file.on('finish', () => {
+          file.close();
+          resolve();
+        });
 
-      file.on('finish', () => {
-        file.close();
-        resolve();
+        file.on('error', (err) => {
+          fs.unlink(dest, () => {});
+          reject(err);
+        });
+      }).on('error', (err) => {
+        fs.unlink(dest, () => {});
+        reject(err);
       });
-    }).on('error', (err) => {
-      fs.unlink(dest, () => {});
-      reject(err);
-    });
+    };
+
+    makeRequest(url);
   });
 }
 
@@ -110,15 +85,10 @@ async function install() {
     const { os, arch, isWindows } = getPlatform();
     console.log(`Platform: ${os} ${arch}`);
 
-    // Get latest version
-    console.log('Fetching latest version...');
-    const version = await getLatestVersion();
-    console.log(`Latest version: ${version}`);
-
-    // Construct download URL
+    // Use GitHub's latest release redirect URL to avoid API rate limits
     const binaryName = isWindows ? `${BINARY_NAME}.exe` : BINARY_NAME;
     const downloadName = isWindows ? `${BINARY_NAME}_${os}_${arch}.exe` : `${BINARY_NAME}_${os}_${arch}`;
-    const downloadUrl = `https://github.com/${REPO}/releases/download/${version}/${downloadName}`;
+    const downloadUrl = `https://github.com/${REPO}/releases/latest/download/${downloadName}`;
 
     console.log(`Downloading from: ${downloadUrl}`);
 

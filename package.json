@@ -1,6 +1,6 @@
 {
   "name": "@conductor-oss/conductor-cli",
-  "version": "0.0.4",
+  "version": "0.0.0",
   "description": "CLI for Conductor - The leading open-source orchestration platform",
   "main": "index.js",
   "bin": {
