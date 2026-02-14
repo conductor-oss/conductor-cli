@@ -1,0 +1,59 @@
+# Stage 1: Build the orkes CLI
+FROM golang:1.23-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /build
+
+# Copy go mod files (better caching)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o orkes .
+
+# Stage 2: Runtime
+FROM alpine:3.19
+
+# Install basic utilities
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    bash \
+    jq \
+    && rm -rf /var/cache/apk/*
+
+# Create non-root user
+RUN addgroup -g 1000 orkes && \
+    adduser -D -u 1000 -G orkes orkes
+
+# Copy binary from builder
+COPY --from=builder /build/orkes /usr/local/bin/orkes
+RUN chmod +x /usr/local/bin/orkes
+
+# Create config directory
+RUN mkdir -p /home/orkes/.conductor-cli /app && \
+    chown -R orkes:orkes /home/orkes /app
+
+# Switch to non-root user
+USER orkes
+WORKDIR /app
+
+# Verify installation
+RUN orkes --version
+
+# Labels
+LABEL org.opencontainers.image.title="Orkes CLI Runner - Base" \
+      org.opencontainers.image.description="Base image with Orkes CLI and basic utilities" \
+      org.opencontainers.image.source="https://github.com/conductor-oss/conductor-cli" \
+      org.opencontainers.image.vendor="Orkes" \
+      maintainer="Orkes <developers@orkes.io>"
+
+ENTRYPOINT ["orkes"]
+CMD ["--help"]
