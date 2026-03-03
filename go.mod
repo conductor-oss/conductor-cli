@@ -1,4 +1,4 @@
-module github.com/orkes-io/conductor-cli
+module github.com/conductor-oss/conductor-cli
 
 go 1.23
 

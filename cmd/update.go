@@ -21,7 +21,7 @@ import (
 	"runtime"
 
 	goupdater "github.com/inconshreveable/go-update"
-	"github.com/orkes-io/conductor-cli/internal/updater"
+	"github.com/conductor-oss/conductor-cli/internal/updater"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

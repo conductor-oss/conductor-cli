@@ -29,7 +29,7 @@ jobs:
         VERSION="${GITHUB_REF_NAME:-dev}"
         COMMIT="${GITHUB_SHA:-none}"
         DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        go build -x -v -ldflags "-X github.com/orkes-io/conductor-cli/cmd.Version=${VERSION} -X github.com/orkes-io/conductor-cli/cmd.Commit=${COMMIT} -X github.com/orkes-io/conductor-cli/cmd.Date=${DATE}" ./...
+        go build -x -v -ldflags "-X github.com/conductor-oss/conductor-cli/cmd.Version=${VERSION} -X github.com/conductor-oss/conductor-cli/cmd.Commit=${COMMIT} -X github.com/conductor-oss/conductor-cli/cmd.Date=${DATE}" ./...
     
     - name: Run tests
       run: go test -v -race -coverprofile=coverage.out -covermode=atomic -json ./... > test-results.json

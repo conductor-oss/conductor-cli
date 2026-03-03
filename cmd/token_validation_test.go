@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -95,6 +96,166 @@ func TestGetTokenExpiry(t *testing.T) {
 			if gotError != tt.wantError {
 				t.Errorf("getTokenExpiry() error = %v, wantError %v - %s",
 					err, tt.wantError, tt.description)
+			}
+		})
+	}
+}
+
+func TestValidateUserToken(t *testing.T) {
+	tests := []struct {
+		name      string
+		token     string
+		wantError bool
+	}{
+		{
+			name:      "empty token returns error",
+			token:     "",
+			wantError: true,
+		},
+		{
+			name:      "non-JWT token passes (server will validate)",
+			token:     "some-opaque-token-value",
+			wantError: false,
+		},
+		{
+			name: "valid JWT with future exp passes",
+			// JWT with exp: 9999999999 (far future)
+			token:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjo5OTk5OTk5OTk5fQ.Vx6H4JbpOKdVwi0gC73qfaKMVpkBRXMOxHeE9xDIhQQ",
+			wantError: false,
+		},
+		{
+			name: "expired JWT returns error",
+			// JWT with exp: 1000000000 (Jan 2001)
+			token:     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjoxMDAwMDAwMDAwfQ.Iy63AiTmaZLJEvQBUwxWkFo9EvHdWkJ4JFtVSeNz3LQ",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateUserToken(tt.token)
+			gotError := err != nil
+			if gotError != tt.wantError {
+				t.Errorf("validateUserToken(%q) error = %v, wantError %v", tt.token, err, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		name    string
+		seconds int64
+		want    string
+	}{
+		{
+			name:    "seconds",
+			seconds: 45,
+			want:    "45 seconds",
+		},
+		{
+			name:    "minutes",
+			seconds: 300,
+			want:    "5 minutes",
+		},
+		{
+			name:    "hours",
+			seconds: 7200,
+			want:    "2.0 hours",
+		},
+		{
+			name:    "days",
+			seconds: 172800,
+			want:    "2.0 days",
+		},
+		{
+			name:    "zero seconds",
+			seconds: 0,
+			want:    "0 seconds",
+		},
+		{
+			name:    "just under a minute",
+			seconds: 59,
+			want:    "59 seconds",
+		},
+		{
+			name:    "exactly one minute",
+			seconds: 60,
+			want:    "1 minutes",
+		},
+		{
+			name:    "just under an hour",
+			seconds: 3599,
+			want:    "59 minutes",
+		},
+		{
+			name:    "exactly one hour",
+			seconds: 3600,
+			want:    "1.0 hours",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := formatDuration(tt.seconds)
+			if got != tt.want {
+				t.Errorf("formatDuration(%d) = %q, want %q", tt.seconds, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetTokenExpiryManual(t *testing.T) {
+	tests := []struct {
+		name      string
+		token     string
+		wantError bool
+		errContains string
+	}{
+		{
+			name:        "invalid format - no dots",
+			token:       "notajwt",
+			wantError:   true,
+			errContains: "invalid JWT format",
+		},
+		{
+			name:        "invalid format - only 2 parts",
+			token:       "header.payload",
+			wantError:   true,
+			errContains: "invalid JWT format",
+		},
+		{
+			name:        "invalid base64 payload",
+			token:       "header.!!!invalid!!!.signature",
+			wantError:   true,
+			errContains: "failed to decode",
+		},
+		{
+			name: "valid JWT with exp claim",
+			// base64url of {"sub":"123","exp":1700000000}
+			token:     "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMiLCJleHAiOjE3MDAwMDAwMDB9.signature",
+			wantError: false,
+		},
+		{
+			name: "valid JWT without exp claim",
+			// base64url of {"sub":"123","name":"John"}
+			token:     "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMiLCJuYW1lIjoiSm9obiJ9.signature",
+			wantError: true,
+			errContains: "does not contain exp",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := getTokenExpiryManual(tt.token)
+			gotError := err != nil
+			if gotError != tt.wantError {
+				t.Errorf("getTokenExpiryManual() error = %v, wantError %v", err, tt.wantError)
+			}
+			if tt.wantError && tt.errContains != "" && err != nil {
+				if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error %q should contain %q", err.Error(), tt.errContains)
+				}
 			}
 		})
 	}
