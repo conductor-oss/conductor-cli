@@ -25,3 +25,4 @@ go.work
 .DS_Store
 .idea/
 conductorosstest.db
+conductor-cli
