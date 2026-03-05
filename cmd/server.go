@@ -16,6 +16,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,6 +49,11 @@ const (
 
 	// Default server port
 	defaultPort = 8080
+
+	// Server update check constants
+	serverStateFile        = "server-state.json"
+	serverCheckInterval    = 24 * time.Hour
+	serverCheckTimeout     = 3 * time.Second
 )
 
 // Server type constants
@@ -120,7 +126,161 @@ Examples:
 		RunE:         logsServer,
 		SilenceUsage: true,
 	}
+
+	serverUpdateCmd = &cobra.Command{
+		Use:   "update",
+		Short: "Update the local Conductor server to the latest version",
+		Long: `Re-download the Conductor server JAR to get the latest version.
+
+Since the 'latest' tag is a floating reference that gets updated periodically,
+this command forces a fresh download to ensure you have the newest version.
+
+The server must be stopped before updating.
+
+Examples:
+  # Update to the latest version
+  conductor server update
+
+  # Update a specific version
+  conductor server update --version 3.21.23`,
+		RunE:         updateServer,
+		SilenceUsage: true,
+	}
 )
+
+// ServerUpdateState tracks the state of server update checks
+type ServerUpdateState struct {
+	LastCheck  time.Time `json:"last_check"`
+	ETag       string    `json:"etag,omitempty"`
+	ServerType string    `json:"server_type,omitempty"`
+	Version    string    `json:"version,omitempty"`
+}
+
+// getServerStatePath returns the path to the server state file
+func getServerStatePath() (string, error) {
+	serverDir, err := getServerDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(serverDir, serverStateFile), nil
+}
+
+// loadServerState loads the server update state from disk
+func loadServerState() *ServerUpdateState {
+	statePath, err := getServerStatePath()
+	if err != nil {
+		return &ServerUpdateState{}
+	}
+
+	data, err := os.ReadFile(statePath)
+	if err != nil {
+		return &ServerUpdateState{}
+	}
+
+	var state ServerUpdateState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return &ServerUpdateState{}
+	}
+
+	return &state
+}
+
+// save persists the server update state to disk
+func (s *ServerUpdateState) save() error {
+	serverDir, err := getServerDir()
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(serverDir, 0755); err != nil {
+		return err
+	}
+
+	statePath, err := getServerStatePath()
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(statePath, data, 0644)
+}
+
+// getRemoteETag performs an HTTP HEAD request to get the ETag of the remote JAR
+func getRemoteETag(jarURL string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), serverCheckTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "HEAD", jarURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HEAD request returned status %d", resp.StatusCode)
+	}
+
+	return resp.Header.Get("ETag"), nil
+}
+
+// saveServerETag fetches and saves the ETag for a freshly downloaded JAR
+func saveServerETag(serverType, version string) {
+	jarURL, err := getJarDownloadURL(serverType, version)
+	if err != nil {
+		return
+	}
+
+	etag, err := getRemoteETag(jarURL)
+	if err != nil || etag == "" {
+		return
+	}
+
+	state := loadServerState()
+	state.ETag = etag
+	state.ServerType = serverType
+	state.Version = version
+	state.LastCheck = time.Now()
+	_ = state.save()
+}
+
+// checkServerUpdate checks if a newer server JAR is available
+// Returns true if an update is available. Uses 24h check interval to avoid excessive requests.
+func checkServerUpdate(serverType, version string) bool {
+	state := loadServerState()
+
+	// Only check periodically
+	if !state.LastCheck.IsZero() && time.Since(state.LastCheck) < serverCheckInterval {
+		return false
+	}
+
+	jarURL, err := getJarDownloadURL(serverType, version)
+	if err != nil {
+		return false
+	}
+
+	remoteETag, err := getRemoteETag(jarURL)
+	if err != nil || remoteETag == "" {
+		// Update timestamp even on failure to avoid retrying too soon
+		state.LastCheck = time.Now()
+		_ = state.save()
+		return false
+	}
+
+	hasUpdate := state.ETag != "" && state.ETag != remoteETag
+	state.LastCheck = time.Now()
+	_ = state.save()
+
+	return hasUpdate
+}
 
 // getServerDir returns the path to the server directory (~/.conductor-cli/server)
 func getServerDir() (string, error) {
@@ -465,8 +625,15 @@ func startServer(cmd *cobra.Command, args []string) error {
 		if err := downloadJar(jarPath, jarURL); err != nil {
 			return fmt.Errorf("failed to download server: %w", err)
 		}
+		// Save the ETag for future update checks
+		saveServerETag(serverType, version)
 	} else {
 		fmt.Printf("Using cached server JAR: %s\n", jarPath)
+		// Check if a newer version is available (non-blocking, periodic)
+		if checkServerUpdate(serverType, version) {
+			fmt.Fprintln(os.Stderr, "\nA newer Conductor server version is available.")
+			fmt.Fprintln(os.Stderr, "Run 'conductor server update' to download it.")
+		}
 	}
 
 	// Get log file path
@@ -646,6 +813,15 @@ func statusServer(cmd *cobra.Command, args []string) error {
 		fmt.Println("Status: starting or unreachable")
 	}
 
+	// Check if a newer server version is available
+	state := loadServerState()
+	if state.ServerType != "" {
+		if checkServerUpdate(state.ServerType, state.Version) {
+			fmt.Fprintln(os.Stderr, "\nA newer Conductor server version is available.")
+			fmt.Fprintln(os.Stderr, "Run 'conductor server update' to download it.")
+		}
+	}
+
 	return nil
 }
 
@@ -677,6 +853,54 @@ func logsServer(cmd *cobra.Command, args []string) error {
 	return tailCmd.Run()
 }
 
+func updateServer(cmd *cobra.Command, args []string) error {
+	version, _ := cmd.Flags().GetString("version")
+
+	// Determine server type
+	serverType, err := determineServerType(cmd)
+	if err != nil {
+		return err
+	}
+
+	// Check if server is running
+	pid, _ := readPid()
+	if isProcessRunning(pid) {
+		return fmt.Errorf("Conductor server is currently running (PID: %d)\nPlease stop it first with 'conductor server stop' before updating", pid)
+	}
+
+	// Get JAR URL and path
+	jarURL, err := getJarDownloadURL(serverType, version)
+	if err != nil {
+		return err
+	}
+
+	jarPath, err := getJarPathForType(serverType, version)
+	if err != nil {
+		return err
+	}
+
+	// Remove existing JAR if present
+	if _, err := os.Stat(jarPath); err == nil {
+		fmt.Println("Removing cached server JAR...")
+		if err := os.Remove(jarPath); err != nil {
+			return fmt.Errorf("failed to remove existing JAR: %w", err)
+		}
+	}
+
+	// Download fresh JAR
+	if err := downloadJar(jarPath, jarURL); err != nil {
+		return fmt.Errorf("failed to download server: %w", err)
+	}
+
+	// Save the new ETag
+	saveServerETag(serverType, version)
+
+	fmt.Printf("\n✓ Conductor server updated successfully\n")
+	fmt.Println("Run 'conductor server start' to start the updated server")
+
+	return nil
+}
+
 func init() {
 	// Start command flags
 	serverStartCmd.Flags().Int("port", defaultPort, "Port to run the server on")
@@ -690,11 +914,18 @@ func init() {
 	serverLogsCmd.Flags().BoolP("follow", "f", false, "Follow log output (like tail -f)")
 	serverLogsCmd.Flags().IntP("lines", "n", 50, "Number of lines to show")
 
+	// Update command flags
+	serverUpdateCmd.Flags().String("version", "latest", "Server version to update (e.g., 'latest', '3.21.23')")
+	serverUpdateCmd.Flags().Bool("oss", false, "Use open-source Conductor server (default)")
+	serverUpdateCmd.Flags().Bool("orkes", false, "Use Orkes Conductor server (coming soon)")
+	serverUpdateCmd.MarkFlagsMutuallyExclusive("oss", "orkes")
+
 	// Add subcommands
 	serverCmd.AddCommand(serverStartCmd)
 	serverCmd.AddCommand(serverStopCmd)
 	serverCmd.AddCommand(serverStatusCmd)
 	serverCmd.AddCommand(serverLogsCmd)
+	serverCmd.AddCommand(serverUpdateCmd)
 
 	// Add to root
 	rootCmd.AddCommand(serverCmd)

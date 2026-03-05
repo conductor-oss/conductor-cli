@@ -3,24 +3,35 @@
 # E2E tests for schedule commands
 # Tests schedule create, list, get, and delete functionality
 
-setup() {
+setup_file() {
     # Ensure the CLI binary exists
     if [ ! -f "./conductor" ]; then
         echo "ERROR: conductor binary not found. Please build it first."
         exit 1
     fi
 
-    # Clean up any existing test schedules
+    # Clean up any existing test schedules from previous runs
     ./conductor schedule delete e2e_test_schedule -y 2>/dev/null || true
     ./conductor schedule delete e2e_test_schedule_2 -y 2>/dev/null || true
     ./conductor schedule delete e2e_test_paused -y 2>/dev/null || true
 }
 
-teardown() {
-    # Clean up test schedules after each test
+teardown_file() {
+    # Clean up test schedules after all tests
     ./conductor schedule delete e2e_test_schedule -y 2>/dev/null || true
     ./conductor schedule delete e2e_test_schedule_2 -y 2>/dev/null || true
     ./conductor schedule delete e2e_test_paused -y 2>/dev/null || true
+}
+
+# Helper: ensure a schedule exists, creating it if needed
+ensure_schedule() {
+    local name="$1"
+    local cron="${2:-0 0 * ? * *}"
+    local workflow="${3:-hello_world}"
+    if ./conductor schedule get "$name" >/dev/null 2>&1; then
+        return 0
+    fi
+    ./conductor schedule create -n "$name" -c "$cron" -w "$workflow"
 }
 
 @test "1. Create schedule with flags" {
@@ -30,8 +41,8 @@ teardown() {
 }
 
 @test "2. List schedules shows created schedule" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # List and verify it appears
     run bash -c "./conductor schedule list 2>/dev/null"
@@ -41,8 +52,8 @@ teardown() {
 }
 
 @test "3. List with csv flag shows schedule name and cron expression" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # List with csv flag
     run bash -c "./conductor schedule list --csv 2>/dev/null"
@@ -53,8 +64,8 @@ teardown() {
 }
 
 @test "4. Get schedule returns full details" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Get schedule details
     run bash -c "./conductor schedule get e2e_test_schedule 2>/dev/null"
@@ -68,6 +79,7 @@ teardown() {
 }
 
 @test "5. Create schedule with input JSON" {
+    ./conductor schedule delete e2e_test_schedule_2 -y 2>/dev/null || true
     run bash -c "./conductor schedule create -n e2e_test_schedule_2 -c '0 0 * ? * *' -w hello_world -i '{\"key\":\"value\"}' 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -79,6 +91,7 @@ teardown() {
 }
 
 @test "6. Create paused schedule" {
+    ./conductor schedule delete e2e_test_paused -y 2>/dev/null || true
     run bash -c "./conductor schedule create -n e2e_test_paused -c '0 0 * ? * *' -w hello_world -p 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -89,8 +102,8 @@ teardown() {
 }
 
 @test "7. Delete schedule removes it" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Verify it exists
     run bash -c "./conductor schedule get e2e_test_schedule 2>/dev/null"
@@ -137,8 +150,8 @@ teardown() {
 }
 
 @test "12. Create duplicate schedule shows error" {
-    # Create first schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Try to create duplicate
     run bash -c "./conductor schedule create -n e2e_test_schedule -c '0 0 * ? * *' -w hello_world 2>&1"
@@ -148,8 +161,8 @@ teardown() {
 }
 
 @test "13. Update existing schedule" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Update with new cron expression
     run bash -c "./conductor schedule update -n e2e_test_schedule -c '0 0 12 ? * *' -w hello_world 2>&1"
@@ -169,8 +182,8 @@ teardown() {
 }
 
 @test "15. Pause schedule" {
-    # Create active schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Pause it
     run bash -c "./conductor schedule pause e2e_test_schedule 2>&1"
@@ -183,8 +196,9 @@ teardown() {
 }
 
 @test "16. Resume schedule" {
-    # Create paused schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world -p 2>/dev/null
+    # Ensure schedule exists and is paused
+    ensure_schedule e2e_test_schedule
+    ./conductor schedule pause e2e_test_schedule 2>/dev/null || true
 
     # Resume it
     run bash -c "./conductor schedule resume e2e_test_schedule 2>&1"
@@ -197,6 +211,7 @@ teardown() {
 }
 
 @test "17. Create schedule with workflow version" {
+    ./conductor schedule delete e2e_test_schedule -y 2>/dev/null || true
     run bash -c "./conductor schedule create -n e2e_test_schedule -c '0 0 * ? * *' -w hello_world --version 1 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -207,6 +222,7 @@ teardown() {
 }
 
 @test "18. Create schedule with invalid JSON input shows error" {
+    ./conductor schedule delete e2e_test_schedule -y 2>/dev/null || true
     run bash -c "./conductor schedule create -n e2e_test_schedule -c '0 0 * ? * *' -w hello_world -i 'not-json' 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
@@ -214,8 +230,8 @@ teardown() {
 }
 
 @test "19. List schedules with JSON flag shows full details" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     run bash -c "./conductor schedule list --json 2>/dev/null | jq '.[] | select(.name == \"e2e_test_schedule\")'"
     echo "Output: $output"
@@ -225,9 +241,9 @@ teardown() {
 }
 
 @test "20. Get multiple schedules at once" {
-    # Create two schedules
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
-    ./conductor schedule create -n e2e_test_schedule_2 -c "0 0 12 ? * *" -w hello_world 2>/dev/null
+    # Ensure both schedules exist
+    ensure_schedule e2e_test_schedule
+    ensure_schedule e2e_test_schedule_2 "0 0 12 ? * *"
 
     # Get both at once
     run bash -c "./conductor schedule get e2e_test_schedule e2e_test_schedule_2 2>/dev/null"
@@ -238,8 +254,8 @@ teardown() {
 }
 
 @test "21. Delete without -y flag prompts for confirmation" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Try to delete without -y flag (should prompt and timeout in test)
     run bash -c "echo 'n' | timeout 2 ./conductor schedule delete e2e_test_schedule 2>&1"
@@ -249,8 +265,8 @@ teardown() {
 }
 
 @test "22. Delete with -y flag skips confirmation" {
-    # Create schedule
-    ./conductor schedule create -n e2e_test_schedule -c "0 0 * ? * *" -w hello_world 2>/dev/null
+    # Ensure schedule exists
+    ensure_schedule e2e_test_schedule
 
     # Delete with -y flag (no prompt)
     run bash -c "./conductor schedule delete e2e_test_schedule -y 2>&1"

@@ -12,40 +12,8 @@ Show support for the Conductor OSS.  Please help spread the awareness by starrin
 
 [![GitHub stars](https://img.shields.io/github/stars/conductor-oss/conductor.svg?style=social&label=Star&maxAge=)](https://GitHub.com/conductor-oss/conductor/)
 
+
 ## Installation
-
-### Using Homebrew (macOS/Linux)
-
-**First time installation:**
-```bash
-# Add the Conductor tap (one-time setup)
-brew tap conductor-oss/conductor
-
-# Install the CLI
-brew install conductor
-```
-
-Or install directly in one line:
-```bash
-brew install conductor-oss/conductor/conductor
-```
-
-**After tapping, future updates are simple:**
-```bash
-brew upgrade conductor
-```
-
-<details>
-<summary><b>Migrating from old tap (conductor-tools)?</b></summary>
-
-If you previously installed from `conductor-oss/conductor-tools`, migrate to the new tap:
-
-```bash
-brew uninstall conductor
-brew untap conductor-oss/conductor-tools
-brew install conductor-oss/conductor/conductor
-```
-</details>
 
 ### Using npm
 
@@ -71,12 +39,46 @@ This will automatically:
 - Install to `/usr/local/bin`
 - Verify the installation
 
-### Custom Installation Directory
-
-To install to a custom directory:
+_Custom Installation Directory:_
 
 ```bash
 INSTALL_DIR=$HOME/.local/bin curl -fsSL https://raw.githubusercontent.com/conductor-oss/conductor-cli/main/install.sh | sh
+```
+
+### Quick Install (Windows)
+
+**PowerShell (one-liner):**
+
+```powershell
+irm https://raw.githubusercontent.com/conductor-oss/conductor-cli/main/install.ps1 | iex
+```
+
+**Command Prompt (cmd):**
+
+```cmd
+powershell -Command "irm https://raw.githubusercontent.com/conductor-oss/conductor-cli/main/install.ps1 | iex"
+```
+
+After installation, restart your terminal and verify:
+```
+conductor --version
+```
+
+
+### Using Homebrew (macOS/Linux)
+
+**First time installation:**
+```bash
+# Add the Conductor tap (one-time setup)
+brew tap conductor-oss/conductor
+
+# Install the CLI
+brew install conductor
+```
+
+Or install directly in one line:
+```bash
+brew install conductor-oss/conductor/conductor
 ```
 
 ### Manual Installation
@@ -141,7 +143,54 @@ After installing, you'll get tab completion when typing `conductor <TAB>`.
 
 ---
 
-## Command Reference
+# Usage Guide
+<!-- TOC -->
+* [CLI for Conductor](#cli-for-conductor)
+  * [⭐ Conductor OSS](#-conductor-oss)
+  * [Installation](#installation)
+    * [Using npm](#using-npm)
+    * [Quick Install (macOS/Linux)](#quick-install--macoslinux-)
+    * [Quick Install (Windows)](#quick-install--windows-)
+    * [Using Homebrew (macOS/Linux)](#using-homebrew--macoslinux-)
+    * [Manual Installation](#manual-installation)
+    * [Verify Installation](#verify-installation)
+    * [Shell Completion](#shell-completion)
+* [Usage Guide](#usage-guide)
+    * [Global Flags](#global-flags)
+    * [Workflow Commands](#workflow-commands)
+    * [Task Commands](#task-commands)
+    * [Schedule Commands](#schedule-commands)
+    * [Secret Commands](#secret-commands)
+    * [Webhook Commands](#webhook-commands)
+    * [API Gateway Commands](#api-gateway-commands)
+      * [Service Management](#service-management)
+      * [Auth Configuration Management](#auth-configuration-management)
+      * [Route Management](#route-management)
+    * [Server Commands](#server-commands)
+    * [Worker Commands](#worker-commands)
+    * [Config Commands](#config-commands)
+    * [Other Commands](#other-commands)
+  * [Configuration](#configuration)
+    * [Server Types](#server-types)
+    * [Saving Your Configuration](#saving-your-configuration)
+    * [Using Profiles for Multiple Environments](#using-profiles-for-multiple-environments)
+    * [Configuration Precedence](#configuration-precedence)
+    * [Command-line Flags](#command-line-flags)
+    * [Environment Variables](#environment-variables)
+      * [Disabling Colored Output](#disabling-colored-output)
+    * [Configuration File Format](#configuration-file-format)
+  * [Workers](#workers)
+    * [Stdio Workers](#stdio-workers)
+    * [JavaScript Workers (Built-in)](#javascript-workers--built-in-)
+    * [Remote Workers (Registry-based)](#remote-workers--registry-based-)
+  * [Exit Codes](#exit-codes)
+  * [Error Handling](#error-handling)
+    * [Connection Errors](#connection-errors)
+    * [Authentication Errors](#authentication-errors)
+    * [Resource Not Found](#resource-not-found)
+    * [Profile Not Found](#profile-not-found)
+  * [For AI Assistants & LLMs](#for-ai-assistants--llms)
+<!-- TOC -->
 
 ### Global Flags
 
@@ -167,28 +216,32 @@ These flags can be used with any command:
 
 Manage workflow definitions and executions.
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `workflow` | `list` | `--json`, `--csv` | List all workflow definitions | `conductor workflow list` |
-| `workflow` | `get` | `<name> [version]` | Get workflow definition | `conductor workflow get my_workflow` |
-| `workflow` | `get_all` | | Get all workflow definitions (JSON) | `conductor workflow get_all` |
-| `workflow` | `create` | `<file>`, `--force`, `--js` | Create/register a workflow | `conductor workflow create flow.json --force` |
-| `workflow` | `update` | `<file>` | Update a workflow definition | `conductor workflow update flow.json` |
-| `workflow` | `delete` | `<name> <version>` | Delete a workflow definition | `conductor workflow delete my_workflow 1` |
-| `workflow` | `start` | `-w`, `-i`, `-f`, `--version`, `--correlation`, `--sync`, `-u` | Start workflow execution | `conductor workflow start -w my_workflow -i '{"key":"value"}'` |
-| `workflow` | `search` | `-w`, `-s`, `-c`, `--start-time-after`, `--start-time-before`, `--json`, `--csv` | Search workflow executions | `conductor workflow search -w my_workflow -s FAILED` |
-| `workflow` | `status` | `<workflow_id>` | Get workflow execution status | `conductor workflow status abc-123` |
-| `workflow` | `get-execution` | `<workflow_id>`, `-c` | Get full execution details | `conductor workflow get-execution abc-123` |
-| `workflow` | `terminate` | `<workflow_id>` | Terminate a running execution | `conductor workflow terminate abc-123` |
-| `workflow` | `pause` | `<workflow_id>` | Pause a running execution | `conductor workflow pause abc-123` |
-| `workflow` | `resume` | `<workflow_id>` | Resume a paused execution | `conductor workflow resume abc-123` |
-| `workflow` | `restart` | `<workflow_id>`, `--use-latest` | Restart a completed workflow | `conductor workflow restart abc-123` |
-| `workflow` | `retry` | `<workflow_id>`, `--resume-subworkflow-tasks` | Retry the last failed task | `conductor workflow retry abc-123` |
-| `workflow` | `rerun` | `<workflow_id>`, `--task-id`, `--task-input`, `--workflow-input` | Rerun from a specific task | `conductor workflow rerun abc-123 --task-id task1` |
-| `workflow` | `skip-task` | `<workflow_id> <task_ref>`, `--task-input`, `--task-output` | Skip a task | `conductor workflow skip-task abc-123 task1` |
-| `workflow` | `jump` | `<workflow_id> <task_ref>`, `--task-input` | Jump to a specific task | `conductor workflow jump abc-123 task2` |
-| `workflow` | `delete-execution` | `<workflow_id>`, `-a` | Delete a workflow execution | `conductor workflow delete-execution abc-123` |
-| `workflow` | `update-state` | `<workflow_id>`, `--variables`, `--task-updates` | Update workflow state | `conductor workflow update-state abc-123 --variables '{"x":1}'` |
+```
+conductor workflow <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all workflow definitions (`--json`, `--csv`) |
+| `get <name> [version]` | Get workflow definition |
+| `get_all` | Get all workflow definitions (JSON) |
+| `create <file>` | Create/register a workflow (`--force` to overwrite, `--js` for JavaScript) |
+| `update <file>` | Update a workflow definition |
+| `delete <name> <version>` | Delete a workflow definition |
+| `start` | Start workflow execution (see options below) |
+| `search` | Search workflow executions (see options below) |
+| `status <workflow_id>` | Get workflow execution status |
+| `get-execution <workflow_id>` | Get full execution details (`-c` for complete) |
+| `terminate <workflow_id>` | Terminate a running execution |
+| `pause <workflow_id>` | Pause a running execution |
+| `resume <workflow_id>` | Resume a paused execution |
+| `restart <workflow_id>` | Restart a completed workflow (`--use-latest`) |
+| `retry <workflow_id>` | Retry the last failed task (`--resume-subworkflow-tasks`) |
+| `rerun <workflow_id>` | Rerun from a specific task (`--task-id`, `--task-input`, `--workflow-input`) |
+| `skip-task <workflow_id> <task_ref>` | Skip a task (`--task-input`, `--task-output`) |
+| `jump <workflow_id> <task_ref>` | Jump to a specific task (`--task-input`) |
+| `delete-execution <workflow_id>` | Delete a workflow execution (`-a` to archive) |
+| `update-state <workflow_id>` | Update workflow state (`--variables`, `--task-updates`) |
 
 **Workflow Start Options:**
 - `-w, --workflow` - Workflow name (required)
@@ -212,18 +265,22 @@ Manage workflow definitions and executions.
 
 Manage task definitions and executions.
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `task` | `list` | `--json`, `--csv` | List all task definitions | `conductor task list` |
-| `task` | `get` | `<task_type>` | Get task definition | `conductor task get my_task` |
-| `task` | `get_all` | | Get all task definitions (JSON) | `conductor task get_all` |
-| `task` | `create` | `<file>` | Create a task definition | `conductor task create task.json` |
-| `task` | `update` | `<file>` | Update a task definition | `conductor task update task.json` |
-| `task` | `delete` | `<task_type>` | Delete a task definition | `conductor task delete my_task` |
-| `task` | `poll` | `<task_type>`, `--count`, `--worker-id`, `--domain`, `--timeout` | Batch poll for tasks | `conductor task poll my_task --count 5` |
-| `task` | `update-execution` | `--workflow-id`, `--task-ref-name`, `--status`, `--output` | Update task by reference | `conductor task update-execution --workflow-id abc --task-ref-name t1 --status COMPLETED` |
-| `task` | `signal` | `--workflow-id`, `--status`, `--output` | Signal a task (async) | `conductor task signal --workflow-id abc --status COMPLETED` |
-| `task` | `signal-sync` | `--workflow-id`, `--status`, `--output` | Signal a task (sync) | `conductor task signal-sync --workflow-id abc --status COMPLETED` |
+```
+conductor task <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all task definitions (`--json`, `--csv`) |
+| `get <task_type>` | Get task definition |
+| `get_all` | Get all task definitions (JSON) |
+| `create <file>` | Create a task definition |
+| `update <file>` | Update a task definition |
+| `delete <task_type>` | Delete a task definition |
+| `poll <task_type>` | Batch poll for tasks (`--count`, `--worker-id`, `--domain`, `--timeout`) |
+| `update-execution` | Update task by reference (`--workflow-id`, `--task-ref-name`, `--status`, `--output`) |
+| `signal` | Signal a task async (`--workflow-id`, `--status`, `--output`) |
+| `signal-sync` | Signal a task sync (`--workflow-id`, `--status`, `--output`) |
 
 ---
 
@@ -231,16 +288,20 @@ Manage task definitions and executions.
 
 Manage workflow schedules (Enterprise only).
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `schedule` | `list` | `--json`, `--csv` | List all schedules | `conductor schedule list` |
-| `schedule` | `get` | `<name>` | Get schedule details | `conductor schedule get my_schedule` |
-| `schedule` | `create` | `<file>` or `-n`, `-c`, `-w`, `-i`, `-p` | Create a schedule | `conductor schedule create -n daily -c "0 0 * * *" -w my_workflow` |
-| `schedule` | `update` | `<file>` or flags | Update a schedule | `conductor schedule update schedule.json` |
-| `schedule` | `delete` | `<name>` | Delete a schedule | `conductor schedule delete my_schedule` |
-| `schedule` | `pause` | `<name>` | Pause a schedule | `conductor schedule pause my_schedule` |
-| `schedule` | `resume` | `<name>` | Resume a schedule | `conductor schedule resume my_schedule` |
-| `schedule` | `search` | `-c`, `-s` | Search schedule executions | `conductor schedule search -s FAILED` |
+```
+conductor schedule <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all schedules (`--json`, `--csv`) |
+| `get <name>` | Get schedule details |
+| `create` | Create a schedule (see options below) |
+| `update <file>` | Update a schedule |
+| `delete <name>` | Delete a schedule |
+| `pause <name>` | Pause a schedule |
+| `resume <name>` | Resume a schedule |
+| `search` | Search schedule executions (`-c`, `-s`) |
 
 **Schedule Create Options:**
 - `-n, --name` - Schedule name (required)
@@ -256,17 +317,21 @@ Manage workflow schedules (Enterprise only).
 
 Manage secrets (Enterprise only).
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `secret` | `list` | `--with-tags`, `--json`, `--csv` | List all secrets | `conductor secret list` |
-| `secret` | `get` | `<key>`, `--show-value` | Get a secret | `conductor secret get db_password --show-value` |
-| `secret` | `put` | `<key> [value]`, `--value` | Create/update a secret | `conductor secret put db_password mySecret` |
-| `secret` | `delete` | `<key>`, `-y` | Delete a secret | `conductor secret delete db_password -y` |
-| `secret` | `exists` | `<key>` | Check if secret exists | `conductor secret exists db_password` |
-| `secret` | `tag-list` | `<key>`, `--json`, `--csv` | List tags for a secret | `conductor secret tag-list db_password` |
-| `secret` | `tag-add` | `<key>`, `--tag` | Add tags to a secret | `conductor secret tag-add db_password --tag env:prod` |
-| `secret` | `tag-delete` | `<key>`, `--tag` | Remove tags from a secret | `conductor secret tag-delete db_password --tag env:prod` |
-| `secret` | `cache-clear` | `--local`, `--redis` | Clear secrets cache | `conductor secret cache-clear` |
+```
+conductor secret <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all secrets (`--with-tags`, `--json`, `--csv`) |
+| `get <key>` | Get a secret (`--show-value` to display value) |
+| `put <key> [value]` | Create/update a secret (`--value` flag alternative) |
+| `delete <key>` | Delete a secret (`-y` to skip confirmation) |
+| `exists <key>` | Check if secret exists |
+| `tag-list <key>` | List tags for a secret (`--json`, `--csv`) |
+| `tag-add <key>` | Add tags to a secret (`--tag key:value`, repeatable) |
+| `tag-delete <key>` | Remove tags from a secret (`--tag key:value`, repeatable) |
+| `cache-clear` | Clear secrets cache (`--local`, `--redis`) |
 
 **Secret Put Methods:**
 ```bash
@@ -289,13 +354,17 @@ cat secret.txt | conductor secret put my_secret
 
 Manage webhooks (Enterprise only).
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `webhook` | `list` | `--json`, `--csv` | List all webhooks | `conductor webhook list` |
-| `webhook` | `get` | `<webhook_id>` | Get webhook details | `conductor webhook get my_webhook` |
-| `webhook` | `create` | `<file>` or flags | Create a webhook | `conductor webhook create webhook.json` |
-| `webhook` | `update` | `<webhook_id>`, `--file` | Update a webhook | `conductor webhook update id --file webhook.json` |
-| `webhook` | `delete` | `<webhook_id>` | Delete a webhook | `conductor webhook delete my_webhook` |
+```
+conductor webhook <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all webhooks (`--json`, `--csv`) |
+| `get <webhook_id>` | Get webhook details |
+| `create` | Create a webhook (from file or flags) |
+| `update <webhook_id>` | Update a webhook (`--file`) |
+| `delete <webhook_id>` | Delete a webhook |
 
 **Webhook Create Options:**
 - `--name` - Webhook name
@@ -312,13 +381,17 @@ Manage API Gateway services, routes, and authentication (Enterprise only).
 
 #### Service Management
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `api-gateway service` | `list` | `--json` | List all services | `conductor api-gateway service list` |
-| `api-gateway service` | `get` | `<service_id>` | Get service details | `conductor api-gateway service get my-service` |
-| `api-gateway service` | `create` | `<file>` or flags | Create a service | `conductor api-gateway service create service.json` |
-| `api-gateway service` | `update` | `<service_id> <file>` | Update a service | `conductor api-gateway service update my-service service.json` |
-| `api-gateway service` | `delete` | `<service_id>` | Delete a service | `conductor api-gateway service delete my-service` |
+```
+conductor api-gateway service <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List all services (`--json`) |
+| `get <service_id>` | Get service details |
+| `create` | Create a service (from file or flags, see options below) |
+| `update <service_id> <file>` | Update a service |
+| `delete <service_id>` | Delete a service |
 
 **Service Create Options:**
 - `--service-id` - Service ID
@@ -334,13 +407,17 @@ Manage API Gateway services, routes, and authentication (Enterprise only).
 
 #### Auth Configuration Management
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `api-gateway auth` | `list` | `--json` | List auth configs | `conductor api-gateway auth list` |
-| `api-gateway auth` | `get` | `<auth_config_id>` | Get auth config | `conductor api-gateway auth get token-based` |
-| `api-gateway auth` | `create` | `<file>` or flags | Create auth config | `conductor api-gateway auth create auth.json` |
-| `api-gateway auth` | `update` | `<auth_config_id> <file>` | Update auth config | `conductor api-gateway auth update token-based auth.json` |
-| `api-gateway auth` | `delete` | `<auth_config_id>` | Delete auth config | `conductor api-gateway auth delete token-based` |
+```
+conductor api-gateway auth <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list` | List auth configs (`--json`) |
+| `get <auth_config_id>` | Get auth config |
+| `create` | Create auth config (from file or flags, see options below) |
+| `update <auth_config_id> <file>` | Update auth config |
+| `delete <auth_config_id>` | Delete auth config |
 
 **Auth Create Options:**
 - `--auth-config-id` - Auth config ID
@@ -350,12 +427,16 @@ Manage API Gateway services, routes, and authentication (Enterprise only).
 
 #### Route Management
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `api-gateway route` | `list` | `<service_id>`, `--json` | List routes | `conductor api-gateway route list my-service` |
-| `api-gateway route` | `create` | `<service_id>` `<file>` or flags | Create a route | `conductor api-gateway route create my-service route.json` |
-| `api-gateway route` | `update` | `<service_id> <path> <file>` | Update a route | `conductor api-gateway route update my-service /users route.json` |
-| `api-gateway route` | `delete` | `<service_id> <method> <path>` | Delete a route | `conductor api-gateway route delete my-service GET /users` |
+```
+conductor api-gateway route <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `list <service_id>` | List routes (`--json`) |
+| `create <service_id>` | Create a route (from file or flags, see options below) |
+| `update <service_id> <path> <file>` | Update a route |
+| `delete <service_id> <method> <path>` | Delete a route |
 
 **Route Create Options:**
 - `--http-method` - HTTP method: `GET`, `POST`, `PUT`, `DELETE`, etc.
@@ -373,12 +454,16 @@ Manage API Gateway services, routes, and authentication (Enterprise only).
 
 Manage a local Conductor server for development.
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `server` | `start` | `--port`, `--version`, `--oss`, `--orkes`, `-f` | Start local server | `conductor server start` |
-| `server` | `stop` | | Stop local server | `conductor server stop` |
-| `server` | `status` | | Check server status | `conductor server status` |
-| `server` | `logs` | `-f`, `-n` | Show server logs | `conductor server logs -f` |
+```
+conductor server <command> [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `start` | Start local server (`--port`, `--version`, `--oss`, `--orkes`, `-f`) |
+| `stop` | Stop local server |
+| `status` | Check server status |
+| `logs` | Show server logs (`-f` to follow, `-n` for line count) |
 
 **Server Start Options:**
 - `--port` - Port to run on (default: 8080)
@@ -408,12 +493,16 @@ conductor server logs -f -n 100
 
 Run task workers (Experimental).
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `worker` | `stdio` | `--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose` | Run stdio worker | `conductor worker stdio --type my_task python worker.py` |
-| `worker` | `js` | `--type`, `--count`, `--worker-id`, `--domain`, `--timeout` | Run JavaScript worker | `conductor worker js --type my_task worker.js` |
-| `worker` | `remote` | `--type`, `--count`, `--worker-id`, `--domain`, `--refresh` | Run remote worker | `conductor worker remote --type my_task` |
-| `worker` | `list-remote` | `--namespace` | List remote workers | `conductor worker list-remote` |
+```
+conductor worker <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `stdio <program> [args...]` | Run stdio worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose`) |
+| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--timeout`) |
+| `remote` | Run remote worker (`--type`, `--count`, `--worker-id`, `--domain`, `--refresh`) |
+| `list-remote` | List remote workers (`--namespace`) |
 
 **Worker Options:**
 - `--type` - Task type to poll for (required)
@@ -431,21 +520,25 @@ Run task workers (Experimental).
 
 Manage CLI configuration.
 
-| Command | Sub-command | Options | Description | Example |
-|---------|-------------|---------|-------------|---------|
-| `config` | `save` | `--profile` | Save configuration (interactive) | `conductor config save` |
-| `config` | `list` | | List all profiles | `conductor config list` |
-| `config` | `delete` | `[profile]`, `--profile`, `-y` | Delete a profile | `conductor config delete production -y` |
+```
+conductor config <command> [arguments] [flags]
+```
+
+| Command | Description |
+|---------|-------------|
+| `save` | Save configuration interactively (`--profile` for named profile) |
+| `list` | List all profiles |
+| `delete [profile]` | Delete a profile (`-y` to skip confirmation) |
 
 ---
 
 ### Other Commands
 
-| Command | Description | Example |
-|---------|-------------|---------|
-| `update` | Update CLI to latest version | `conductor update` |
-| `whoami` | Display current user info | `conductor whoami` |
-| `completion` | Generate shell completion script | `conductor completion zsh` |
+| Command | Description |
+|---------|-------------|
+| `update` | Update CLI to latest version |
+| `whoami` | Display current user info |
+| `completion <shell>` | Generate shell completion script (`bash`, `zsh`, `fish`, `powershell`) |
 
 ---
 
@@ -515,25 +608,9 @@ conductor config save
 # Auth Token [****]: ← Press Enter to keep or enter new token
 ```
 
-**Non-Interactive (Legacy):**
-
-You can still save configuration non-interactively by providing flags:
-
-```bash
-# Enterprise with auth token (default server type)
-conductor --server https://developer.conductorcloud.com --auth-token your-token config save
-
-# Enterprise with API key + secret
-conductor --server https://developer.conductorcloud.com --auth-key your-key --auth-secret your-secret config save
-
-# OSS Conductor
-conductor --server http://localhost:8080/api --server-type OSS config save
-```
-
 Once saved, you can run commands without providing flags:
 
 ```bash
-# After saving config, simply run:
 conductor workflow list
 ```
 

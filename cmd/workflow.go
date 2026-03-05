@@ -39,7 +39,7 @@ import (
 	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/require"
 	"github.com/google/uuid"
-	"github.com/orkes-io/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

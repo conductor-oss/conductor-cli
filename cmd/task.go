@@ -25,7 +25,7 @@ import (
 	"github.com/antihax/optional"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	"github.com/conductor-sdk/conductor-go/sdk/model"
-	"github.com/orkes-io/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal"
 	"github.com/spf13/cobra"
 )
 

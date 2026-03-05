@@ -16,7 +16,7 @@ package main
 
 import (
 	"context"
-	"github.com/orkes-io/conductor-cli/cmd"
+	"github.com/conductor-oss/conductor-cli/cmd"
 )
 
 func main() {

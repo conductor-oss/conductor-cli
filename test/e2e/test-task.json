@@ -1,0 +1,11 @@
+[
+  {
+    "name": "cli_e2e_test_task",
+    "description": "E2E test task definition",
+    "retryCount": 3,
+    "timeoutSeconds": 300,
+    "responseTimeoutSeconds": 120,
+    "timeoutPolicy": "TIME_OUT_WF",
+    "ownerEmail": "test@example.com"
+  }
+]

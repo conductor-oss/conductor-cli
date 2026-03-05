@@ -39,7 +39,7 @@ import (
 	"github.com/conductor-sdk/conductor-go/sdk/model"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	"github.com/dop251/goja"
-	"github.com/orkes-io/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

@@ -31,7 +31,7 @@ jobs:
         VERSION="${{ steps.get_version.outputs.VERSION }}"
         COMMIT="${GITHUB_SHA}"
         DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        LDFLAGS="-X github.com/orkes-io/conductor-cli/cmd.Version=${VERSION} -X github.com/orkes-io/conductor-cli/cmd.Commit=${COMMIT} -X github.com/orkes-io/conductor-cli/cmd.Date=${DATE}"
+        LDFLAGS="-X github.com/conductor-oss/conductor-cli/cmd.Version=${VERSION} -X github.com/conductor-oss/conductor-cli/cmd.Commit=${COMMIT} -X github.com/conductor-oss/conductor-cli/cmd.Date=${DATE}"
 
         # Create dist directory
         mkdir -p dist

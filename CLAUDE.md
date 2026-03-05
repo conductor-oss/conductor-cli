@@ -128,6 +128,8 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 
 ### Webhook Commands
 
+> **Note:** Webhook commands are only available with Orkes Conductor (Enterprise).
+
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | `webhook list` | List webhooks | None | `--json` | `conductor webhook list` |
@@ -143,6 +145,8 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 Columns: NAME, WEBHOOK ID, WORKFLOWS, URL
 
 ### Schedule Commands
+
+> **Note:** Schedule commands are only available with Orkes Conductor (Enterprise).
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
@@ -160,6 +164,8 @@ Columns: NAME, WEBHOOK ID, WORKFLOWS, URL
 Columns: NAME, WORKFLOW, STATUS, CREATED TIME
 
 ### Secret Commands
+
+> **Note:** Secret commands are only available with Orkes Conductor (Enterprise).
 
 Secret management for storing and managing sensitive configuration values like API keys, passwords, and tokens.
 
@@ -216,6 +222,8 @@ cat secret.txt | conductor secret put my_secret
 ```
 
 ### API Gateway Commands
+
+> **Note:** API Gateway commands are only available with Orkes Conductor (Enterprise).
 
 API Gateway allows exposing Conductor workflows as REST APIs with authentication, CORS configuration, and route management.
 

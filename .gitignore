@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Built binary
+conductor
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -22,3 +25,4 @@ go.work
 .DS_Store
 .idea/
 conductorosstest.db
+conductor-cli
