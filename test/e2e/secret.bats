@@ -7,22 +7,32 @@ SECRET_KEY_2="e2e_test_secret_2"
 SECRET_VALUE="test_secret_value_12345"
 SECRET_VALUE_UPDATED="updated_secret_value_67890"
 
-setup() {
+setup_file() {
     # Ensure the CLI binary exists
     if [ ! -f "./conductor" ]; then
         echo "ERROR: conductor binary not found. Please build it first."
         exit 1
     fi
 
-    # Clean up any existing test secrets
+    # Clean up any existing test secrets from previous runs
     ./conductor secret delete "$SECRET_KEY" -y 2>/dev/null || true
     ./conductor secret delete "$SECRET_KEY_2" -y 2>/dev/null || true
 }
 
-teardown() {
-    # Clean up test secrets after each test
+teardown_file() {
+    # Clean up test secrets after all tests
     ./conductor secret delete "$SECRET_KEY" -y 2>/dev/null || true
     ./conductor secret delete "$SECRET_KEY_2" -y 2>/dev/null || true
+}
+
+# Helper: ensure a secret exists, creating it if needed
+ensure_secret() {
+    local key="$1"
+    local value="$2"
+    if ./conductor secret get "$key" >/dev/null 2>&1; then
+        return 0
+    fi
+    ./conductor secret put "$key" "$value"
 }
 
 @test "1. Create secret using command arguments" {
@@ -33,8 +43,8 @@ teardown() {
 }
 
 @test "2. Check if secret exists" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # Check if it exists
     run bash -c "./conductor secret exists '$SECRET_KEY' 2>&1"
@@ -44,8 +54,8 @@ teardown() {
 }
 
 @test "3. Get secret value (without --show-value flag)" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # Get without showing value
     run bash -c "./conductor secret get '$SECRET_KEY' 2>&1"
@@ -57,8 +67,8 @@ teardown() {
 }
 
 @test "4. Get secret value (with --show-value flag)" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # Get with showing value
     run bash -c "./conductor secret get '$SECRET_KEY' --show-value 2>&1"
@@ -69,8 +79,8 @@ teardown() {
 }
 
 @test "5. Update secret with new value" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # Update with new value
     run bash -c "./conductor secret put '$SECRET_KEY' '$SECRET_VALUE_UPDATED' 2>&1"
@@ -86,6 +96,7 @@ teardown() {
 }
 
 @test "6. Create secret using --value flag" {
+    ./conductor secret delete "$SECRET_KEY_2" -y 2>/dev/null || true
     run bash -c "./conductor secret put '$SECRET_KEY_2' --value '$SECRET_VALUE' 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -108,8 +119,8 @@ teardown() {
 }
 
 @test "8. List secrets (should include created secret)" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # List secrets
     run bash -c "./conductor secret list 2>&1"
@@ -119,8 +130,8 @@ teardown() {
 }
 
 @test "9. List secrets with JSON output" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # List with JSON
     run bash -c "./conductor secret list --json 2>&1"
@@ -130,8 +141,8 @@ teardown() {
 }
 
 @test "10. Add tags to secret" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # Add tags
     run bash -c "./conductor secret tag-add '$SECRET_KEY' --tag env:test --tag team:e2e 2>&1"
@@ -141,9 +152,9 @@ teardown() {
 }
 
 @test "11. List tags for secret" {
-    # Create secret and add tags
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
-    ./conductor secret tag-add "$SECRET_KEY" --tag env:test --tag team:e2e 2>/dev/null
+    # Ensure secret exists and has tags
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
+    ./conductor secret tag-add "$SECRET_KEY" --tag env:test --tag team:e2e 2>/dev/null || true
 
     # List tags
     run bash -c "./conductor secret tag-list '$SECRET_KEY' 2>&1"
@@ -156,9 +167,9 @@ teardown() {
 }
 
 @test "12. List secrets with tags" {
-    # Create secret and add tags
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
-    ./conductor secret tag-add "$SECRET_KEY" --tag env:test 2>/dev/null
+    # Ensure secret exists and has tags
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
+    ./conductor secret tag-add "$SECRET_KEY" --tag env:test 2>/dev/null || true
 
     # List with tags
     run bash -c "./conductor secret list --with-tags 2>&1"
@@ -169,9 +180,9 @@ teardown() {
 }
 
 @test "13. Delete tags from secret" {
-    # Create secret and add tags
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
-    ./conductor secret tag-add "$SECRET_KEY" --tag env:test --tag team:e2e 2>/dev/null
+    # Ensure secret exists and has tags
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
+    ./conductor secret tag-add "$SECRET_KEY" --tag env:test --tag team:e2e 2>/dev/null || true
 
     # Delete one tag
     run bash -c "./conductor secret tag-delete '$SECRET_KEY' --tag env:test 2>&1"
@@ -211,8 +222,8 @@ teardown() {
 }
 
 @test "17. Delete secret" {
-    # Create secret first
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
+    # Ensure secret exists
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
 
     # Delete with -y flag to skip confirmation
     run bash -c "./conductor secret delete '$SECRET_KEY' -y 2>&1"
@@ -222,9 +233,9 @@ teardown() {
 }
 
 @test "18. Verify deleted secret no longer exists" {
-    # Create and then delete secret
-    ./conductor secret put "$SECRET_KEY" "$SECRET_VALUE" 2>/dev/null
-    ./conductor secret delete "$SECRET_KEY" -y 2>/dev/null
+    # Ensure secret exists, then delete it
+    ensure_secret "$SECRET_KEY" "$SECRET_VALUE"
+    ./conductor secret delete "$SECRET_KEY" -y
 
     # Try to get deleted secret (should fail)
     run bash -c "./conductor secret get '$SECRET_KEY' 2>&1"
