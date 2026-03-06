@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"runtime"
 	"time"
+
+	"github.com/conductor-oss/conductor-cli/internal/progress"
 )
 
 const (
@@ -181,5 +183,12 @@ func DownloadBinary(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("download failed with status %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	pr, bar := progress.NewReader(resp.Body, resp.ContentLength, "Downloading")
+	data, err := io.ReadAll(pr)
+	bar.Finish()
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

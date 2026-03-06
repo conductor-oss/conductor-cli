@@ -72,8 +72,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to download binary: %w", err)
 	}
 
-	fmt.Printf("Downloaded %d bytes\n", len(binaryData))
-
 	// Apply the update (replace current binary)
 	fmt.Println("Applying update...")
 	err = goupdater.Apply(bytes.NewReader(binaryData), goupdater.Options{})
