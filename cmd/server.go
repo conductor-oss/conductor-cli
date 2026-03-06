@@ -29,6 +29,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/conductor-oss/conductor-cli/internal/progress"
 	"github.com/spf13/cobra"
 )
 
@@ -426,42 +427,16 @@ func downloadJar(jarPath, jarURL string) error {
 		return fmt.Errorf("download failed with status: %s", resp.Status)
 	}
 
-	// Get content length for progress
-	contentLength := resp.ContentLength
-	if contentLength > 0 {
-		fmt.Printf("Size: %.1f MB\n", float64(contentLength)/1024/1024)
+	// Show size and download with progress bar
+	if resp.ContentLength > 0 {
+		fmt.Printf("Size: %s\n", progress.FormatBytes(resp.ContentLength))
 	}
 
-	// Download with progress
-	var downloaded int64
-	buf := make([]byte, 32*1024)
-	lastProgress := -1
-
-	for {
-		n, err := resp.Body.Read(buf)
-		if n > 0 {
-			_, writeErr := tmpFile.Write(buf[:n])
-			if writeErr != nil {
-				return fmt.Errorf("failed to write file: %w", writeErr)
-			}
-			downloaded += int64(n)
-
-			// Show progress
-			if contentLength > 0 {
-				progress := int(float64(downloaded) / float64(contentLength) * 100)
-				if progress != lastProgress && progress%10 == 0 {
-					fmt.Printf("Progress: %d%%\n", progress)
-					lastProgress = progress
-				}
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("download interrupted: %w", err)
-		}
+	pr, bar := progress.NewReader(resp.Body, resp.ContentLength, "Downloading")
+	if _, err := io.Copy(tmpFile, pr); err != nil {
+		return fmt.Errorf("download interrupted: %w", err)
 	}
+	bar.Finish()
 
 	// Close temp file before rename
 	tmpFile.Close()
