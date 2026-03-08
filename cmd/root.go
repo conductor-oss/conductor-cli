@@ -257,16 +257,25 @@ func initConfig() {
 		}
 	}
 
-	// Environment variable mapping
-	viper.SetEnvPrefix("CONDUCTOR")
-	viper.AutomaticEnv()
+	// Only bind environment variables when no profile is active.
+	// When a profile is explicitly selected, the profile config should take
+	// precedence over ambient environment variables. CLI flags (via BindPFlag)
+	// still override everything regardless.
+	activeProfile := profile
+	if activeProfile == "" {
+		activeProfile = os.Getenv("CONDUCTOR_PROFILE")
+	}
 
-	// Map environment variables to config keys
-	viper.BindEnv("server", "CONDUCTOR_SERVER_URL")
-	viper.BindEnv("auth-key", "CONDUCTOR_AUTH_KEY")
-	viper.BindEnv("auth-secret", "CONDUCTOR_AUTH_SECRET")
-	viper.BindEnv("auth-token", "CONDUCTOR_AUTH_TOKEN")
-	viper.BindEnv("server-type", "CONDUCTOR_SERVER_TYPE")
+	if activeProfile == "" {
+		viper.SetEnvPrefix("CONDUCTOR")
+		viper.AutomaticEnv()
+
+		viper.BindEnv("server", "CONDUCTOR_SERVER_URL")
+		viper.BindEnv("auth-key", "CONDUCTOR_AUTH_KEY")
+		viper.BindEnv("auth-secret", "CONDUCTOR_AUTH_SECRET")
+		viper.BindEnv("auth-token", "CONDUCTOR_AUTH_TOKEN")
+		viper.BindEnv("server-type", "CONDUCTOR_SERVER_TYPE")
+	}
 
 	if err := viper.ReadInConfig(); err == nil {
 		if viper.GetBool("verbose") {
