@@ -49,9 +49,9 @@ func TestGetConfigPath(t *testing.T) {
 		wantSuffix  string
 	}{
 		{
-			name:        "default profile",
+			name:        "empty profile returns error",
 			profileName: "",
-			wantSuffix:  filepath.Join(".conductor-cli", "config.yaml"),
+			wantSuffix:  "",
 		},
 		{
 			name:        "named profile",
@@ -68,6 +68,12 @@ func TestGetConfigPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := getConfigPath(tt.profileName)
+			if tt.profileName == "" {
+				if err == nil {
+					t.Fatalf("getConfigPath(%q) expected error, got path %q", tt.profileName, got)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("getConfigPath(%q) error: %v", tt.profileName, err)
 			}

@@ -26,11 +26,6 @@ func TestConfigFilePathResolution(t *testing.T) {
 		wantFile    string
 	}{
 		{
-			name:        "default profile uses config.yaml",
-			profileName: "",
-			wantFile:    "config.yaml",
-		},
-		{
 			name:        "named profile uses config-<name>.yaml",
 			profileName: "production",
 			wantFile:    "config-production.yaml",

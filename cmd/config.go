@@ -38,32 +38,38 @@ var configCmd = &cobra.Command{
 var configSaveCmd = &cobra.Command{
 	Use:   "save",
 	Short: "Save configuration to file (interactive)",
-	Long: `Interactively configure and save server and authentication settings to a configuration file.
+	Long: `Interactively configure and save server and authentication settings to a named profile.
 
-The configuration will be saved to ~/.conductor-cli/config.yaml by default,
-or to a profile-specific file if --profile is specified.
+The configuration will be saved to ~/.conductor-cli/config-<profile>.yaml.
+A profile name is required — you will be prompted if --profile is not specified.
 
 If a configuration already exists, you can press Enter to keep existing values.
 
 Examples:
-  # Interactively save to default config file
+  # Interactively save (will prompt for profile name)
   conductor config save
 
-  # Interactively save to a named profile
+  # Save to a named profile directly
   conductor config save --profile production
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		profileName := profile
 
+		if profileName == "" {
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Fprintf(os.Stdout, "Profile name: ")
+			input, _ := reader.ReadString('\n')
+			profileName = strings.TrimSpace(input)
+			if profileName == "" {
+				return fmt.Errorf("profile name is required")
+			}
+		}
+
 		if err := interactiveSaveConfig(profileName); err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		configFileName := "config.yaml"
-		if profileName != "" {
-			configFileName = fmt.Sprintf("config-%s.yaml", profileName)
-		}
-
+		configFileName := fmt.Sprintf("config-%s.yaml", profileName)
 		fmt.Fprintf(os.Stdout, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
 		return nil
 	},
@@ -75,7 +81,7 @@ var configListCmd = &cobra.Command{
 	Short: "List all configuration profiles",
 	Long: `List all configuration profiles in ~/.conductor-cli directory.
 
-Shows the default config.yaml and all named profiles (config-<profile>.yaml).
+Shows all named profiles (config-<profile>.yaml).
 
 Examples:
   # List all config profiles
@@ -137,15 +143,11 @@ Examples:
 var configDeleteCmd = &cobra.Command{
 	Use:   "delete [profile]",
 	Short: "Delete a configuration file",
-	Long: `Delete a configuration file.
+	Long: `Delete a configuration profile.
 
-If no profile is specified, the default config.yaml will be deleted.
 Profile can be specified either as a positional argument or via --profile flag.
 
 Examples:
-  # Delete default config file (requires confirmation)
-  conductor config delete
-
   # Delete a named profile using positional argument
   conductor config delete production
 
@@ -171,11 +173,11 @@ Examples:
 			profileName = profile
 		}
 
-		configFileName := "config.yaml"
-		if profileName != "" {
-			configFileName = fmt.Sprintf("config-%s.yaml", profileName)
+		if profileName == "" {
+			return fmt.Errorf("profile name is required (use positional argument or --profile flag)")
 		}
 
+		configFileName := fmt.Sprintf("config-%s.yaml", profileName)
 		configPath := filepath.Join(configDir, configFileName)
 
 		// Check if config file exists
@@ -210,6 +212,10 @@ Examples:
 }
 
 func interactiveSaveConfig(profileName string) error {
+	if profileName == "" {
+		return fmt.Errorf("profile name is required")
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -222,12 +228,7 @@ func interactiveSaveConfig(profileName string) error {
 		return err
 	}
 
-	// Determine config file name
-	configFileName := "config.yaml"
-	if profileName != "" {
-		configFileName = fmt.Sprintf("config-%s.yaml", profileName)
-	}
-
+	configFileName := fmt.Sprintf("config-%s.yaml", profileName)
 	configPath := filepath.Join(configDir, configFileName)
 
 	// Load existing config if it exists

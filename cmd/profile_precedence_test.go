@@ -65,9 +65,9 @@ func initConfigForTest(configDir string, activeProfile string) {
 
 	if activeProfile != "" {
 		viper.SetConfigName("config-" + activeProfile)
-	} else {
-		viper.SetConfigName("config")
 	}
+	// When no profile is active, no config file is loaded.
+	// The CLI relies on environment variables and CLI flags only.
 
 	// Replicate the env var binding logic from initConfig:
 	// Only bind env vars when no profile is active.
@@ -109,13 +109,13 @@ auth-token: profile-token-123
 }
 
 func TestEnvVarUsedWithoutProfile(t *testing.T) {
-	// Default config with a different server
-	defaultConfig := `server: https://default-server.example.com/api
-`
-	configDir, cleanup := setupTestConfig(t, "", defaultConfig)
-	defer cleanup()
+	configDir := t.TempDir() // no config file needed
+	defer func() {
+		viper.Reset()
+		os.Unsetenv("CONDUCTOR_SERVER_URL")
+	}()
 
-	// Set env var — should override default config when no profile is active
+	// Set env var — should be used when no profile is active
 	os.Setenv("CONDUCTOR_SERVER_URL", "https://env-server.example.com/api")
 
 	initConfigForTest(configDir, "")
@@ -222,12 +222,13 @@ func TestConductorProfileEnvVarActivatesProfile(t *testing.T) {
 	}
 }
 
-func TestDefaultConfigUsedWhenNoProfileNoEnv(t *testing.T) {
-	defaultConfig := `server: https://default-server.example.com/api
-auth-token: default-token
-`
-	configDir, cleanup := setupTestConfig(t, "", defaultConfig)
-	defer cleanup()
+func TestNoConfigLoadedWhenNoProfileNoEnv(t *testing.T) {
+	configDir := t.TempDir() // empty dir, no config file
+	defer func() {
+		viper.Reset()
+		os.Unsetenv("CONDUCTOR_SERVER_URL")
+		os.Unsetenv("CONDUCTOR_AUTH_TOKEN")
+	}()
 
 	os.Unsetenv("CONDUCTOR_SERVER_URL")
 	os.Unsetenv("CONDUCTOR_AUTH_TOKEN")
@@ -235,12 +236,12 @@ auth-token: default-token
 	initConfigForTest(configDir, "")
 
 	got := viper.GetString("server")
-	if got != "https://default-server.example.com/api" {
-		t.Errorf("server = %q, want default config value %q", got, "https://default-server.example.com/api")
+	if got != "" {
+		t.Errorf("server = %q, want empty (no config loaded without profile)", got)
 	}
 
 	gotToken := viper.GetString("auth-token")
-	if gotToken != "default-token" {
-		t.Errorf("auth-token = %q, want default config value %q", gotToken, "default-token")
+	if gotToken != "" {
+		t.Errorf("auth-token = %q, want empty (no config loaded without profile)", gotToken)
 	}
 }

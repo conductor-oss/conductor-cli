@@ -155,6 +155,7 @@ type ServerUpdateState struct {
 	ETag       string    `json:"etag,omitempty"`
 	ServerType string    `json:"server_type,omitempty"`
 	Version    string    `json:"version,omitempty"`
+	Port       int       `json:"port,omitempty"`
 }
 
 // getServerStatePath returns the path to the server state file
@@ -679,6 +680,9 @@ func startServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save PID: %w", err)
 	}
 
+	// Save port to server state for auto-detection
+	saveServerPort(port)
+
 	fmt.Printf("Server starting (PID: %d)...\n", javaCmd.Process.Pid)
 	fmt.Printf("Logs: %s\n", logPath)
 
@@ -773,14 +777,20 @@ func statusServer(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Conductor server is running (PID: %d)\n", pid)
 
+	// Determine the port from server state, defaulting to 8080
+	port := defaultPort
+	if statePort := readServerPort(); statePort > 0 {
+		port = statePort
+	}
+
 	// Try to get server health
-	resp, err := http.Get("http://localhost:8080/health")
+	resp, err := http.Get(fmt.Sprintf("http://localhost:%d/health", port))
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusOK {
 			fmt.Println("Status: healthy")
-			fmt.Println("  API: http://localhost:8080/api")
-			fmt.Println("  UI:  http://localhost:8080")
+			fmt.Printf("  API: http://localhost:%d/api\n", port)
+			fmt.Printf("  UI:  http://localhost:%d\n", port)
 		} else {
 			fmt.Printf("Status: unhealthy (HTTP %d)\n", resp.StatusCode)
 		}
@@ -872,6 +882,125 @@ func updateServer(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\n✓ Conductor server updated successfully\n")
 	fmt.Println("Run 'conductor server start' to start the updated server")
+
+	return nil
+}
+
+// saveServerPort saves the server port to the state file for auto-detection.
+func saveServerPort(port int) {
+	state := loadServerState()
+	state.Port = port
+	_ = state.save()
+}
+
+// startLocalServer starts a local OSS Conductor server in background mode on the given port.
+// This is a reusable version of the start logic for auto-detection flows.
+func startLocalServer(port int) error {
+	// Check if already running
+	pid, _ := readPid()
+	if isProcessRunning(pid) {
+		return fmt.Errorf("Conductor server is already running (PID: %d)", pid)
+	}
+
+	// Check Java version
+	fmt.Println("Checking Java version...")
+	javaVersion, err := checkJavaVersion()
+	if err != nil {
+		return err
+	}
+
+	if javaVersion < minJavaVersion {
+		return fmt.Errorf("Java %d is installed, but Java %d or higher is required.\n\nPlease upgrade your Java installation:\n  - macOS: brew install openjdk@21\n  - Ubuntu/Debian: sudo apt install openjdk-21-jdk\n  - Windows: Download from https://adoptium.net/", javaVersion, minJavaVersion)
+	}
+
+	fmt.Printf("Java %d detected\n", javaVersion)
+
+	sType := serverTypeOSS
+	version := "latest"
+
+	// Get JAR download URL
+	jarURL, err := getJarDownloadURL(sType, version)
+	if err != nil {
+		return err
+	}
+
+	// Check if JAR exists, download if not
+	jarPath, err := getJarPathForType(sType, version)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(jarPath); os.IsNotExist(err) {
+		if err := downloadJar(jarPath, jarURL); err != nil {
+			return fmt.Errorf("failed to download server: %w", err)
+		}
+		saveServerETag(sType, version)
+	} else {
+		fmt.Printf("Using cached server JAR: %s\n", jarPath)
+	}
+
+	// Get log file path
+	logPath, err := getLogPath()
+	if err != nil {
+		return err
+	}
+
+	// Build Java command
+	javaArgs := []string{"-jar", jarPath}
+	if port != defaultPort {
+		javaArgs = append(javaArgs, fmt.Sprintf("--server.port=%d", port))
+	}
+
+	fmt.Printf("Starting OSS Conductor server (version: %s) on port %d...\n", version, port)
+
+	// Ensure server directory exists for log file
+	serverDir, _ := getServerDir()
+	if err := os.MkdirAll(serverDir, 0755); err != nil {
+		return fmt.Errorf("failed to create server directory: %w", err)
+	}
+
+	// Open log file
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create log file: %w", err)
+	}
+
+	javaCmd := exec.Command("java", javaArgs...)
+	javaCmd.Stdout = logFile
+	javaCmd.Stderr = logFile
+
+	if err := javaCmd.Start(); err != nil {
+		logFile.Close()
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	if err := writePid(javaCmd.Process.Pid); err != nil {
+		javaCmd.Process.Kill()
+		logFile.Close()
+		return fmt.Errorf("failed to save PID: %w", err)
+	}
+
+	saveServerPort(port)
+
+	fmt.Printf("Server starting (PID: %d)...\n", javaCmd.Process.Pid)
+	fmt.Printf("Logs: %s\n", logPath)
+
+	fmt.Println("Waiting for server to be ready...")
+	if err := waitForServer(port, 60*time.Second); err != nil {
+		fmt.Printf("Warning: %v\n", err)
+		fmt.Println("The server may still be starting. Check the logs for details.")
+		return err
+	}
+
+	fmt.Printf("\nConductor server is ready!\n")
+	fmt.Printf("  API: http://localhost:%d/api\n", port)
+	fmt.Printf("  UI:  http://localhost:%d\n", port)
+
+	// Detach the process
+	go func() {
+		javaCmd.Wait()
+		logFile.Close()
+	}()
 
 	return nil
 }

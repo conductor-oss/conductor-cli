@@ -117,9 +117,13 @@ var rootCmd = &cobra.Command{
 			serverType = "Enterprise"
 		}
 
-		// Set default URL if not provided
+		// Auto-detect server if not configured
 		if url == "" {
-			url = "http://localhost:8080/api"
+			detectedURL, err := detectOrPromptServer()
+			if err != nil {
+				return err
+			}
+			url = detectedURL
 		}
 
 		// Ensure URL has /api suffix for SDK
@@ -157,9 +161,13 @@ var rootCmd = &cobra.Command{
 				activeProfile = os.Getenv("CONDUCTOR_PROFILE")
 			}
 
-			configPath, err := getConfigPath(activeProfile)
-			if err != nil {
-				return fmt.Errorf("failed to get config path: %w", err)
+			configPath := ""
+			if activeProfile != "" {
+				var err error
+				configPath, err = getConfigPath(activeProfile)
+				if err != nil {
+					return fmt.Errorf("failed to get config path: %w", err)
+				}
 			}
 
 			tokenManager := NewCachedTokenManager(
@@ -252,9 +260,9 @@ func initConfig() {
 			}
 
 			viper.SetConfigName(configName)
-		} else {
-			viper.SetConfigName("config")
 		}
+		// When no profile is active, no config file is loaded.
+		// The CLI relies on environment variables and CLI flags only.
 	}
 
 	// Only bind environment variables when no profile is active.
@@ -325,7 +333,7 @@ func init() {
 	})
 
 	// Configuration file flag
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.conductor-cli/config.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file path (overrides profile-based config loading)")
 
 	// Server and authentication flags
 	rootCmd.PersistentFlags().String("server", "", "Conductor server URL (can also be set via CONDUCTOR_SERVER_URL)")

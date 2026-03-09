@@ -192,18 +192,20 @@ func getCurrentTimeUnix() int64 {
 	return time.Now().Unix()
 }
 
-// getConfigPath returns the path to the config file for the given profile
+// getConfigPath returns the path to the config file for the given profile.
+// Profile name is required — returns an error if empty.
 func getConfigPath(profileName string) (string, error) {
+	if profileName == "" {
+		return "", fmt.Errorf("profile name is required for config path resolution")
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
 
 	configDir := filepath.Join(home, ".conductor-cli")
-	configFileName := "config.yaml"
-	if profileName != "" {
-		configFileName = fmt.Sprintf("config-%s.yaml", profileName)
-	}
+	configFileName := fmt.Sprintf("config-%s.yaml", profileName)
 
 	return filepath.Join(configDir, configFileName), nil
 }
