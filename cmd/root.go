@@ -114,7 +114,7 @@ var rootCmd = &cobra.Command{
 
 		// Set default server type if not provided
 		if serverType == "" {
-			serverType = "Enterprise"
+			serverType = "OSS"
 		}
 
 		// Auto-detect server if not configured
