@@ -262,7 +262,7 @@ func interactiveSaveConfig(profileName string) error {
 	// Prompt for server type
 	serverTypeDefault := existingConfig["server-type"]
 	if serverTypeDefault == "" {
-		serverTypeDefault = "Enterprise"
+		serverTypeDefault = "OSS"
 	}
 	fmt.Fprintf(os.Stdout, "Server type (OSS/Enterprise) [%s]: ", serverTypeDefault)
 	serverTypeInput, _ := reader.ReadString('\n')
@@ -284,68 +284,73 @@ func interactiveSaveConfig(profileName string) error {
 		templateURL = templateURLInput
 	}
 
-	// Prompt for auth method
-	fmt.Fprintf(os.Stdout, "\nAuthentication method:\n")
-	fmt.Fprintf(os.Stdout, "  1. API Key + Secret\n")
-	fmt.Fprintf(os.Stdout, "  2. Auth Token\n")
-
-	// Determine default auth method based on existing config
-	defaultAuthMethod := "1"
-	if existingConfig["auth-token"] != "" {
-		defaultAuthMethod = "2"
-	}
-
-	fmt.Fprintf(os.Stdout, "Choose [%s]: ", defaultAuthMethod)
-	authMethodInput, _ := reader.ReadString('\n')
-	authMethodInput = strings.TrimSpace(authMethodInput)
-	authMethod := defaultAuthMethod
-	if authMethodInput != "" {
-		authMethod = authMethodInput
-	}
-
 	var authKey, authSecret, authToken string
 
-	if authMethod == "1" {
-		// API Key + Secret
-		authKeyDefault := existingConfig["auth-key"]
-		if authKeyDefault != "" {
-			authKeyDefault = "****" // Mask existing key
-		}
-		fmt.Fprintf(os.Stdout, "API Key [%s]: ", authKeyDefault)
-		authKeyInput, _ := reader.ReadString('\n')
-		authKeyInput = strings.TrimSpace(authKeyInput)
-		if authKeyInput != "" {
-			authKey = authKeyInput
-		} else if existingConfig["auth-key"] != "" {
-			authKey = existingConfig["auth-key"]
+	// Only prompt for authentication when using Enterprise server
+	if strings.EqualFold(serverType, "OSS") {
+		fmt.Fprintf(os.Stdout, "\nNo authentication required for OSS Conductor.\n")
+	} else {
+		// Prompt for auth method
+		fmt.Fprintf(os.Stdout, "\nAuthentication method:\n")
+		fmt.Fprintf(os.Stdout, "  1. API Key + Secret\n")
+		fmt.Fprintf(os.Stdout, "  2. Auth Token\n")
+
+		// Determine default auth method based on existing config
+		defaultAuthMethod := "1"
+		if existingConfig["auth-token"] != "" {
+			defaultAuthMethod = "2"
 		}
 
-		authSecretDefault := existingConfig["auth-secret"]
-		if authSecretDefault != "" {
-			authSecretDefault = "****" // Mask existing secret
+		fmt.Fprintf(os.Stdout, "Choose [%s]: ", defaultAuthMethod)
+		authMethodInput, _ := reader.ReadString('\n')
+		authMethodInput = strings.TrimSpace(authMethodInput)
+		authMethod := defaultAuthMethod
+		if authMethodInput != "" {
+			authMethod = authMethodInput
 		}
-		fmt.Fprintf(os.Stdout, "API Secret [%s]: ", authSecretDefault)
-		authSecretInput, _ := reader.ReadString('\n')
-		authSecretInput = strings.TrimSpace(authSecretInput)
-		if authSecretInput != "" {
-			authSecret = authSecretInput
-		} else if existingConfig["auth-secret"] != "" {
-			authSecret = existingConfig["auth-secret"]
-		}
-	} else {
-		// Auth Token
-		authTokenDefault := existingConfig["auth-token"]
-		if authTokenDefault != "" {
-			authTokenDefault = "****" // Mask existing token
-		}
-		fmt.Fprintf(os.Stdout, "Auth Token [%s]: ", authTokenDefault)
-		authTokenInput, _ := ReadLineRaw(8192)
-		fmt.Println()
-		authTokenInput = strings.TrimSpace(authTokenInput)
-		if authTokenInput != "" {
-			authToken = authTokenInput
-		} else if existingConfig["auth-token"] != "" {
-			authToken = existingConfig["auth-token"]
+
+		if authMethod == "1" {
+			// API Key + Secret
+			authKeyDefault := existingConfig["auth-key"]
+			if authKeyDefault != "" {
+				authKeyDefault = "****" // Mask existing key
+			}
+			fmt.Fprintf(os.Stdout, "API Key [%s]: ", authKeyDefault)
+			authKeyInput, _ := reader.ReadString('\n')
+			authKeyInput = strings.TrimSpace(authKeyInput)
+			if authKeyInput != "" {
+				authKey = authKeyInput
+			} else if existingConfig["auth-key"] != "" {
+				authKey = existingConfig["auth-key"]
+			}
+
+			authSecretDefault := existingConfig["auth-secret"]
+			if authSecretDefault != "" {
+				authSecretDefault = "****" // Mask existing secret
+			}
+			fmt.Fprintf(os.Stdout, "API Secret [%s]: ", authSecretDefault)
+			authSecretInput, _ := reader.ReadString('\n')
+			authSecretInput = strings.TrimSpace(authSecretInput)
+			if authSecretInput != "" {
+				authSecret = authSecretInput
+			} else if existingConfig["auth-secret"] != "" {
+				authSecret = existingConfig["auth-secret"]
+			}
+		} else {
+			// Auth Token
+			authTokenDefault := existingConfig["auth-token"]
+			if authTokenDefault != "" {
+				authTokenDefault = "****" // Mask existing token
+			}
+			fmt.Fprintf(os.Stdout, "Auth Token [%s]: ", authTokenDefault)
+			authTokenInput, _ := ReadLineRaw(8192)
+			fmt.Println()
+			authTokenInput = strings.TrimSpace(authTokenInput)
+			if authTokenInput != "" {
+				authToken = authTokenInput
+			} else if existingConfig["auth-token"] != "" {
+				authToken = existingConfig["auth-token"]
+			}
 		}
 	}
 
