@@ -109,7 +109,10 @@ async function install() {
 
     console.log('Installation successful!');
     console.log(`Binary installed at: ${binaryPath}`);
-    console.log(`\nRun 'conductor --version' to verify installation.`);
+    console.log('');
+    console.log('Get started:');
+    console.log('  conductor server start   Start a local Conductor server');
+    console.log('  conductor --help          See all available commands');
   } catch (error) {
     console.error('Installation failed:', error.message);
     process.exit(1);

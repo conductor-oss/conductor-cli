@@ -91,7 +91,9 @@ verify_installation() {
         echo "${GREEN}Installation successful!${NC}"
         echo "${GREEN}  Version: $VERSION_OUTPUT${NC}"
         echo ""
-        echo "Run '${BINARY_NAME} --help' to get started."
+        echo "${GREEN}Get started:${NC}"
+        echo "  ${YELLOW}conductor server start${NC}   Start a local Conductor server"
+        echo "  ${YELLOW}conductor --help${NC}          See all available commands"
     else
         echo "${YELLOW}Binary installed but not found in PATH${NC}"
         echo "You may need to add $INSTALL_DIR to your PATH:"

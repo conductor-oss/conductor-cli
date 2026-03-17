@@ -56,4 +56,7 @@ Write-Host "Conductor CLI $version installed successfully!" -ForegroundColor Gre
 Write-Host "Location: $exePath"
 Write-Host ""
 Write-Host "Restart your terminal, then run:" -ForegroundColor Yellow
-Write-Host "  conductor --version"
+Write-Host ""
+Write-Host "Get started:" -ForegroundColor Green
+Write-Host "  conductor server start   Start a local Conductor server" -ForegroundColor Yellow
+Write-Host "  conductor --help          See all available commands" -ForegroundColor Yellow

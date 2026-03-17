@@ -694,7 +694,8 @@ func startServer(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("\nConductor server is ready!\n")
 		fmt.Printf("  API: http://localhost:%d/api\n", port)
-		fmt.Printf("  UI:  http://localhost:%d\n", port)
+		fmt.Printf("  UI:  http://localhost:%d\n\n", port)
+		fmt.Printf("Open http://localhost:%d in your browser to access the Conductor UI\n", port)
 	}
 
 	fmt.Printf("\nUse 'conductor server stop' to stop the server\n")
@@ -994,7 +995,8 @@ func startLocalServer(port int) error {
 
 	fmt.Printf("\nConductor server is ready!\n")
 	fmt.Printf("  API: http://localhost:%d/api\n", port)
-	fmt.Printf("  UI:  http://localhost:%d\n", port)
+	fmt.Printf("  UI:  http://localhost:%d\n\n", port)
+	fmt.Printf("Open http://localhost:%d in your browser to access the Conductor UI\n", port)
 
 	// Detach the process
 	go func() {
