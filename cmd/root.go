@@ -285,9 +285,29 @@ func initConfig() {
 		viper.BindEnv("server-type", "CONDUCTOR_SERVER_TYPE")
 	}
 
+	// Determine if env vars are the active config source (no profile selected)
+	usingEnvVars := profile == "" && os.Getenv("CONDUCTOR_PROFILE") == ""
+
+	if viper.GetBool("verbose") && usingEnvVars {
+		for _, ev := range []string{"CONDUCTOR_SERVER_URL", "CONDUCTOR_AUTH_TOKEN", "CONDUCTOR_AUTH_KEY", "CONDUCTOR_AUTH_SECRET", "CONDUCTOR_SERVER_TYPE"} {
+			if v := os.Getenv(ev); v != "" {
+				switch ev {
+				case "CONDUCTOR_AUTH_TOKEN", "CONDUCTOR_AUTH_SECRET":
+					fmt.Fprintf(os.Stdout, "Using env var %s: (set)\n", ev)
+				default:
+					fmt.Fprintf(os.Stdout, "Using env var %s: %s\n", ev, v)
+				}
+			}
+		}
+	}
+
 	if err := viper.ReadInConfig(); err == nil {
 		if viper.GetBool("verbose") {
-			fmt.Fprintf(os.Stdout, "Using config file: %s\n", viper.ConfigFileUsed())
+			// When CONDUCTOR_SERVER_URL env var is active, suppress the config file message
+			// to avoid confusion about which source the server URL came from.
+			if !usingEnvVars || os.Getenv("CONDUCTOR_SERVER_URL") == "" {
+				fmt.Fprintf(os.Stdout, "Using config file: %s\n", viper.ConfigFileUsed())
+			}
 		}
 	}
 }
