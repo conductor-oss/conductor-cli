@@ -589,7 +589,11 @@ func parseAPIError(err error, defaultMsg string) error {
 				if message == "" {
 					message = "Authentication failed"
 				}
-				return fmt.Errorf("%s\nPlease check your authentication settings. Run 'conductor config save' to configure credentials", message)
+				hint := "Please check your authentication settings. Run 'conductor config save' to configure credentials"
+			if envURL := os.Getenv("CONDUCTOR_SERVER_URL"); envURL != "" {
+				hint += fmt.Sprintf("\nNote: Server URL is set via CONDUCTOR_SERVER_URL=%s", envURL)
+			}
+			return fmt.Errorf("%s\n%s", message, hint)
 			}
 
 			if errorResponse.Message != "" {
