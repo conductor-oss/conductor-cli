@@ -580,7 +580,7 @@ func startServer(cmd *cobra.Command, args []string) error {
 	}
 
 	if javaVersion < minJavaVersion {
-		return fmt.Errorf("Java %d is installed, but Java %d or higher is required.\n\nPlease upgrade your Java installation:\n  - macOS: brew install openjdk@21\n  - Ubuntu/Debian: sudo apt install openjdk-21-jdk\n  - Windows: Download from https://adoptium.net/", javaVersion, minJavaVersion)
+		return fmt.Errorf("Java %d is installed, but Java %d or higher is required.\n\nPlease upgrade your Java installation:\n  - macOS: brew install openjdk@21\n  - Ubuntu/Debian: sudo apt install openjdk-21-jdk\n  - Windows: Download from https://adoptium.net/\n\nIf you already have Java 21+ installed but it is not in PATH (common on macOS after Homebrew install):\n  export JAVA_HOME=$(brew --prefix openjdk@21)\n  export PATH=\"$JAVA_HOME/bin:$PATH\"", javaVersion, minJavaVersion)
 	}
 
 	fmt.Printf("Java %d detected\n", javaVersion)
@@ -911,7 +911,7 @@ func startLocalServer(port int) error {
 	}
 
 	if javaVersion < minJavaVersion {
-		return fmt.Errorf("Java %d is installed, but Java %d or higher is required.\n\nPlease upgrade your Java installation:\n  - macOS: brew install openjdk@21\n  - Ubuntu/Debian: sudo apt install openjdk-21-jdk\n  - Windows: Download from https://adoptium.net/", javaVersion, minJavaVersion)
+		return fmt.Errorf("Java %d is installed, but Java %d or higher is required.\n\nPlease upgrade your Java installation:\n  - macOS: brew install openjdk@21\n  - Ubuntu/Debian: sudo apt install openjdk-21-jdk\n  - Windows: Download from https://adoptium.net/\n\nIf you already have Java 21+ installed but it is not in PATH (common on macOS after Homebrew install):\n  export JAVA_HOME=$(brew --prefix openjdk@21)\n  export PATH=\"$JAVA_HOME/bin:$PATH\"", javaVersion, minJavaVersion)
 	}
 
 	fmt.Printf("Java %d detected\n", javaVersion)

@@ -454,6 +454,13 @@ conductor api-gateway route <command> [arguments] [flags]
 
 Manage a local Conductor server for development.
 
+> **Prerequisite:** `conductor server start` downloads and runs a local Conductor server JAR. This requires **Java 21 or higher** in your PATH.
+> - macOS: `brew install openjdk@21 && export JAVA_HOME=$(brew --prefix openjdk@21)`
+> - Ubuntu/Debian: `sudo apt install openjdk-21-jdk`
+> - Windows: Download from https://adoptium.net/
+>
+> Note: `brew install openjdk@21` installs Java but does not link it to your PATH by default — the `export JAVA_HOME` step above is required on macOS.
+
 ```
 conductor server <command> [flags]
 ```
