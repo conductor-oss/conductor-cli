@@ -443,6 +443,7 @@ func registerWorkflow(data []byte, force bool) error {
 	if err != nil {
 		return parseAPIError(err, "Failed to create workflow")
 	}
+	fmt.Printf("Workflow '%s' version %d registered successfully\n", workflowDef.Name, workflowDef.Version)
 	return nil
 }
 
