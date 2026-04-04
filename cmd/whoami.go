@@ -48,7 +48,10 @@ var whoamiCmd = &cobra.Command{
 			}
 			jwtToken = tokenResponse.Token
 		} else {
-			return fmt.Errorf("no authentication configured - please configure auth-token or auth-key/auth-secret")
+			// No auth configured — normal for OSS Conductor
+			fmt.Printf("Server:         %s\n", url)
+			fmt.Println("Authentication: none (OSS Conductor)")
+			return nil
 		}
 
 		// Print server URL

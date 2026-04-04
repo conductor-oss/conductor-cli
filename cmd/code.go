@@ -269,10 +269,11 @@ func buildTemplateContext(fields []Field, reader *bufio.Reader) (map[string]inte
 	}
 
 	serverURL := viper.GetString("server")
-	if serverURL != "" {
-		context["server_url"] = serverURL
-		context["server"] = serverURL
+	if serverURL == "" {
+		serverURL = "http://localhost:8080/api"
 	}
+	context["server_url"] = serverURL
+	context["server"] = serverURL
 
 	authKey := viper.GetString("auth-key")
 	if authKey != "" {
