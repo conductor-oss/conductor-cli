@@ -539,6 +539,22 @@ conductor config <command> [arguments] [flags]
 
 ---
 
+### Code Generation Commands
+
+Generate worker scaffold code for a given language and template.
+
+```
+conductor code [flags]
+```
+
+| Flag | Description |
+|------|-------------|
+| `-l, --lang` | Programming language (e.g. `python`, `java`, `go`) |
+| `-t, --template` | Template name |
+| `-n, --name` | Project name |
+
+> **Note:** `conductor code` prompts interactively for any fields not supplied as flags (including task name). It cannot be used non-interactively via pipe or in CI — passing all inputs via flags is not yet fully supported. Use `conductor code list` to see available templates.
+
 ### Other Commands
 
 | Command | Description |
