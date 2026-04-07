@@ -598,6 +598,8 @@ func startServer(cmd *cobra.Command, args []string) error {
 	}
 
 	if _, err := os.Stat(jarPath); os.IsNotExist(err) {
+		fmt.Println("First run: downloading the Conductor server JAR (~600 MB). This may take a few minutes.")
+		fmt.Println("Tip: for a faster start, use Docker instead: docker run -p 8080:8080 conductoross/conductor:latest")
 		if err := downloadJar(jarPath, jarURL); err != nil {
 			return fmt.Errorf("failed to download server: %w", err)
 		}
