@@ -68,7 +68,8 @@ var (
 	}
 
 	getAllWorkflowMetadataCmd = &cobra.Command{
-		Use:          "get_all",
+		Use:          "get-all",
+		Aliases:      []string{"get_all"},
 		Short:        "Get All Workflows",
 		RunE:         getAllWorkflowMetadata,
 		SilenceUsage: true,
