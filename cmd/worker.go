@@ -98,7 +98,9 @@ Exit codes:
 	workerRemoteCmd = &cobra.Command{
 		Use:   "remote",
 		Short: "Run a worker from the job-runner registry (EXPERIMENTAL)",
-		Long: `⚠️  EXPERIMENTAL FEATURE - Download and execute a worker from the Orkes Conductor job-runner.
+		Long: `⚠️  EXPERIMENTAL FEATURE - Requires Orkes Conductor. Not available in OSS Conductor.
+
+Download and execute a worker from the Orkes Conductor job-runner.
 
 The worker is downloaded from the configured Conductor server and cached locally for
 subsequent runs. Use --refresh to force re-download from the registry.
