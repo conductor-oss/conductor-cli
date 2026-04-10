@@ -1082,7 +1082,14 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 			return parseAPIError(execErr, "Failed to start workflow")
 		}
 
-		data, jsonError := json.MarshalIndent(run, "", "   ")
+		full, _ := cmd.Flags().GetBool("full")
+		var printTarget interface{}
+		if full {
+			printTarget = run
+		} else {
+			printTarget = run.Output
+		}
+		data, jsonError := json.MarshalIndent(printTarget, "", "   ")
 		if jsonError != nil {
 			return jsonError
 		}
@@ -1434,6 +1441,7 @@ func init() {
 	startExecutionCmd.Flags().StringP("correlation", "", "", "Correlation ID")
 	startExecutionCmd.Flags().Bool("sync", false, "Execute synchronously and wait for completion")
 	startExecutionCmd.Flags().StringP("wait-until", "u", "", "Wait until task completes (only with --sync)")
+	startExecutionCmd.Flags().Bool("full", false, "Print full workflow run JSON instead of just the output (only with --sync)")
 	startExecutionCmd.MarkFlagsMutuallyExclusive("input", "file")
 
 	getExecutionCmd.Flags().BoolP("complete", "c", false, "Include complete details")

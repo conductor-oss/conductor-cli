@@ -34,8 +34,8 @@ const (
 var (
 	apiGatewayCmd = &cobra.Command{
 		Use:     "api-gateway",
-		Short:   "API Gateway management commands",
-		Long:    "Manage API Gateway services, routes, and authentication configurations.",
+		Short:   "API Gateway management commands (Orkes Conductor only)",
+		Long:    "Manage API Gateway services, routes, and authentication configurations.\n\n⚠️  Requires Orkes Conductor. These commands are not available in OSS Conductor.",
 		GroupID: "conductor",
 	}
 

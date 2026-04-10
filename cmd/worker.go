@@ -97,8 +97,9 @@ Exit codes:
 
 	workerRemoteCmd = &cobra.Command{
 		Use:   "remote",
-		Short: "Run a worker from the job-runner registry (EXPERIMENTAL)",
+		Short: "Run a worker from the job-runner registry (EXPERIMENTAL, Orkes Conductor only)",
 		Long: `⚠️  EXPERIMENTAL FEATURE - Download and execute a worker from the Orkes Conductor job-runner.
+⚠️  Requires Orkes Conductor. Not available in OSS Conductor.
 
 The worker is downloaded from the configured Conductor server and cached locally for
 subsequent runs. Use --refresh to force re-download from the registry.
@@ -115,8 +116,9 @@ The worker runs in continuous mode, polling for tasks and executing them in para
 
 	workerListRemoteCmd = &cobra.Command{
 		Use:          "list-remote",
-		Short:        "List available workers in the job-runner registry (EXPERIMENTAL)",
-		Long:         `⚠️  EXPERIMENTAL FEATURE - List all available workers in the Orkes Conductor job-runner registry.`,
+		Short:        "List available workers in the job-runner registry (EXPERIMENTAL, Orkes Conductor only)",
+		Long:         `⚠️  EXPERIMENTAL FEATURE - List all available workers in the Orkes Conductor job-runner registry.
+⚠️  Requires Orkes Conductor. Not available in OSS Conductor.`,
 		RunE:         listRemoteWorkers,
 		SilenceUsage: true,
 		Example:      "conductor worker list-remote\nconductor worker list-remote --namespace production",
