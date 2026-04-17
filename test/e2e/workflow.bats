@@ -43,18 +43,30 @@ get_workflow_id() {
 }
 
 @test "4. Start workflow execution with --sync --version 1" {
+    # Default --sync prints only run.Output (JSON); --full prints the complete WorkflowRun.
     run bash -c "./conductor workflow start --workflow '$WORKFLOW_NAME_2' --sync --version 1 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
-    # Output should be JSON (workflow execution details), not just a UUID
-    [[ "$output" == *"\"status\""* ]]
-    [[ "$output" == *"\"workflowId\""* ]]
-    [[ "$output" == *"$WORKFLOW_NAME_2"* ]]
+    # Output should be the workflow's output JSON — not a UUID, not the full WorkflowRun envelope.
+    [[ "$output" == *"\"result\""* ]]
+    [[ "$output" == *"CLI TEST"* ]]
+    [[ "$output" != *"\"workflowId\""* ]]
 
     # Should NOT be just a single line UUID
     line_count=$(echo "$output" | wc -l | tr -d ' ')
     [ "$line_count" -gt 1 ]
+}
+
+@test "4b. Start workflow execution with --sync --full prints complete WorkflowRun" {
+    run bash -c "./conductor workflow start --workflow '$WORKFLOW_NAME_2' --sync --full --version 1 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+
+    # --full returns the complete WorkflowRun JSON (status, workflowId, etc.)
+    [[ "$output" == *"\"status\""* ]]
+    [[ "$output" == *"\"workflowId\""* ]]
+    [[ "$output" == *"$WORKFLOW_NAME_2"* ]]
 }
 
 @test "5. Cleanup - delete workflow definition for sync test" {
