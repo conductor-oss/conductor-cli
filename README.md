@@ -286,7 +286,7 @@ conductor task <command> [arguments] [flags]
 
 ### Schedule Commands
 
-Manage workflow schedules (Enterprise only).
+Manage workflow schedules. Works against both OSS Conductor and Orkes Conductor (the OSS server must include the `scheduler` module — the default jar started by `conductor server start` does).
 
 ```
 conductor schedule <command> [arguments] [flags]
