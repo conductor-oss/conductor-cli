@@ -146,7 +146,7 @@ Columns: NAME, WEBHOOK ID, WORKFLOWS, URL
 
 ### Schedule Commands
 
-> **Note:** Schedule commands are only available with Orkes Conductor (Enterprise).
+> **Note:** Schedule commands work against both OSS Conductor and Orkes Conductor. The OSS server must include the `scheduler` module — the default jar from `conductor-oss/conductor` (used by `conductor server start`) ships it. Custom OSS builds that omit the module will return 404 with a hint message.
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
