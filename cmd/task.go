@@ -411,6 +411,18 @@ func updateTaskByRefName(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// signalUnsupportedOnOSS returns an error when signal operations are invoked
+// against an OSS server. OSS Conductor does not implement the signal endpoints
+// (POST /tasks/{workflowId}/{status}/signal[/sync]); calling them there causes
+// the server to misinterpret the "signal" path segment as a TaskResult.Status,
+// producing a confusing type-conversion error. Signal is Enterprise-only.
+func signalUnsupportedOnOSS() error {
+	if !isEnterpriseServer() {
+		return fmt.Errorf("task signal is not supported in OSS Conductor; signal operations are only available in Orkes Conductor (Enterprise)")
+	}
+	return nil
+}
+
 func signalTaskAsync(cmd *cobra.Command, args []string) error {
 	workflowId, _ := cmd.Flags().GetString("workflow-id")
 	status, _ := cmd.Flags().GetString("status")
@@ -418,6 +430,10 @@ func signalTaskAsync(cmd *cobra.Command, args []string) error {
 
 	if workflowId == "" || status == "" {
 		return fmt.Errorf("--workflow-id and --status are required")
+	}
+
+	if err := signalUnsupportedOnOSS(); err != nil {
+		return err
 	}
 
 	var outputMap map[string]interface{}
@@ -447,6 +463,10 @@ func signalTaskSync(cmd *cobra.Command, args []string) error {
 
 	if workflowId == "" || status == "" {
 		return fmt.Errorf("--workflow-id and --status are required")
+	}
+
+	if err := signalUnsupportedOnOSS(); err != nil {
+		return err
 	}
 
 	var outputMap map[string]interface{}
