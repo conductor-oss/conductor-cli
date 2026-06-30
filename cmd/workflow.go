@@ -952,13 +952,40 @@ func getWorkflowExecutionStatus(cmd *cobra.Command, args []string) error {
 
 	for i := 0; i < len(args); i++ {
 		id := args[i]
-		status, _, getStateErr := workflowClient.GetWorkflowState(context.Background(), id, true, true)
-		if getStateErr != nil {
-			return parseAPIError(getStateErr, fmt.Sprintf("Failed to get workflow status for '%s'", id))
+		status, err := resolveWorkflowStatus(workflowClient, id)
+		if err != nil {
+			return err
 		}
-		fmt.Println(status.Status)
+		fmt.Println(status)
 	}
 	return nil
+}
+
+// resolveWorkflowStatus returns the status of a workflow execution.
+//
+// It first tries GetWorkflowState (GET /workflow/{id}/status), the cheap
+// purpose-built endpoint available on Orkes Conductor. OSS Conductor does not
+// implement that route and returns 404, so on a 404 we fall back to fetching
+// the full workflow (GET /workflow/{id}), which is available on all server
+// versions and carries the same status value. Gating on the 404 response —
+// rather than serverType — keeps this working even when serverType is
+// misconfigured, and automatically uses the fast path once OSS adds /status.
+func resolveWorkflowStatus(workflowClient *client.WorkflowResourceApiService, id string) (string, error) {
+	state, resp, getStateErr := workflowClient.GetWorkflowState(context.Background(), id, true, true)
+	if getStateErr == nil {
+		return state.Status, nil
+	}
+
+	if resp != nil && resp.StatusCode == http.StatusNotFound {
+		opts := &client.WorkflowResourceApiGetExecutionStatusOpts{IncludeTasks: optional.NewBool(false)}
+		workflow, _, execErr := workflowClient.GetExecutionStatus(context.Background(), id, opts)
+		if execErr != nil {
+			return "", parseAPIError(execErr, fmt.Sprintf("Failed to get workflow status for '%s'", id))
+		}
+		return string(workflow.Status), nil
+	}
+
+	return "", parseAPIError(getStateErr, fmt.Sprintf("Failed to get workflow status for '%s'", id))
 }
 
 func getWorkflowExecution(cmd *cobra.Command, args []string) error {
