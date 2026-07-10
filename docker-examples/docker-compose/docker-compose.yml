@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  worker:
+    image: orkes/cli-runner:python
+    command: >
+      worker stdio
+      --type greeting_task
+      python /app/worker.py
+    environment:
+      CONDUCTOR_SERVER_URL: ${CONDUCTOR_SERVER_URL:-https://developer.orkescloud.com/api}
+      CONDUCTOR_AUTH_TOKEN: ${CONDUCTOR_AUTH_TOKEN}
+    volumes:
+      - ../workers/python/simple_worker.py:/app/worker.py:ro
+    restart: unless-stopped
+
+# To run:
+# 1. Set your auth token: export CONDUCTOR_AUTH_TOKEN=your-token
+# 2. Run: docker-compose up

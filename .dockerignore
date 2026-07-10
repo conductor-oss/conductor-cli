@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+.github
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Build artifacts
+bin/
+dist/
+*.exe
+orkes
+orkes-test
+conductor-cli
+
+# Documentation (keep only Docker-related docs)
+*.md
+!docker/README.md
+!docker-examples/README.md
+!WORKER_STDIO.md
+
+# Test files
+test/
+*_test.go
+*.bats
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+.env.*
+
+# Cache
+.cache/
+node_modules/
+__pycache__/
+*.pyc
+
+# Config
+config.yaml
+config-*.yaml
+.conductor-cli/
+
+# Claude
+.claude/
+
+# Examples (keep for Docker context)
+# stdio-example/
+# stdio/
+
+# Temporary files
+*.log
+*.tmp
+tmp/

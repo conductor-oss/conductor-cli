@@ -1,0 +1,60 @@
+# Stage 1: Build the orkes CLI
+FROM golang:1.23-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /build
+
+# Copy go mod files (better caching)
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o orkes .
+
+# Stage 2: Runtime with .NET
+FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine
+
+# Install utilities
+RUN apk add --no-cache \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    bash \
+    jq \
+    && rm -rf /var/cache/apk/*
+
+# Create non-root user
+RUN addgroup -g 1000 orkes && \
+    adduser -D -u 1000 -G orkes orkes
+
+# Copy orkes CLI binary
+COPY --from=builder /build/orkes /usr/local/bin/orkes
+RUN chmod +x /usr/local/bin/orkes
+
+# Create directories
+RUN mkdir -p /home/orkes/.conductor-cli /app && \
+    chown -R orkes:orkes /home/orkes /app
+
+# Switch to non-root user
+USER orkes
+WORKDIR /app
+
+# Verify installations
+RUN orkes --version && dotnet --version
+
+# Labels
+LABEL org.opencontainers.image.title="Orkes CLI Runner - .NET" \
+      org.opencontainers.image.description="Orkes CLI with .NET 8 runtime" \
+      org.opencontainers.image.source="https://github.com/conductor-oss/conductor-cli" \
+      org.opencontainers.image.vendor="Orkes" \
+      dotnet.version="8.0" \
+      maintainer="Orkes <developers@orkes.io>"
+
+ENTRYPOINT ["orkes"]
+CMD ["--help"]

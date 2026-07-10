@@ -1,0 +1,17 @@
+{
+  "name": "conductor-stdio-workers",
+  "version": "1.0.0",
+  "description": "Example stdio workers for Orkes Conductor CLI",
+  "main": "simple_worker.js",
+  "scripts": {
+    "simple": "node simple_worker.js"
+  },
+  "keywords": [
+    "conductor",
+    "orkes",
+    "worker",
+    "stdio"
+  ],
+  "author": "Orkes",
+  "license": "Apache-2.0"
+}
