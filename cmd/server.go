@@ -958,6 +958,11 @@ func startLocalServer(port int) error {
 		saveServerETag(sType, version)
 	} else {
 		fmt.Printf("Using cached server JAR: %s\n", jarPath)
+		// Check if a newer version is available (non-blocking, periodic)
+		if checkServerUpdate(sType, version) {
+			fmt.Fprintln(os.Stderr, "\nA newer Conductor server version is available.")
+			fmt.Fprintln(os.Stderr, "Run 'conductor server update' to download it.")
+		}
 	}
 
 	// Get log file path
