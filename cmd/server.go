@@ -630,6 +630,11 @@ func startServer(cmd *cobra.Command, args []string) error {
 		javaArgs = append(javaArgs, fmt.Sprintf("--server.port=%d", port))
 	}
 
+	// Enable AI integration + embedded AgentSpan by default for the local dev server.
+	// Passed as command-line args (Spring Boot's highest-precedence source) so this holds
+	// regardless of the downloaded jar's baked default; agentspan.embedded resolves from it.
+	javaArgs = append(javaArgs, aiIntegrationArgs()...)
+
 	serverTypeDisplay := "OSS"
 	if serverType == serverTypeOrkes {
 		serverTypeDisplay = "Orkes"
@@ -889,6 +894,19 @@ func updateServer(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// aiIntegrationArgs returns the Spring Boot command-line args that turn on the AI
+// integration and the embedded AgentSpan runtime for the local server. These are enabled
+// by default so agentic workflows work out of the box with `conductor server start`.
+// Command-line args are Spring Boot's highest-precedence property source, so this holds
+// even if the downloaded jar was built with the feature off; agentspan.embedded resolves
+// from conductor.integrations.ai.enabled.
+func aiIntegrationArgs() []string {
+	return []string{
+		"--conductor.integrations.ai.enabled=true",
+		"--agentspan.embedded=true",
+	}
+}
+
 // saveServerPort saves the server port to the state file for auto-detection.
 func saveServerPort(port int) {
 	state := loadServerState()
@@ -953,6 +971,9 @@ func startLocalServer(port int) error {
 	if port != defaultPort {
 		javaArgs = append(javaArgs, fmt.Sprintf("--server.port=%d", port))
 	}
+
+	// Enable AI integration + embedded AgentSpan by default (see startServer for rationale).
+	javaArgs = append(javaArgs, aiIntegrationArgs()...)
 
 	fmt.Printf("Starting OSS Conductor server (version: %s) on port %d...\n", version, port)
 
