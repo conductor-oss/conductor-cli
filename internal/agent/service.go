@@ -33,6 +33,7 @@ type EventSink interface {
 // Service is the agent use-case layer. It depends only on Client and is free of
 // presentation and transport concerns.
 type Service interface {
+	CheckSupported(ctx context.Context) error
 	Run(ctx context.Context, req RunRequest) (Execution, error)
 	Deploy(ctx context.Context, framework string, rawConfig json.RawMessage) (DeployResult, error)
 	StreamExecution(ctx context.Context, executionID, lastEventID string, sink EventSink) error
@@ -54,6 +55,10 @@ func NewService(c Client) Service {
 
 type service struct {
 	client Client
+}
+
+func (s *service) CheckSupported(ctx context.Context) error {
+	return s.client.CheckSupported(ctx)
 }
 
 // Run starts an agent execution. In name-mode (Name set, no inline Definition) it

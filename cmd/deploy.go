@@ -117,6 +117,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 	}
+	if err := internal.GetAgentService().CheckSupported(ctx); err != nil {
+		return err
+	}
 
 	names := make([]string, len(discovered))
 	for i, a := range discovered {

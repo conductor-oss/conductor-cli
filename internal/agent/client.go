@@ -16,7 +16,9 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -68,6 +70,7 @@ const (
 // Client is the transport boundary for agent endpoints. It returns domain types or
 // raw JSON for free-form payloads — never *http.Response or transport types.
 type Client interface {
+	CheckSupported(ctx context.Context) error
 	Run(ctx context.Context, req RunRequest) (Execution, error)
 	Deploy(ctx context.Context, framework string, rawConfig json.RawMessage) (DeployResult, error)
 	Stream(ctx context.Context, executionID, lastEventID string) (<-chan SSEEvent, <-chan error)
@@ -89,6 +92,50 @@ func NewClient(t transport.Config) Client {
 
 type restClient struct {
 	t transport.Config
+}
+
+const unsupportedAPIMessage = "Agents API is not available on this Conductor server. Update to the latest version of Conductor with Agents enabled."
+
+// do and doJSON preserve normal API errors, but turn a missing Agents API into an
+// actionable compatibility error. A 404 from a resource endpoint is ambiguous: it
+// can mean either "this agent/execution does not exist" or "this server predates the
+// Agents API". In that case we probe the list endpoint and only show the upgrade
+// guidance when the list endpoint is missing too.
+func (c *restClient) do(ctx context.Context, method, path string, body io.Reader, header http.Header) (*http.Response, error) {
+	resp, err := c.t.Do(ctx, method, path, body, header)
+	if err != nil {
+		return nil, c.agentAPIError(ctx, path, err)
+	}
+	return resp, nil
+}
+
+func (c *restClient) doJSON(ctx context.Context, method, path string, reqBody, respBody any) error {
+	err := c.t.DoJSON(ctx, method, path, reqBody, respBody)
+	if err != nil {
+		return c.agentAPIError(ctx, path, err)
+	}
+	return nil
+}
+
+func (c *restClient) agentAPIError(ctx context.Context, path string, err error) error {
+	var apiErr *transport.APIError
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
+		return err
+	}
+	if path == pathList {
+		return errors.New(unsupportedAPIMessage)
+	}
+
+	resp, probeErr := c.t.Do(ctx, http.MethodGet, pathList, nil, nil)
+	if resp != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+	}
+	var probeAPIErr *transport.APIError
+	if errors.As(probeErr, &probeAPIErr) && probeAPIErr.Status == http.StatusNotFound {
+		return errors.New(unsupportedAPIMessage)
+	}
+	return err
 }
 
 // Wire DTOs — private to the client so the JSON shape never leaks across a boundary.
@@ -131,6 +178,13 @@ type pruneResponse struct {
 	Deleted int `json:"deleted"`
 }
 
+// CheckSupported verifies that the connected server exposes the Agents API. It is
+// used by commands that delegate their actual request to another process and would
+// otherwise bypass this client's compatibility-error handling.
+func (c *restClient) CheckSupported(ctx context.Context) error {
+	return c.doJSON(ctx, http.MethodGet, pathList, nil, nil)
+}
+
 func (c *restClient) Run(ctx context.Context, req RunRequest) (Execution, error) {
 	var body any
 	if req.Framework != "" {
@@ -139,7 +193,7 @@ func (c *restClient) Run(ctx context.Context, req RunRequest) (Execution, error)
 		body = startRequest{AgentConfig: req.Definition, Prompt: req.Prompt, SessionID: req.SessionID}
 	}
 	var sr startResponse
-	if err := c.t.DoJSON(ctx, http.MethodPost, pathStart, body, &sr); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, pathStart, body, &sr); err != nil {
 		return Execution{}, err
 	}
 	return Execution{ID: sr.ExecutionID, AgentName: sr.AgentName}, nil
@@ -151,7 +205,7 @@ func (c *restClient) Run(ctx context.Context, req RunRequest) (Execution, error)
 func (c *restClient) Deploy(ctx context.Context, framework string, rawConfig json.RawMessage) (DeployResult, error) {
 	body := deployRequest{Framework: framework, RawConfig: rawConfig}
 	var dr deployResponse
-	if err := c.t.DoJSON(ctx, http.MethodPost, pathDeploy, body, &dr); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, pathDeploy, body, &dr); err != nil {
 		return DeployResult{}, err
 	}
 	return DeployResult{AgentName: dr.AgentName, RequiredWorkers: dr.RequiredWorkers}, nil
@@ -173,7 +227,7 @@ func (c *restClient) Stream(ctx context.Context, executionID, lastEventID string
 		if lastEventID != "" {
 			header.Set(headerLastEventID, lastEventID)
 		}
-		resp, err := c.t.Do(ctx, http.MethodGet, fmt.Sprintf(pathStreamFmt, url.PathEscape(executionID)), nil, header)
+		resp, err := c.do(ctx, http.MethodGet, fmt.Sprintf(pathStreamFmt, url.PathEscape(executionID)), nil, header)
 		if err != nil {
 			errc <- err
 			return
@@ -186,7 +240,7 @@ func (c *restClient) Stream(ctx context.Context, executionID, lastEventID string
 
 func (c *restClient) List(ctx context.Context) ([]AgentSummary, error) {
 	var out []AgentSummary
-	if err := c.t.DoJSON(ctx, http.MethodGet, pathList, nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, pathList, nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -194,19 +248,19 @@ func (c *restClient) List(ctx context.Context) ([]AgentSummary, error) {
 
 func (c *restClient) Get(ctx context.Context, name string, version *int) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.t.DoJSON(ctx, http.MethodGet, agentPath(name, version), nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, agentPath(name, version), nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 func (c *restClient) Delete(ctx context.Context, name string, version *int) error {
-	return c.t.DoJSON(ctx, http.MethodDelete, agentPath(name, version), nil, nil)
+	return c.doJSON(ctx, http.MethodDelete, agentPath(name, version), nil, nil)
 }
 
 func (c *restClient) Compile(ctx context.Context, def json.RawMessage) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.t.DoJSON(ctx, http.MethodPost, pathCompile, def, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, pathCompile, def, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -227,7 +281,7 @@ func (c *restClient) SearchExecutions(ctx context.Context, filter ExecutionFilte
 		q.Set(queryFreeText, filter.FreeText)
 	}
 	var page ExecutionPage
-	if err := c.t.DoJSON(ctx, http.MethodGet, pathExecutions+"?"+q.Encode(), nil, &page); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, pathExecutions+"?"+q.Encode(), nil, &page); err != nil {
 		return ExecutionPage{}, err
 	}
 	return page, nil
@@ -235,7 +289,7 @@ func (c *restClient) SearchExecutions(ctx context.Context, filter ExecutionFilte
 
 func (c *restClient) GetExecution(ctx context.Context, id string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.t.DoJSON(ctx, http.MethodGet, pathExecutions+"/"+url.PathEscape(id), nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, pathExecutions+"/"+url.PathEscape(id), nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -243,7 +297,7 @@ func (c *restClient) GetExecution(ctx context.Context, id string) (json.RawMessa
 
 func (c *restClient) Status(ctx context.Context, id string) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.t.DoJSON(ctx, http.MethodGet, fmt.Sprintf(pathStatusFmt, url.PathEscape(id)), nil, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodGet, fmt.Sprintf(pathStatusFmt, url.PathEscape(id)), nil, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -251,7 +305,7 @@ func (c *restClient) Status(ctx context.Context, id string) (json.RawMessage, er
 
 func (c *restClient) Respond(ctx context.Context, id string, resp HumanResponse) error {
 	body := respondRequest{Approved: resp.Approved, Reason: resp.Reason, Message: resp.Message}
-	return c.t.DoJSON(ctx, http.MethodPost, fmt.Sprintf(pathRespondFmt, url.PathEscape(id)), body, nil)
+	return c.doJSON(ctx, http.MethodPost, fmt.Sprintf(pathRespondFmt, url.PathEscape(id)), body, nil)
 }
 
 func (c *restClient) Prune(ctx context.Context, req PruneRequest) (PruneResult, error) {
@@ -261,7 +315,7 @@ func (c *restClient) Prune(ctx context.Context, req PruneRequest) (PruneResult, 
 		q.Set(queryArchiveTasks, valueTrue)
 	}
 	var pr pruneResponse
-	if err := c.t.DoJSON(ctx, http.MethodPost, pathPrune+"?"+q.Encode(), nil, &pr); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, pathPrune+"?"+q.Encode(), nil, &pr); err != nil {
 		return PruneResult{}, err
 	}
 	return PruneResult{Removed: pr.Deleted}, nil

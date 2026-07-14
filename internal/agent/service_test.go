@@ -33,6 +33,8 @@ type fakeClient struct {
 	streamErr     error
 }
 
+func (f *fakeClient) CheckSupported(ctx context.Context) error { return nil }
+
 func (f *fakeClient) Run(ctx context.Context, req RunRequest) (Execution, error) {
 	f.lastRun = req
 	return Execution{ID: "exec-1", AgentName: req.Name}, nil

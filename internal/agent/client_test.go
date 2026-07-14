@@ -16,6 +16,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -193,6 +194,53 @@ func TestGetReturnsRawPassthrough(t *testing.T) {
 	}
 	if string(out) != payload {
 		t.Errorf("got %s, want %s", out, payload)
+	}
+}
+
+func TestListReportsUnsupportedAgentsAPI(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	})
+
+	_, err := c.List(context.Background())
+	if err == nil || err.Error() != unsupportedAPIMessage {
+		t.Fatalf("error = %v, want %q", err, unsupportedAPIMessage)
+	}
+}
+
+func TestGetReportsUnsupportedAgentsAPIWhenProbeIsAlsoMissing(t *testing.T) {
+	var paths []string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		http.NotFound(w, r)
+	})
+
+	_, err := c.Get(context.Background(), "greeter", nil)
+	if err == nil || err.Error() != unsupportedAPIMessage {
+		t.Fatalf("error = %v, want %q", err, unsupportedAPIMessage)
+	}
+	if len(paths) != 2 || paths[0] != pathAgents+"/greeter" || paths[1] != pathList {
+		t.Fatalf("request paths = %v, want resource request followed by capability probe", paths)
+	}
+}
+
+func TestGetPreservesResourceNotFoundWhenAgentsAPIExists(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathList {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"agent not found"}`))
+	})
+
+	_, err := c.Get(context.Background(), "missing", nil)
+	var apiErr *transport.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %T, want *transport.APIError", err)
+	}
+	if apiErr.Message != "agent not found" {
+		t.Fatalf("message = %q, want agent not found", apiErr.Message)
 	}
 }
 
