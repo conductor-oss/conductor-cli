@@ -28,6 +28,7 @@ import (
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/conductor-oss/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal/transport"
 	"github.com/conductor-oss/conductor-cli/internal/updater"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -134,7 +135,10 @@ var rootCmd = &cobra.Command{
 
 		log.Debug("Using Server ", url)
 
+		httpSettings := settings.NewHttpSettings(url)
+
 		var apiClient *client.APIClient
+		var agentTokens transport.TokenProvider
 
 		// Priority: auth-token > auth-key/secret
 		if token != "" {
@@ -147,10 +151,11 @@ var rootCmd = &cobra.Command{
 			}
 			apiClient = client.NewAPIClientWithTokenManager(
 				nil,
-				settings.NewHttpSettings(url),
+				httpSettings,
 				nil,
 				tokenManager,
 			)
+			agentTokens = newTokenProvider(tokenManager, httpSettings)
 		} else if key != "" && secret != "" {
 			cachedToken := viper.GetString("cached-token")
 			cachedExpiry := viper.GetInt64("cached-token-expiry")
@@ -176,24 +181,33 @@ var rootCmd = &cobra.Command{
 				cachedToken,
 				cachedExpiry,
 				configPath,
-				settings.NewHttpSettings(url),
+				httpSettings,
 			)
 
 			apiClient = client.NewAPIClientWithTokenManager(
 				nil,
-				settings.NewHttpSettings(url),
+				httpSettings,
 				nil,
 				tokenManager,
 			)
+			agentTokens = newTokenProvider(tokenManager, httpSettings)
 		} else {
 			// No authentication configured, create client without credentials
 			apiClient = client.NewAPIClient(
 				settings.NewAuthenticationSettings("", ""),
-				settings.NewHttpSettings(url),
+				httpSettings,
 			)
 		}
 
 		internal.SetAPIClient(apiClient)
+
+		// Share the same server URL and auth with the agent/skill transport, whose
+		// endpoints are not part of the conductor-go SDK. agentTokens is nil when no
+		// credentials are configured (anonymous access).
+		internal.SetTransport(transport.Config{
+			BaseURL: url,
+			Tokens:  agentTokens,
+		})
 
 		return nil
 	},
