@@ -1093,36 +1093,84 @@ func startWorkflow(cmd *cobra.Command, args []string) error {
 
 	// Synchronous execution
 	if sync {
-		requestId, _ := uuid.NewRandom()
-		request := model.StartWorkflowRequest{
-			Name:          workflowName,
-			Version:       version,
-			CorrelationId: correlationId,
-			Input:         inputMap,
-			Priority:      0,
-		}
-
 		waitUntil, _ := cmd.Flags().GetString("wait-until")
+		full, _ := cmd.Flags().GetBool("full")
 		log.Debug("wait until ", waitUntil)
 
-		run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
-		if execErr != nil {
-			return parseAPIError(execErr, "Failed to start workflow")
+		// ExecuteWorkflow (POST /api/workflow/execute/{name}/{version}) is only
+		// available when auth is configured (Orkes Conductor). If no credentials
+		// are set, skip straight to the OSS-compatible start + poll path.
+		authKey := viper.GetString("auth-key")
+		authToken := viper.GetString("auth-token")
+		if authKey != "" || authToken != "" {
+			requestId, _ := uuid.NewRandom()
+			request := model.StartWorkflowRequest{
+				Name:          workflowName,
+				Version:       version,
+				CorrelationId: correlationId,
+				Input:         inputMap,
+				Priority:      0,
+			}
+			run, _, execErr := workflowClient.ExecuteWorkflow(context.Background(), request, requestId.String(), workflowName, version, waitUntil)
+			if execErr == nil {
+				var printTarget interface{}
+				if full {
+					printTarget = run
+				} else {
+					printTarget = run.Output
+				}
+				data, jsonError := json.MarshalIndent(printTarget, "", "   ")
+				if jsonError != nil {
+					return jsonError
+				}
+				fmt.Println(string(data))
+				return nil
+			}
+			log.Debug("ExecuteWorkflow unavailable, falling back to StartWorkflow + poll: ", execErr)
 		}
 
-		full, _ := cmd.Flags().GetBool("full")
-		var printTarget interface{}
-		if full {
-			printTarget = run
-		} else {
-			printTarget = run.Output
+		// OSS path (or Orkes fallback): start async, then poll until terminal.
+		startOpts := &client.WorkflowResourceApiStartWorkflowOpts{}
+		if version > 0 {
+			startOpts.Version = optional.NewInt32(version)
 		}
-		data, jsonError := json.MarshalIndent(printTarget, "", "   ")
-		if jsonError != nil {
-			return jsonError
+		if correlationId != "" {
+			startOpts.CorrelationId = optional.NewString(correlationId)
 		}
-		fmt.Println(string(data))
-		return nil
+		workflowId, _, startErr := workflowClient.StartWorkflow(cmd.Context(), inputMap, workflowName, startOpts)
+		if startErr != nil {
+			return parseAPIError(startErr, "Failed to start workflow")
+		}
+
+		pollOpts := &client.WorkflowResourceApiGetExecutionStatusOpts{IncludeTasks: optional.NewBool(false)}
+		for {
+			wf, _, pollErr := workflowClient.GetExecutionStatus(context.Background(), workflowId, pollOpts)
+			if pollErr != nil {
+				return parseAPIError(pollErr, "Failed to get workflow status")
+			}
+			isTerminal := false
+			for _, s := range model.WorkflowTerminalStates {
+				if wf.Status == s {
+					isTerminal = true
+					break
+				}
+			}
+			if isTerminal {
+				var printTarget interface{}
+				if full {
+					printTarget = wf
+				} else {
+					printTarget = wf.Output
+				}
+				data, jsonError := json.MarshalIndent(printTarget, "", "   ")
+				if jsonError != nil {
+					return jsonError
+				}
+				fmt.Println(string(data))
+				return nil
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
 
 	// Asynchronous execution
