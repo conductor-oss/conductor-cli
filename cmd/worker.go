@@ -11,35 +11,25 @@
  * specific language governing permissions and limitations under the License.
  */
 
-
 package cmd
 
 import (
-	"bytes"
-	"context"
-	"crypto/md5"
-	"crypto/sha1"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
+	"syscall"
 	"time"
 
-	"github.com/antihax/optional"
-	"github.com/conductor-sdk/conductor-go/sdk/authentication"
-	"github.com/conductor-sdk/conductor-go/sdk/client"
-	"github.com/conductor-sdk/conductor-go/sdk/model"
-	"github.com/conductor-sdk/conductor-go/sdk/settings"
-	"github.com/dop251/goja"
 	"github.com/conductor-oss/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal/taskworker"
+	"github.com/conductor-sdk/conductor-go/sdk/authentication"
+	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -115,9 +105,9 @@ The worker runs in continuous mode, polling for tasks and executing them in para
 	}
 
 	workerListRemoteCmd = &cobra.Command{
-		Use:          "list-remote",
-		Short:        "List available workers in the job-runner registry (EXPERIMENTAL, Orkes Conductor only)",
-		Long:         `⚠️  EXPERIMENTAL FEATURE - List all available workers in the Orkes Conductor job-runner registry.
+		Use:   "list-remote",
+		Short: "List available workers in the job-runner registry (EXPERIMENTAL, Orkes Conductor only)",
+		Long: `⚠️  EXPERIMENTAL FEATURE - List all available workers in the Orkes Conductor job-runner registry.
 ⚠️  Requires Orkes Conductor. Not available in OSS Conductor.`,
 		RunE:         listRemoteWorkers,
 		SilenceUsage: true,
@@ -167,298 +157,30 @@ func runJsWorker(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--type flag is required")
 	}
 
-	count, _ := cmd.Flags().GetInt32("count")
-	workerId, _ := cmd.Flags().GetString("worker-id")
-	domain, _ := cmd.Flags().GetString("domain")
-	timeout, _ := cmd.Flags().GetInt32("timeout")
-
 	scriptContent, err := os.ReadFile(jsFile)
 	if err != nil {
 		return fmt.Errorf("error reading JavaScript file: %v", err)
 	}
 
+	pollOpts, _ := workerPollFlags(cmd)
+
 	fmt.Printf("Starting worker for task type: %s\n", taskType)
 	fmt.Printf("JavaScript file: %s\n", jsFile)
-	fmt.Printf("Worker ID: %s\n", workerId)
+	fmt.Printf("Worker ID: %s\n", pollOpts.WorkerID)
 
-	for {
-		opts := &client.TaskResourceApiBatchPollOpts{}
-		if workerId != "" {
-			opts.Workerid = optional.NewString(workerId)
-		}
-		if domain != "" {
-			opts.Domain = optional.NewString(domain)
-		}
-		if count > 0 {
-			opts.Count = optional.NewInt32(count)
-		}
-		if timeout > 0 {
-			opts.Timeout = optional.NewInt32(timeout)
-		}
-
-		taskClient := internal.GetTaskClient()
-		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
-		if err != nil {
-			log.Errorf("Error polling tasks: %v", err)
-			continue
-		}
-
-		if len(tasks) == 0 {
-			log.Debug("No tasks available")
-			continue
-		}
-
-		log.Infof("Polled %d task(s)", len(tasks))
-
-		var wg sync.WaitGroup
-		for _, task := range tasks {
-			wg.Add(1)
-			go func(t model.Task) {
-				defer wg.Done()
-				processTask(t, string(scriptContent), taskClient)
-			}(task)
-		}
-
-		wg.Wait()
+	handler, err := taskworker.NewGojaHandler(string(scriptContent), jsFile)
+	if err != nil {
+		return err
 	}
+
+	return runWorkerLoop(cmd, taskType, handler, jsRunnerOptions(pollOpts))
 }
 
-func processTask(task model.Task, script string, taskClient *client.TaskResourceApiService) {
-	log.Infof("Processing task: %s (workflow: %s)", task.TaskId, task.WorkflowInstanceId)
-
-	vm := goja.New()
-
-	taskJSON, err := json.Marshal(task)
-	if err != nil {
-		log.Errorf("Error marshaling task: %v", err)
-		updateTaskFailed(taskClient, task, fmt.Sprintf("Error marshaling task: %v", err))
-		return
-	}
-
-	var taskObj interface{}
-	err = json.Unmarshal(taskJSON, &taskObj)
-	if err != nil {
-		log.Errorf("Error unmarshaling task: %v", err)
-		updateTaskFailed(taskClient, task, fmt.Sprintf("Error unmarshaling task: %v", err))
-		return
-	}
-
-	dollarObj := vm.NewObject()
-	err = dollarObj.Set("task", taskObj)
-	if err != nil {
-		log.Errorf("Error setting task in $: %v", err)
-		updateTaskFailed(taskClient, task, fmt.Sprintf("Error setting task: %v", err))
-		return
-	}
-	err = vm.Set("$", dollarObj)
-	if err != nil {
-		log.Errorf("Error setting $ object: %v", err)
-		updateTaskFailed(taskClient, task, fmt.Sprintf("Error setting $ object: %v", err))
-		return
-	}
-
-	injectUtilities(vm)
-
-	result, err := vm.RunString(script)
-	if err != nil {
-		log.Errorf("Error executing script for task %s: %v", task.TaskId, err)
-		updateTaskFailed(taskClient, task, fmt.Sprintf("Script execution error: %v", err))
-		return
-	}
-
-	if result != nil && !goja.IsUndefined(result) && !goja.IsNull(result) {
-		resultJSON := result.Export()
-		resultBytes, err := json.Marshal(resultJSON)
-		if err != nil {
-			log.Errorf("Error marshaling script result: %v", err)
-			updateTaskCompleted(taskClient, task, map[string]interface{}{})
-			return
-		}
-
-		var taskResult TaskResult
-		err = json.Unmarshal(resultBytes, &taskResult)
-		if err != nil {
-			log.Warnf("Script result not in expected format, treating as completed")
-			updateTaskCompleted(taskClient, task, map[string]interface{}{"result": resultJSON})
-			return
-		}
-
-		if taskResult.Body == nil {
-			taskResult.Body = make(map[string]interface{})
-		}
-		updateTaskWithStatus(taskClient, task, taskResult.Status, taskResult.Body)
-	} else {
-		updateTaskCompleted(taskClient, task, map[string]interface{}{})
-	}
-}
-
-func updateTaskCompleted(taskClient *client.TaskResourceApiService, task model.Task, output map[string]interface{}) {
-	updateTaskWithStatus(taskClient, task, "COMPLETED", output)
-}
-
-func updateTaskFailed(taskClient *client.TaskResourceApiService, task model.Task, reason string) {
-	output := map[string]interface{}{
-		"error": reason,
-	}
-	updateTaskWithStatus(taskClient, task, "FAILED", output)
-}
-
-func updateTaskWithStatus(taskClient *client.TaskResourceApiService, task model.Task, status string, output map[string]interface{}) {
-	log.Infof("Updating task %s with status: %s", task.TaskId, status)
-
-	taskResult := &model.TaskResult{
-		TaskId:             task.TaskId,
-		WorkflowInstanceId: task.WorkflowInstanceId,
-		WorkerId:           task.WorkerId,
-		Status:             model.TaskResultStatus(status),
-		OutputData:         output,
-	}
-
-	_, _, err := taskClient.UpdateTask(context.Background(), taskResult)
-	if err != nil {
-		log.Errorf("Error updating task %s: %v", task.TaskId, err)
-		return
-	}
-
-	log.Infof("Task %s updated successfully with status: %s", task.TaskId, status)
-}
-
-// injectUtilities adds utility functions to the JavaScript VM
-func injectUtilities(vm *goja.Runtime) {
-	// HTTP utilities
-	httpObj := vm.NewObject()
-	httpObj.Set("get", func(url string, headers map[string]interface{}) map[string]interface{} {
-		return httpRequest("GET", url, headers, "")
-	})
-	httpObj.Set("post", func(url string, headers map[string]interface{}, body string) map[string]interface{} {
-		return httpRequest("POST", url, headers, body)
-	})
-	httpObj.Set("put", func(url string, headers map[string]interface{}, body string) map[string]interface{} {
-		return httpRequest("PUT", url, headers, body)
-	})
-	httpObj.Set("delete", func(url string, headers map[string]interface{}) map[string]interface{} {
-		return httpRequest("DELETE", url, headers, "")
-	})
-	vm.Set("http", httpObj)
-
-	// Crypto utilities
-	cryptoObj := vm.NewObject()
-	cryptoObj.Set("md5", func(text string) string {
-		hash := md5.Sum([]byte(text))
-		return hex.EncodeToString(hash[:])
-	})
-	cryptoObj.Set("sha1", func(text string) string {
-		hash := sha1.Sum([]byte(text))
-		return hex.EncodeToString(hash[:])
-	})
-	cryptoObj.Set("sha256", func(text string) string {
-		hash := sha256.Sum256([]byte(text))
-		return hex.EncodeToString(hash[:])
-	})
-	cryptoObj.Set("base64Encode", func(text string) string {
-		return base64.StdEncoding.EncodeToString([]byte(text))
-	})
-	cryptoObj.Set("base64Decode", func(text string) string {
-		decoded, err := base64.StdEncoding.DecodeString(text)
-		if err != nil {
-			return ""
-		}
-		return string(decoded)
-	})
-	vm.Set("crypto", cryptoObj)
-
-	// Utility functions
-	utilObj := vm.NewObject()
-	utilObj.Set("sleep", func(ms int) {
-		time.Sleep(time.Duration(ms) * time.Millisecond)
-	})
-	utilObj.Set("uuid", func() string {
-		return fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())
-	})
-	utilObj.Set("env", func(key string) string {
-		return os.Getenv(key)
-	})
-	vm.Set("util", utilObj)
-
-	// String utilities
-	stringObj := vm.NewObject()
-	stringObj.Set("toUpper", strings.ToUpper)
-	stringObj.Set("toLower", strings.ToLower)
-	stringObj.Set("trim", strings.TrimSpace)
-	stringObj.Set("split", func(s, sep string) []string {
-		return strings.Split(s, sep)
-	})
-	stringObj.Set("join", func(arr []string, sep string) string {
-		return strings.Join(arr, sep)
-	})
-	stringObj.Set("replace", func(s, old, new string) string {
-		return strings.ReplaceAll(s, old, new)
-	})
-	stringObj.Set("contains", strings.Contains)
-	stringObj.Set("hasPrefix", strings.HasPrefix)
-	stringObj.Set("hasSuffix", strings.HasSuffix)
-	vm.Set("str", stringObj)
-}
-
-func httpRequest(method, url string, headers map[string]interface{}, body string) map[string]interface{} {
-	var bodyReader io.Reader
-	if body != "" {
-		bodyReader = strings.NewReader(body)
-	}
-
-	req, err := http.NewRequest(method, url, bodyReader)
-	if err != nil {
-		return map[string]interface{}{
-			"error":  err.Error(),
-			"status": 0,
-		}
-	}
-
-	for key, value := range headers {
-		if strVal, ok := value.(string); ok {
-			req.Header.Set(key, strVal)
-		}
-	}
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return map[string]interface{}{
-			"error":  err.Error(),
-			"status": 0,
-		}
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return map[string]interface{}{
-			"error":  err.Error(),
-			"status": resp.StatusCode,
-		}
-	}
-
-	var jsonBody interface{}
-	if err := json.Unmarshal(respBody, &jsonBody); err == nil {
-		return map[string]interface{}{
-			"status": resp.StatusCode,
-			"body":   jsonBody,
-			"text":   string(respBody),
-		}
-	}
-
-	return map[string]interface{}{
-		"status": resp.StatusCode,
-		"text":   string(respBody),
-	}
-}
-
-// WorkerResult represents the expected output from a worker command
-type WorkerResult struct {
-	Status string                 `json:"status"` // COMPLETED | FAILED | IN_PROGRESS
-	Output map[string]interface{} `json:"output,omitempty"`
-	Logs   []string               `json:"logs,omitempty"`
-	Reason string                 `json:"reason,omitempty"`
+// jsRunnerOptions adjusts poll options for JavaScript workers, which report the polled
+// task's own worker id on the result rather than the configured --worker-id.
+func jsRunnerOptions(opts taskworker.RunnerOptions) taskworker.RunnerOptions {
+	opts.UseTaskWorkerID = true
+	return opts
 }
 
 func execWorker(cmd *cobra.Command, args []string) error {
@@ -481,234 +203,67 @@ func execWorker(cmd *cobra.Command, args []string) error {
 	count, _ := cmd.Flags().GetInt32("count")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
-	taskClient := internal.GetTaskClient()
-
 	fmt.Printf("Starting worker for task type: %s\n", taskType)
 	fmt.Printf("Command: %s %v\n", workerCmd, workerArgs)
 	if workerId != "" {
 		fmt.Printf("Worker ID: %s\n", workerId)
 	}
 
-	for {
-		opts := &client.TaskResourceApiBatchPollOpts{}
-		if workerId != "" {
-			opts.Workerid = optional.NewString(workerId)
-		}
-		if domain != "" {
-			opts.Domain = optional.NewString(domain)
-		}
-		if count > 0 {
-			opts.Count = optional.NewInt32(count)
-		}
-		if pollTimeout > 0 {
-			opts.Timeout = optional.NewInt32(pollTimeout)
-		}
+	handler := taskworker.NewStdioHandler(taskworker.StdioOptions{
+		Command:     workerCmd,
+		Args:        workerArgs,
+		Env:         workerChildEnv(),
+		Domain:      domain,
+		ExecTimeout: time.Duration(execTimeout) * time.Second,
+		Verbose:     verbose,
+	})
 
-		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
-		if err != nil {
-			log.Errorf("Error polling tasks: %v", err)
-			continue
-		}
-
-		if len(tasks) == 0 {
-			log.Debug("No tasks available")
-			continue
-		}
-
-		log.Infof("Polled %d task(s)", len(tasks))
-
-		// Process tasks in parallel goroutines
-		var wg sync.WaitGroup
-		for _, task := range tasks {
-			wg.Add(1)
-			go func(t model.Task) {
-				defer wg.Done()
-				executeExternalWorker(t, workerCmd, workerArgs, workerId, domain, execTimeout, verbose, taskClient)
-			}(task)
-		}
-
-		wg.Wait()
-	}
+	return runWorkerLoop(cmd, taskType, handler, taskworker.RunnerOptions{
+		WorkerID:      workerId,
+		Domain:        domain,
+		Count:         count,
+		PollTimeoutMs: pollTimeout,
+	})
 }
 
-func executeExternalWorker(task model.Task, workerCmd string, workerArgs []string, workerId, domain string, execTimeout int32, verbose bool, taskClient *client.TaskResourceApiService) {
-	log.Infof("Processing task: %s (workflow: %s)", task.TaskId, task.WorkflowInstanceId)
+// runWorkerLoop drives a handler with the shared poll loop until the user interrupts it.
+// Every worker flavour funnels through here, so the loop exists once rather than per
+// flavour.
+func runWorkerLoop(cmd *cobra.Command, taskType string, h taskworker.Handler, opts taskworker.RunnerOptions) error {
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	taskJSON, err := json.Marshal(task)
-	if err != nil {
-		log.Errorf("Error marshaling task: %v", err)
-		updateExecTaskFailed(taskClient, task, workerId, fmt.Sprintf("error marshaling task: %v", err))
-		return
-	}
+	runner := taskworker.NewConductorRunner(internal.GetTaskClient(), opts)
+	taskworker.NewWorker(runner, taskworker.Config{}).Run(ctx, taskType, h)
+	return nil
+}
 
-	if verbose {
-		fmt.Println("=== Task Input ===")
-		fmt.Println(string(taskJSON))
-		fmt.Println("==================")
-	}
+// workerChildEnv builds the Conductor environment handed to worker subprocesses, so a
+// worker can call back into Conductor with the same server and credentials as the CLI.
+//
+// Resolving viper here keeps process-global config in the cmd layer: internal/taskworker
+// receives a plain []string.
+func workerChildEnv() []string {
+	var env []string
 
-	ctx := context.Background()
-	if execTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(execTimeout)*time.Second)
-		defer cancel()
-	}
-
-	execCmd := exec.CommandContext(ctx, workerCmd, workerArgs...)
-	execCmd.Env = append(execCmd.Environ(),
-		"TASK_TYPE="+task.TaskType,
-		"TASK_ID="+task.TaskId,
-		"WORKFLOW_ID="+task.WorkflowInstanceId,
-		"EXECUTION_ID="+task.WorkflowInstanceId,
-	)
-	if domain != "" {
-		execCmd.Env = append(execCmd.Env, "POLL_DOMAIN="+domain)
-	}
-
-	serverUrl := viper.GetString("server")
-	if serverUrl != "" {
+	if serverUrl := viper.GetString("server"); serverUrl != "" {
 		serverUrl = strings.TrimSuffix(serverUrl, "/")
 		if !strings.HasSuffix(serverUrl, "/api") {
 			serverUrl = serverUrl + "/api"
 		}
-		execCmd.Env = append(execCmd.Env, "CONDUCTOR_SERVER_URL="+serverUrl)
+		env = append(env, "CONDUCTOR_SERVER_URL="+serverUrl)
+	}
+	if authKey := viper.GetString("auth-key"); authKey != "" {
+		env = append(env, "CONDUCTOR_ACCESS_KEY_ID="+authKey)
+	}
+	if authSecret := viper.GetString("auth-secret"); authSecret != "" {
+		env = append(env, "CONDUCTOR_ACCESS_KEY_SECRET="+authSecret)
+	}
+	if authToken := viper.GetString("auth-token"); authToken != "" {
+		env = append(env, "CONDUCTOR_AUTH_TOKEN="+authToken)
 	}
 
-	authKey := viper.GetString("auth-key")
-	authSecret := viper.GetString("auth-secret")
-	if authKey != "" {
-		execCmd.Env = append(execCmd.Env, "CONDUCTOR_ACCESS_KEY_ID="+authKey)
-	}
-	if authSecret != "" {
-		execCmd.Env = append(execCmd.Env, "CONDUCTOR_ACCESS_KEY_SECRET="+authSecret)
-	}
-
-	authToken := viper.GetString("auth-token")
-	if authToken != "" {
-		execCmd.Env = append(execCmd.Env, "CONDUCTOR_AUTH_TOKEN="+authToken)
-	}
-
-	execCmd.Stdin = bytes.NewReader(taskJSON)
-
-	var stdout, stderr bytes.Buffer
-	execCmd.Stdout = io.MultiWriter(&stdout, os.Stdout)
-	execCmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
-
-	execErr := execCmd.Run()
-
-	var result WorkerResult
-	if execErr != nil {
-		stderrOutput := stderr.String()
-		log.Errorf("Worker execution failed: %v", execErr)
-		if stderrOutput != "" {
-			log.Errorf("Worker stderr:\n%s", stderrOutput)
-		}
-
-		result = WorkerResult{
-			Status: "FAILED",
-			Reason: fmt.Sprintf("worker execution failed: %v", execErr),
-			Logs:   []string{stderrOutput},
-		}
-	} else {
-		if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-			stdoutOutput := stdout.String()
-			log.Errorf("Failed to parse worker output as JSON: %v", err)
-			log.Errorf("Worker stdout:\n%s", stdoutOutput)
-
-			result = WorkerResult{
-				Status: "FAILED",
-				Reason: fmt.Sprintf("invalid worker stdout JSON: %v", err),
-				Logs:   []string{stdoutOutput},
-			}
-		}
-	}
-
-	if verbose {
-		resultJSON, _ := json.MarshalIndent(result, "", "  ")
-		if result.Status == "FAILED" {
-			fmt.Println("=== Task Result (Error) ===")
-			fmt.Println(string(resultJSON))
-			fmt.Println("===========================")
-		} else {
-			fmt.Println("=== Task Result ===")
-			fmt.Println(string(resultJSON))
-			fmt.Println("===================")
-		}
-	}
-
-	switch result.Status {
-	case "COMPLETED", "FAILED", "IN_PROGRESS":
-	default:
-		result.Status = "FAILED"
-		result.Reason = fmt.Sprintf("invalid status from worker: %s", result.Status)
-	}
-
-	var status model.TaskResultStatus
-	switch result.Status {
-	case "COMPLETED":
-		status = model.CompletedTask
-	case "FAILED":
-		status = model.FailedTask
-	case "IN_PROGRESS":
-		status = model.InProgressTask
-	default:
-		status = model.FailedTask
-	}
-
-	taskResult := model.TaskResult{
-		TaskId:             task.TaskId,
-		WorkflowInstanceId: task.WorkflowInstanceId,
-		Status:             status,
-	}
-
-	if result.Output != nil {
-		taskResult.OutputData = result.Output
-	}
-
-	if len(result.Logs) > 0 {
-		logs := make([]model.TaskExecLog, len(result.Logs))
-		for i, logLine := range result.Logs {
-			logs[i] = model.TaskExecLog{
-				Log: logLine,
-			}
-		}
-		taskResult.Logs = logs
-	}
-
-	if result.Reason != "" {
-		taskResult.ReasonForIncompletion = result.Reason
-	}
-
-	if workerId != "" {
-		taskResult.WorkerId = workerId
-	}
-
-	_, _, err = taskClient.UpdateTask(context.Background(), &taskResult)
-	if err != nil {
-		log.Errorf("Error updating task %s: %v", task.TaskId, err)
-		return
-	}
-
-	log.Infof("Task %s completed with status: %s", task.TaskId, result.Status)
-}
-
-func updateExecTaskFailed(taskClient *client.TaskResourceApiService, task model.Task, workerId, reason string) {
-	taskResult := model.TaskResult{
-		TaskId:                  task.TaskId,
-		WorkflowInstanceId:      task.WorkflowInstanceId,
-		Status:                  model.FailedTask,
-		ReasonForIncompletion:   reason,
-		OutputData:              map[string]interface{}{"error": reason},
-	}
-
-	if workerId != "" {
-		taskResult.WorkerId = workerId
-	}
-
-	_, _, err := taskClient.UpdateTask(context.Background(), &taskResult)
-	if err != nil {
-		log.Errorf("Error updating task %s as failed: %v", task.TaskId, err)
-	}
+	return env
 }
 
 func listRemoteWorkers(cmd *cobra.Command, args []string) error {
@@ -996,61 +551,24 @@ func fileExists(path string) bool {
 }
 
 func executeJsWorkerFromFile(cmd *cobra.Command, workerFile, taskType string) error {
-	count, _ := cmd.Flags().GetInt32("count")
-	workerId, _ := cmd.Flags().GetString("worker-id")
-	domain, _ := cmd.Flags().GetString("domain")
-	timeout, _ := cmd.Flags().GetInt32("timeout")
-
 	scriptContent, err := os.ReadFile(workerFile)
 	if err != nil {
 		return fmt.Errorf("error reading worker file: %v", err)
 	}
 
+	pollOpts, _ := workerPollFlags(cmd)
+
 	log.Infof("Starting JavaScript worker for task type: %s", taskType)
-	if workerId != "" {
-		log.Infof("Worker ID: %s", workerId)
+	if pollOpts.WorkerID != "" {
+		log.Infof("Worker ID: %s", pollOpts.WorkerID)
 	}
 
-	for {
-		opts := &client.TaskResourceApiBatchPollOpts{}
-		if workerId != "" {
-			opts.Workerid = optional.NewString(workerId)
-		}
-		if domain != "" {
-			opts.Domain = optional.NewString(domain)
-		}
-		if count > 0 {
-			opts.Count = optional.NewInt32(count)
-		}
-		if timeout > 0 {
-			opts.Timeout = optional.NewInt32(timeout)
-		}
-
-		taskClient := internal.GetTaskClient()
-		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
-		if err != nil {
-			log.Errorf("Error polling tasks: %v", err)
-			continue
-		}
-
-		if len(tasks) == 0 {
-			log.Debug("No tasks available")
-			continue
-		}
-
-		log.Infof("Polled %d task(s)", len(tasks))
-
-		var wg sync.WaitGroup
-		for _, task := range tasks {
-			wg.Add(1)
-			go func(t model.Task) {
-				defer wg.Done()
-				processTask(t, string(scriptContent), taskClient)
-			}(task)
-		}
-
-		wg.Wait()
+	handler, err := taskworker.NewGojaHandler(string(scriptContent), workerFile)
+	if err != nil {
+		return err
 	}
+
+	return runWorkerLoop(cmd, taskType, handler, jsRunnerOptions(pollOpts))
 }
 
 func setupPythonEnvironment(cacheDir string, dependencies []string) error {
@@ -1130,10 +648,7 @@ func equalStringSlices(a, b []string) bool {
 }
 
 func executePythonWorkerFromFile(cmd *cobra.Command, workerFile, taskType string) error {
-	count, _ := cmd.Flags().GetInt32("count")
-	workerId, _ := cmd.Flags().GetString("worker-id")
-	domain, _ := cmd.Flags().GetString("domain")
-	execTimeout, _ := cmd.Flags().GetInt32("timeout")
+	pollOpts, execTimeout := workerPollFlags(cmd)
 
 	pythonCmd := "python3"
 	cacheDir := filepath.Dir(workerFile)
@@ -1147,52 +662,54 @@ func executePythonWorkerFromFile(cmd *cobra.Command, workerFile, taskType string
 	}
 
 	log.Infof("Starting Python worker for task type: %s", taskType)
-	if workerId != "" {
-		log.Infof("Worker ID: %s", workerId)
+	if pollOpts.WorkerID != "" {
+		log.Infof("Worker ID: %s", pollOpts.WorkerID)
 	}
 
-	taskClient := internal.GetTaskClient()
+	handler := taskworker.NewStdioHandler(taskworker.StdioOptions{
+		Command:     pythonCmd,
+		Args:        []string{workerFile},
+		Env:         workerChildEnv(),
+		Domain:      pollOpts.Domain,
+		ExecTimeout: execTimeout,
+	})
 
-	for {
-		opts := &client.TaskResourceApiBatchPollOpts{}
-		if workerId != "" {
-			opts.Workerid = optional.NewString(workerId)
-		}
-		if domain != "" {
-			opts.Domain = optional.NewString(domain)
-		}
-		if count > 0 {
-			opts.Count = optional.NewInt32(count)
-		}
-		if execTimeout > 0 {
-			opts.Timeout = optional.NewInt32(execTimeout)
-		}
+	return runWorkerLoop(cmd, taskType, handler, pollOpts)
+}
 
-		tasks, _, err := taskClient.BatchPoll(context.Background(), taskType, opts)
-		if err != nil {
-			log.Errorf("Error polling tasks: %v", err)
-			continue
-		}
+// workerPollFlags reads the poll and execution flags shared by the worker subcommands.
+//
+// --poll-timeout and --exec-timeout are the canonical names. --timeout is a deprecated
+// alias for --poll-timeout, kept because `worker js` and `worker remote` shipped with it.
+// Previously `worker remote` fed one --timeout value to both, so the same number meant
+// milliseconds of poll wait and seconds of execution budget at once (issue #91).
+func workerPollFlags(cmd *cobra.Command) (taskworker.RunnerOptions, time.Duration) {
+	opts := taskworker.RunnerOptions{}
+	opts.WorkerID, _ = cmd.Flags().GetString("worker-id")
+	opts.Domain, _ = cmd.Flags().GetString("domain")
+	opts.Count, _ = cmd.Flags().GetInt32("count")
 
-		if len(tasks) == 0 {
-			log.Debug("No tasks available")
-			continue
-		}
-
-		log.Infof("Polled %d task(s)", len(tasks))
-
-		// Process tasks in parallel goroutines
-		var wg sync.WaitGroup
-		for _, task := range tasks {
-			wg.Add(1)
-			go func(t model.Task) {
-				defer wg.Done()
-				executeExternalWorker(t, pythonCmd, []string{workerFile}, workerId, domain, execTimeout, false, taskClient)
-			}(task)
-		}
-
-		wg.Wait()
+	opts.PollTimeoutMs, _ = cmd.Flags().GetInt32("poll-timeout")
+	if cmd.Flags().Changed("timeout") && !cmd.Flags().Changed("poll-timeout") {
+		legacy, _ := cmd.Flags().GetInt32("timeout")
+		opts.PollTimeoutMs = legacy
 	}
+
+	execSeconds, _ := cmd.Flags().GetInt32("exec-timeout")
+	return opts, time.Duration(execSeconds) * time.Second
+}
+
+// addPollTimeoutFlags registers the two timeout flags on a worker subcommand, plus the
+// deprecated --timeout alias that `worker js` and `worker remote` shipped with.
+//
+// The alias is hidden rather than removed so existing invocations keep working; it maps
+// to --poll-timeout only. See workerPollFlags and issue #91.
+func addPollTimeoutFlags(cmd *cobra.Command, execTimeoutDefault int32) {
+	cmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
+	cmd.Flags().Int32("exec-timeout", execTimeoutDefault, "Worker execution timeout in seconds (0 = no timeout)")
+	cmd.Flags().Int32("timeout", 100, "Deprecated: use --poll-timeout")
+	_ = cmd.Flags().MarkHidden("timeout")
+	_ = cmd.Flags().MarkDeprecated("timeout", "use --poll-timeout instead")
 }
 
 func init() {
@@ -1201,24 +718,26 @@ func init() {
 	workerJsCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 	workerJsCmd.Flags().String("worker-id", "", "Worker ID")
 	workerJsCmd.Flags().String("domain", "", "Domain")
-	workerJsCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
+	addPollTimeoutFlags(workerJsCmd, 0)
 
 	workerStdioCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerStdioCmd.MarkFlagRequired("type")
 	workerStdioCmd.Flags().String("worker-id", "", "Worker ID")
 	workerStdioCmd.Flags().String("domain", "", "Domain")
-	workerStdioCmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
-	workerStdioCmd.Flags().Int32("exec-timeout", 0, "Execution timeout in seconds (0 = no timeout)")
 	workerStdioCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 	workerStdioCmd.Flags().Bool("verbose", false, "Print task and result JSON to stdout")
+	addPollTimeoutFlags(workerStdioCmd, 0)
 
 	workerRemoteCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerRemoteCmd.MarkFlagRequired("type")
 	workerRemoteCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 	workerRemoteCmd.Flags().String("worker-id", "", "Worker ID")
 	workerRemoteCmd.Flags().String("domain", "", "Domain")
-	workerRemoteCmd.Flags().Int32("timeout", 100, "Timeout in milliseconds")
 	workerRemoteCmd.Flags().Bool("refresh", false, "Force refresh worker from registry (ignore cache)")
+	// Remote workers previously derived their execution timeout from --timeout, whose
+	// default was 100. Defaulting --exec-timeout to 100s keeps a hanging remote worker
+	// bounded as it was before the two timeouts were separated.
+	addPollTimeoutFlags(workerRemoteCmd, 100)
 
 	workerListRemoteCmd.Flags().String("namespace", "default", "Namespace to list workers from")
 
