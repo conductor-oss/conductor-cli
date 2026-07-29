@@ -29,6 +29,7 @@ import (
 	"github.com/conductor-oss/conductor-cli/internal"
 	"github.com/conductor-oss/conductor-cli/internal/agent"
 	"github.com/conductor-oss/conductor-cli/internal/skillworker"
+	"github.com/conductor-oss/conductor-cli/internal/taskworker"
 )
 
 // Skill run/serve flag defaults.
@@ -173,9 +174,10 @@ func scriptOptions() skillworker.ScriptOptions {
 // They run until ctx is cancelled.
 func startSkillWorkers(ctx context.Context, registry map[string]skillworker.ToolHandler) {
 	taskClient := internal.GetTaskClient()
+	opts := skillworker.RunnerOptions()
 	for taskType, handler := range registry {
-		w := skillworker.NewWorker(skillworker.NewConductorRunner(taskClient))
-		go w.Run(ctx, taskType, handler)
+		w := taskworker.NewWorker(taskworker.NewConductorRunner(taskClient, opts), taskworker.Config{})
+		go w.Run(ctx, taskType, skillworker.AsTaskHandler(handler))
 	}
 }
 
