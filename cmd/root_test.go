@@ -20,9 +20,9 @@ import (
 
 func TestIsEnterpriseServer(t *testing.T) {
 	tests := []struct {
-		name       string
-		serverVal  string
-		want       bool
+		name      string
+		serverVal string
+		want      bool
 	}{
 		{
 			name:      "Enterprise lowercase",
@@ -134,6 +134,18 @@ func TestURLNormalization(t *testing.T) {
 	}
 }
 
+// TestCodeCommandRemoved guards the removal of `conductor code`. Its templates were
+// fetched from an unversioned external origin and it embedded credentials in generated
+// source; see issue #93. A stray re-registration would silently bring both back.
+func TestCodeCommandRemoved(t *testing.T) {
+	for _, args := range [][]string{{"code"}, {"code", "list"}} {
+		cmd, _, err := rootCmd.Find(args)
+		if err == nil && cmd != rootCmd && cmd.Name() == args[len(args)-1] {
+			t.Errorf("rootCmd.Find(%v) resolved to a real command; `conductor code` was removed in #93", args)
+		}
+	}
+}
+
 func TestIsLocalOnlyCommand(t *testing.T) {
 	tests := []struct {
 		name string
@@ -141,8 +153,6 @@ func TestIsLocalOnlyCommand(t *testing.T) {
 		want bool
 	}{
 		{name: "update", args: []string{"update"}, want: true},
-		{name: "code", args: []string{"code"}, want: true},
-		{name: "code list", args: []string{"code", "list"}, want: true},
 		{name: "config save", args: []string{"config", "save"}, want: true},
 		{name: "server start", args: []string{"server", "start"}, want: true},
 		// Subcommands that merely share a name with a local-only command still

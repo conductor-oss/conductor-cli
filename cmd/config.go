@@ -11,7 +11,6 @@
  * specific language governing permissions and limitations under the License.
  */
 
-
 package cmd
 
 import (
@@ -272,18 +271,6 @@ func interactiveSaveConfig(profileName string) error {
 		serverType = serverTypeInput
 	}
 
-	templateURLDefault := existingConfig["template-url"]
-	if templateURLDefault == "" {
-		templateURLDefault = "https://d2ozrtblsovn5m.cloudfront.net"
-	}
-	fmt.Fprintf(os.Stdout, "Template repo URL [%s]: ", templateURLDefault)
-	templateURLInput, _ := reader.ReadString('\n')
-	templateURLInput = strings.TrimSpace(templateURLInput)
-	templateURL := templateURLDefault
-	if templateURLInput != "" {
-		templateURL = templateURLInput
-	}
-
 	var authKey, authSecret, authToken string
 
 	// Only prompt for authentication when using Enterprise server
@@ -358,7 +345,6 @@ func interactiveSaveConfig(profileName string) error {
 	configData := make(map[string]interface{})
 	configData["server"] = server
 	configData["server-type"] = serverType
-	configData["template-url"] = templateURL
 
 	if authKey != "" {
 		configData["auth-key"] = authKey
