@@ -187,6 +187,65 @@ Columns: NAME, VERSION, DESCRIPTION
 **Table Output (task list):**
 Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETRY COUNT, RESPONSE TIMEOUT (s)
 
+### Worker Commands
+
+> **Note:** Workers are experimental. All flavours share one poll loop; they differ only in how user code is executed and in the result shape it returns.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `worker stdio <command> [args...]` | Run an external program per task; task JSON on stdin, result JSON on stdout | command | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose` | `conductor worker stdio --type greet_task python3 worker.py` |
+| `worker js <file>` | Run a JavaScript worker in the built-in interpreter | JS file | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout` | `conductor worker js --type greet_task worker.js` |
+| `worker remote` | Run a worker downloaded from the Orkes job-runner registry (Orkes only) | None | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--refresh` | `conductor worker remote --type greet_task` |
+| `worker list-remote` | List workers in the registry (Orkes only) | None | `--namespace` | `conductor worker list-remote` |
+
+**Flags:**
+- `--type` - Task type to poll for (required for all worker commands)
+- `--count` - Tasks polled per batch, executed in parallel (default 1). The next poll waits for the slowest task in the batch.
+- `--poll-timeout` - Server-side long-poll wait in milliseconds (default 100)
+- `--exec-timeout` - Per-task execution timeout in seconds (0 = none; default 100 for `remote`)
+- `--timeout` - Deprecated alias for `--poll-timeout`
+- `--verbose` - Print task and result JSON (`stdio` only)
+
+**Result contracts** differ per flavour:
+
+| Flavour | Worker returns | Failure carries |
+|---------|----------------|-----------------|
+| `stdio` | `{"status","output","logs","reason"}` on stdout | `reasonForIncompletion` + logs |
+| `js` | `{status, body}` from the script; `$.task` holds the task | `output.error` |
+| skill tools | bare stdout, wrapped as `{"result": ...}` | `reasonForIncompletion` |
+
+Workers exit cleanly on Ctrl-C/SIGTERM. Child processes receive `TASK_TYPE`, `TASK_ID`, `WORKFLOW_ID`, `EXECUTION_ID`, `POLL_DOMAIN`, and the CLI's own `CONDUCTOR_SERVER_URL` and credentials.
+
+### Skill Commands
+
+A skill is a directory with `SKILL.md` (frontmatter `name` required) plus `scripts/`. Each script is served as the Conductor task type `{skillName}__{tool}`, so a skill tool can be called by an agent **or** by a plain workflow task.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `skill list` | List registered skills | None | `--all-versions`, `--json` | `conductor skill list` |
+| `skill get <name> [version]` | Get a registered skill | name | `--version` | `conductor skill get myskill` |
+| `skill register <path>` | Package and register a local skill | path | | `conductor skill register ./myskill` |
+| `skill load <path>` | Package a local skill and deploy it as an agent | path | | `conductor skill load ./myskill` |
+| `skill pull <name> [dest]` | Download and extract a skill package | name | `--version` | `conductor skill pull myskill` |
+| `skill delete <name> [version]` | Delete a registered skill version | name | `--version` | `conductor skill delete myskill` |
+| `skill run <path-or-name> <prompt>` | Start local tool workers, run the agent, stream output | path/name, prompt | `--model` (required), `--param`, `--version`, workspace flags | `conductor skill run ./myskill "say hi" --model gpt-4o` |
+| `skill serve <path-or-name>` | Start local tool workers only, block until interrupted | path/name | `--version`, workspace flags | `conductor skill serve ./myskill` |
+
+**Workspace flags** (`run` and `serve`): `--workspace` (default `.`), `--no-workspace`, `--filesystem name=path` (repeatable), `--script-timeout` (default 300s), `--script-output-limit` (default 10 MiB).
+
+**Tool contract:** `inputParameters.command` becomes the script's argv; stdout becomes `{"result": "<stdout>"}`; non-zero exit fails the task. Script language is chosen by extension (`.py .sh .js .mjs .ts .rb .go .bat .cmd`).
+
+Using a skill tool as a plain worker:
+
+```bash
+conductor skill serve ./myskill &
+# workflow task named "greetskill__greet" with inputParameters {"command": "Miguel"}
+conductor workflow start --workflow skill_as_worker --input '{"name":"Miguel"}' --sync
+# { "result": "Hello Miguel\n" }
+```
+
+See [WORKER_SKILL.md](./WORKER_SKILL.md), [WORKER_STDIO.md](./WORKER_STDIO.md), [WORKER_JS.md](./WORKER_JS.md).
+
 ### Config Commands
 
 | Command | Description | Required Args | Optional Flags | Example |

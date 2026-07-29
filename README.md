@@ -548,8 +548,8 @@ conductor worker <command> [arguments] [flags]
 | Command | Description |
 |---------|-------------|
 | `stdio <program> [args...]` | Run stdio worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose`) |
-| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--timeout`) |
-| `remote` | Run remote worker (`--type`, `--count`, `--worker-id`, `--domain`, `--refresh`) |
+| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`) |
+| `remote` | Run remote worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--refresh`) |
 | `list-remote` | List remote workers (`--namespace`) |
 
 **Worker Options:**
@@ -880,6 +880,19 @@ Execute tasks using **JavaScript** scripts with built-in utilities (HTTP, crypto
 **Best for:** Prototyping, Lightweight tasks, quick scripts, HTTP integrations
 
 👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
+
+### Skill Workers
+
+A skill directory (`SKILL.md` plus `scripts/`) serves each of its scripts as a
+Conductor task type via `conductor skill serve`. Scripts take their arguments from
+`inputParameters.command` and return bare stdout, so there is no result envelope to
+emit. Works with or without an agent.
+
+```bash
+conductor skill serve ./myskill
+```
+
+👉 **[Complete Skill Worker Documentation →](WORKER_SKILL.md)**
 
 **Quick example:**
 ```bash

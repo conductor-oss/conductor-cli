@@ -260,9 +260,9 @@ func main() {
 7. **Use environment variables**: Access `TASK_ID`, `WORKFLOW_ID` etc. when needed
 8. **Exit with code 0**: Always exit with 0 and use status field for task outcome
 
-## Comparison with JavaScript Workers
+## Comparison with other worker types
 
-| Feature | Generic Workers (exec) | JavaScript Workers (js) |
+| Feature | Stdio Workers (stdio) | JavaScript Workers (js) |
 |---------|----------------------|------------------------|
 | Languages | Any (Python, Node, Go, etc.) | JavaScript only |
 | Dependencies | Full access to language ecosystem | Limited (Goja ES5.1+) |
@@ -271,3 +271,5 @@ func main() {
 | HTTP Calls | Use language's HTTP library | Built-in `http` object |
 | File System | Full access | No access |
 | Best For | Complex logic, heavy dependencies | Lightweight tasks, quick scripts |
+
+See also [Skill Workers](WORKER_SKILL.md), which run a script with no result envelope at all.
