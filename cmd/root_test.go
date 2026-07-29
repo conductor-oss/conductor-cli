@@ -133,3 +133,41 @@ func TestURLNormalization(t *testing.T) {
 		})
 	}
 }
+
+func TestIsLocalOnlyCommand(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "update", args: []string{"update"}, want: true},
+		{name: "code", args: []string{"code"}, want: true},
+		{name: "code list", args: []string{"code", "list"}, want: true},
+		{name: "config save", args: []string{"config", "save"}, want: true},
+		{name: "server start", args: []string{"server", "start"}, want: true},
+		// Subcommands that merely share a name with a local-only command still
+		// need an API client.
+		{name: "schedule update", args: []string{"schedule", "update"}, want: false},
+		{name: "webhook update", args: []string{"webhook", "update"}, want: false},
+		{name: "task update", args: []string{"task", "update"}, want: false},
+		{name: "workflow update", args: []string{"workflow", "update"}, want: false},
+		{name: "workflow list", args: []string{"workflow", "list"}, want: false},
+		{name: "api-gateway service list", args: []string{"api-gateway", "service", "list"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, _, err := rootCmd.Find(tt.args)
+			if err != nil {
+				t.Fatalf("rootCmd.Find(%v) returned error: %v", tt.args, err)
+			}
+			// Guard against a typo in args silently resolving to a parent command.
+			if cmd.Name() != tt.args[len(tt.args)-1] {
+				t.Fatalf("rootCmd.Find(%v) resolved to %q, want %q", tt.args, cmd.Name(), tt.args[len(tt.args)-1])
+			}
+			if got := isLocalOnlyCommand(cmd); got != tt.want {
+				t.Errorf("isLocalOnlyCommand(%v) = %v, want %v", tt.args, got, tt.want)
+			}
+		})
+	}
+}
