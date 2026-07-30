@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,11 +116,6 @@ The worker runs in continuous mode, polling for tasks and executing them in para
 	}
 )
 
-type TaskResult struct {
-	Status string                 `json:"status"`
-	Body   map[string]interface{} `json:"body"`
-}
-
 // WorkerCodeResponse represents the response from the job-runner worker-code API
 type WorkerCodeResponse struct {
 	Id           string    `json:"id"`
@@ -196,46 +192,76 @@ func execWorker(cmd *cobra.Command, args []string) error {
 	workerCmd := args[0]
 	workerArgs := args[1:]
 
-	workerId, _ := cmd.Flags().GetString("worker-id")
-	domain, _ := cmd.Flags().GetString("domain")
-	pollTimeout, _ := cmd.Flags().GetInt32("poll-timeout")
-	execTimeout, _ := cmd.Flags().GetInt32("exec-timeout")
-	count, _ := cmd.Flags().GetInt32("count")
+	pollOpts, execTimeout := workerPollFlags(cmd)
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	fmt.Printf("Starting worker for task type: %s\n", taskType)
 	fmt.Printf("Command: %s %v\n", workerCmd, workerArgs)
-	if workerId != "" {
-		fmt.Printf("Worker ID: %s\n", workerId)
+	if pollOpts.WorkerID != "" {
+		fmt.Printf("Worker ID: %s\n", pollOpts.WorkerID)
 	}
 
 	handler := taskworker.NewStdioHandler(taskworker.StdioOptions{
 		Command:     workerCmd,
 		Args:        workerArgs,
 		Env:         workerChildEnv(),
-		Domain:      domain,
-		ExecTimeout: time.Duration(execTimeout) * time.Second,
+		Domain:      pollOpts.Domain,
+		ExecTimeout: execTimeout,
 		Verbose:     verbose,
 	})
 
-	return runWorkerLoop(cmd, taskType, handler, taskworker.RunnerOptions{
-		WorkerID:      workerId,
-		Domain:        domain,
-		Count:         count,
-		PollTimeoutMs: pollTimeout,
-	})
+	return runWorkerLoop(cmd, taskType, handler, pollOpts)
 }
 
 // runWorkerLoop drives a handler with the shared poll loop until the user interrupts it.
 // Every worker flavour funnels through here, so the loop exists once rather than per
 // flavour.
 func runWorkerLoop(cmd *cobra.Command, taskType string, h taskworker.Handler, opts taskworker.RunnerOptions) error {
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	stop := interruptWithEscalation(cancel)
 	defer stop()
 
 	runner := taskworker.NewConductorRunner(internal.GetTaskClient(), opts)
 	taskworker.NewWorker(runner, taskworker.Config{}).Run(ctx, taskType, h)
 	return nil
+}
+
+// interruptWithEscalation cancels on the first interrupt and force-exits on the second.
+//
+// signal.NotifyContext alone is not enough here: it keeps the signal channel registered
+// after firing once, so the default disposition never returns and further Ctrl-C presses
+// are swallowed. A handler that cannot be interrupted — a goja script with no vm.Interrupt
+// wired, or a subprocess whose grandchild is holding the captured pipes open — would then
+// leave the worker unkillable by anything short of SIGQUIT.
+//
+// So the first signal asks the loop to drain, and a second one means the user is done
+// waiting.
+func interruptWithEscalation(cancel context.CancelFunc) (stop func()) {
+	signals := make(chan os.Signal, 2)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-signals:
+			fmt.Fprintln(os.Stderr, "\nShutting down; press Ctrl-C again to exit immediately.")
+			cancel()
+		case <-done:
+			return
+		}
+
+		select {
+		case <-signals:
+			os.Exit(130)
+		case <-done:
+		}
+	}()
+
+	return func() {
+		signal.Stop(signals)
+		close(done)
+	}
 }
 
 // workerChildEnv builds the Conductor environment handed to worker subprocesses, so a
@@ -704,9 +730,11 @@ func workerPollFlags(cmd *cobra.Command) (taskworker.RunnerOptions, time.Duratio
 //
 // The alias is hidden rather than removed so existing invocations keep working; it maps
 // to --poll-timeout only. See workerPollFlags and issue #91.
-func addPollTimeoutFlags(cmd *cobra.Command, execTimeoutDefault int32) {
+func addPollTimeoutFlags(cmd *cobra.Command, execTimeout bool, execTimeoutDefault int32) {
 	cmd.Flags().Int32("poll-timeout", 100, "Poll timeout in milliseconds")
-	cmd.Flags().Int32("exec-timeout", execTimeoutDefault, "Worker execution timeout in seconds (0 = no timeout)")
+	if execTimeout {
+		cmd.Flags().Int32("exec-timeout", execTimeoutDefault, "Worker execution timeout in seconds (0 = no timeout)")
+	}
 	cmd.Flags().Int32("timeout", 100, "Deprecated: use --poll-timeout")
 	_ = cmd.Flags().MarkHidden("timeout")
 	_ = cmd.Flags().MarkDeprecated("timeout", "use --poll-timeout instead")
@@ -718,7 +746,7 @@ func init() {
 	workerJsCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 	workerJsCmd.Flags().String("worker-id", "", "Worker ID")
 	workerJsCmd.Flags().String("domain", "", "Domain")
-	addPollTimeoutFlags(workerJsCmd, 0)
+	addPollTimeoutFlags(workerJsCmd, false, 0)
 
 	workerStdioCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerStdioCmd.MarkFlagRequired("type")
@@ -726,7 +754,7 @@ func init() {
 	workerStdioCmd.Flags().String("domain", "", "Domain")
 	workerStdioCmd.Flags().Int32("count", 1, "Number of tasks to poll in each batch")
 	workerStdioCmd.Flags().Bool("verbose", false, "Print task and result JSON to stdout")
-	addPollTimeoutFlags(workerStdioCmd, 0)
+	addPollTimeoutFlags(workerStdioCmd, true, 0)
 
 	workerRemoteCmd.Flags().String("type", "", "Task type to poll for (required)")
 	workerRemoteCmd.MarkFlagRequired("type")
@@ -737,7 +765,7 @@ func init() {
 	// Remote workers previously derived their execution timeout from --timeout, whose
 	// default was 100. Defaulting --exec-timeout to 100s keeps a hanging remote worker
 	// bounded as it was before the two timeouts were separated.
-	addPollTimeoutFlags(workerRemoteCmd, 100)
+	addPollTimeoutFlags(workerRemoteCmd, true, 100)
 
 	workerListRemoteCmd.Flags().String("namespace", "default", "Namespace to list workers from")
 

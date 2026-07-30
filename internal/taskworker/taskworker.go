@@ -85,11 +85,13 @@ func (t Task) InputData() (json.RawMessage, error) {
 // flavours shape failures differently — JavaScript workers report the message under an
 // "error" output key, stdio workers use ReasonForIncompletion plus logs — and those
 // differences are observable by workflows.
+// The json tags exist because --verbose prints a Result back to the user, and that
+// output was previously the stdio worker's own lowercase, omitempty-tagged shape.
 type Result struct {
-	Status Status
-	Output map[string]interface{}
-	Logs   []string
-	Reason string
+	Status Status                 `json:"status"`
+	Output map[string]interface{} `json:"output,omitempty"`
+	Logs   []string               `json:"logs,omitempty"`
+	Reason string                 `json:"reason,omitempty"`
 }
 
 // Failure builds a Result for the common shape: FAILED with a reason and no output.
@@ -161,13 +163,26 @@ func (w *Worker) Run(ctx context.Context, taskType string, h Handler) {
 		}
 
 		polled, err := w.runner.Poll(ctx, taskType)
-		if err != nil || len(polled) == 0 {
+		if err != nil {
+			// Logged every time rather than once: a persistent failure here (bad
+			// credentials, unreachable server) is the single most common reason a
+			// worker appears to do nothing, and the backoff keeps the volume sane.
+			log.Errorf("Error polling tasks: %v", err)
 			if !sleep(ctx, w.cfg.PollBackoff) {
 				return
 			}
 			continue
 		}
 
+		if len(polled) == 0 {
+			log.Debug("No tasks available")
+			if !sleep(ctx, w.cfg.PollBackoff) {
+				return
+			}
+			continue
+		}
+
+		log.Infof("Polled %d task(s)", len(polled))
 		w.runBatch(ctx, polled, h)
 	}
 }

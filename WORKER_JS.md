@@ -29,8 +29,10 @@ conductor worker js --type <task_type> <js_file>
 - `--worker-id` - Worker ID for identification
 - `--domain` - Domain for task polling
 - `--poll-timeout` - Poll timeout in milliseconds (default: 100)
-- `--exec-timeout` - Worker execution timeout in seconds (default: 0, no timeout)
 - `--timeout` - Deprecated alias for `--poll-timeout`
+
+There is no execution timeout for JavaScript workers: scripts run in-process and the
+interpreter has no interrupt wired, so a script that loops forever blocks its worker.
 
 ### Example
 

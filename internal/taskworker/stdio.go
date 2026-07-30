@@ -100,21 +100,23 @@ func (h *StdioHandler) Handle(ctx context.Context, t Task) Result {
 
 	result := h.runAndParse(cmd, &stdout, &stderr)
 
-	if h.opts.Verbose {
-		resultJSON, _ := json.MarshalIndent(result, "", "  ")
-		if result.Status == StatusFailed {
-			fmt.Println("=== Task Result (Error) ===")
-			fmt.Println(string(resultJSON))
-			fmt.Println("===========================")
-		} else {
-			fmt.Println("=== Task Result ===")
-			fmt.Println(string(resultJSON))
-			fmt.Println("===================")
-		}
-	}
-
-	log.Infof("Task %s completed with status: %s", t.ID, result.Status)
+	log.Infof("Task %s handled with status: %s", t.ID, result.Status)
 	return result
+}
+
+// printResultBanner reports a result under --verbose. The banner distinguishes failures
+// so they stand out in a stream of task output.
+func printResultBanner(status string, result Result) {
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	if Status(status) == StatusFailed {
+		fmt.Println("=== Task Result (Error) ===")
+		fmt.Println(string(resultJSON))
+		fmt.Println("===========================")
+		return
+	}
+	fmt.Println("=== Task Result ===")
+	fmt.Println(string(resultJSON))
+	fmt.Println("===================")
 }
 
 // runAndParse executes the child and turns its outcome into a Result.
@@ -125,11 +127,15 @@ func (h *StdioHandler) runAndParse(cmd *exec.Cmd, stdout, stderr *bytes.Buffer) 
 		if stderrOutput != "" {
 			log.Errorf("Worker stderr:\n%s", stderrOutput)
 		}
-		return Result{
+		failure := Result{
 			Status: StatusFailed,
 			Reason: fmt.Sprintf("worker execution failed: %v", err),
 			Logs:   []string{stderrOutput},
 		}
+		if h.opts.Verbose {
+			printResultBanner(string(StatusFailed), failure)
+		}
+		return failure
 	}
 
 	var parsed stdioResult
@@ -137,11 +143,27 @@ func (h *StdioHandler) runAndParse(cmd *exec.Cmd, stdout, stderr *bytes.Buffer) 
 		stdoutOutput := stdout.String()
 		log.Errorf("Failed to parse worker output as JSON: %v", err)
 		log.Errorf("Worker stdout:\n%s", stdoutOutput)
-		return Result{
+		failure := Result{
 			Status: StatusFailed,
 			Reason: fmt.Sprintf("invalid worker stdout JSON: %v", err),
 			Logs:   []string{stdoutOutput},
 		}
+		if h.opts.Verbose {
+			printResultBanner(string(StatusFailed), failure)
+		}
+		return failure
+	}
+
+	// Reported before normalisation, so a worker that returned an unrecognised status
+	// sees what it actually sent rather than the rewritten failure — which is the whole
+	// point of asking for verbose output.
+	if h.opts.Verbose {
+		printResultBanner(parsed.Status, Result{
+			Status: Status(parsed.Status),
+			Output: parsed.Output,
+			Logs:   parsed.Logs,
+			Reason: parsed.Reason,
+		})
 	}
 
 	return normalizeStdioResult(parsed)

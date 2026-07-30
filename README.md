@@ -223,6 +223,7 @@ After installing, you'll get tab completion when typing `conductor <TAB>`.
   * [Workers](#workers)
     * [Stdio Workers](#stdio-workers)
     * [JavaScript Workers (Built-in)](#javascript-workers--built-in-)
+    * [Skill Workers](#skill-workers)
     * [Remote Workers (Registry-based)](#remote-workers--registry-based-)
   * [Exit Codes](#exit-codes)
   * [Error Handling](#error-handling)
@@ -548,7 +549,7 @@ conductor worker <command> [arguments] [flags]
 | Command | Description |
 |---------|-------------|
 | `stdio <program> [args...]` | Run stdio worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose`) |
-| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`) |
+| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`) |
 | `remote` | Run remote worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--refresh`) |
 | `list-remote` | List remote workers (`--namespace`) |
 
@@ -852,7 +853,7 @@ conductor --config /path/to/my-config.yaml workflow list
 
 ⚠️ **EXPERIMENTAL FEATURES**
 
-The CLI supports two types of workers for processing Conductor tasks:
+The CLI supports several types of workers for processing Conductor tasks:
 
 ### Stdio Workers
 
@@ -879,6 +880,12 @@ Execute tasks using **JavaScript** scripts with built-in utilities (HTTP, crypto
 
 **Best for:** Prototyping, Lightweight tasks, quick scripts, HTTP integrations
 
+**Quick example:**
+```bash
+# Run a JavaScript worker
+conductor worker js --type greet_task worker.js
+```
+
 👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
 
 ### Skill Workers
@@ -893,12 +900,6 @@ conductor skill serve ./myskill
 ```
 
 👉 **[Complete Skill Worker Documentation →](WORKER_SKILL.md)**
-
-**Quick example:**
-```bash
-# Run a JavaScript worker
-conductor worker js --type greet_task worker.js
-```
 
 ### Remote Workers (Registry-based)
 

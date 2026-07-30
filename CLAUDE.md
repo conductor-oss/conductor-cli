@@ -194,7 +194,7 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | `worker stdio <command> [args...]` | Run an external program per task; task JSON on stdin, result JSON on stdout | command | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose` | `conductor worker stdio --type greet_task python3 worker.py` |
-| `worker js <file>` | Run a JavaScript worker in the built-in interpreter | JS file | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout` | `conductor worker js --type greet_task worker.js` |
+| `worker js <file>` | Run a JavaScript worker in the built-in interpreter | JS file | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout` | `conductor worker js --type greet_task worker.js` |
 | `worker remote` | Run a worker downloaded from the Orkes job-runner registry (Orkes only) | None | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--refresh` | `conductor worker remote --type greet_task` |
 | `worker list-remote` | List workers in the registry (Orkes only) | None | `--namespace` | `conductor worker list-remote` |
 
@@ -202,7 +202,7 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 - `--type` - Task type to poll for (required for all worker commands)
 - `--count` - Tasks polled per batch, executed in parallel (default 1). The next poll waits for the slowest task in the batch.
 - `--poll-timeout` - Server-side long-poll wait in milliseconds (default 100)
-- `--exec-timeout` - Per-task execution timeout in seconds (0 = none; default 100 for `remote`)
+- `--exec-timeout` - Per-task execution timeout in seconds (`stdio` and `remote` only; 0 = none, default 100 for `remote`)
 - `--timeout` - Deprecated alias for `--poll-timeout`
 - `--verbose` - Print task and result JSON (`stdio` only)
 

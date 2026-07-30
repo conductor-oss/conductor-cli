@@ -63,7 +63,7 @@ these built-in tools are served too:
 | Tool | Task type | Purpose |
 |---|---|---|
 | `read_skill_file` | `{skill}__read_skill_file` | Read a file bundled with the skill |
-| `list_workspace` | `{skill}__list_workspace` | List files in the workspace |
+| `list_workspace_files` | `{skill}__list_workspace_files` | List files in the workspace |
 | `read_workspace_file` | `{skill}__read_workspace_file` | Read a workspace file |
 | `search_workspace` | `{skill}__search_workspace` | Search the workspace |
 | `git_status` | `{skill}__git_status` | Workspace git status |
@@ -82,7 +82,11 @@ stdin. Only that field reaches the script.
 **Output** — the script's **stdout** becomes the task output, wrapped as
 `{"result": "<stdout>"}`. There is no envelope to emit.
 
-**Failure** — a non-zero exit fails the task, with stderr in the failure reason.
+**Failure** — a non-zero exit fails the task, with the captured output in the failure reason.
+
+**stderr is merged into stdout.** `executeScript` gives the script a single buffer for both,
+so anything a script logs to stderr ends up inside `{"result": …}` on success. Keep
+diagnostics out of a script whose output you care about.
 
 **Environment** — the skill root and the configured workspace roots are exported to the
 script.
