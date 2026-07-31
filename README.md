@@ -574,7 +574,7 @@ conductor config <command> [arguments] [flags]
 
 | Command | Description |
 |---------|-------------|
-| `save` | Save configuration interactively (`--profile` for named profile) |
+| `save` | Save configuration interactively to `config-<name>.yaml` (prompts for the name if `--profile` is omitted) |
 | `list` | List all profiles |
 | `delete [profile]` | Delete a profile (`-y` to skip confirmation) |
 
@@ -992,7 +992,7 @@ Error: 404 Not Found
 ```
 Error: Profile 'prod' doesn't exist (expected file: ~/.conductor-cli/config-prod.yaml)
 ```
-**Solution:** Create the profile using `--save-config=prod` or verify the profile name
+**Solution:** Create the profile with `conductor config save --profile prod`, or verify the profile name with `conductor config list`
 
 ---
 

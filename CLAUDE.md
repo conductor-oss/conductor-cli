@@ -68,8 +68,8 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 | Operation | Command | Result |
 |-----------|---------|--------|
-| **Save default profile** | `conductor config save` | Creates `~/.conductor-cli/config.yaml` |
 | **Save named profile** | `conductor config save --profile prod` | Creates `~/.conductor-cli/config-prod.yaml` |
+| **Save (prompted)** | `conductor config save` | Prompts `Profile name:`, then creates `config-<name>.yaml` |
 | **Use profile (flag)** | `conductor --profile prod workflow list` | Loads `config-prod.yaml` |
 | **Use profile (env)** | `CONDUCTOR_PROFILE=prod conductor workflow list` | Loads `config-prod.yaml` |
 
@@ -78,6 +78,12 @@ Manage multiple environments (dev, staging, prod) using profiles.
 **Profile directory:** `~/.conductor-cli/`
 - `config.yaml` - default profile
 - `config-<name>.yaml` - named profiles
+
+**`config save` always writes a named profile.** It has no code path that creates the default
+`config.yaml` — without `--profile` it prompts for a name and errors if the name is empty. An
+existing `config.yaml` is still *loaded* as the default, but cannot be created or updated through
+the CLI (see conductor-cli issue #98). To use the default config, write `~/.conductor-cli/config.yaml`
+by hand.
 
 ## Command Reference
 
@@ -190,7 +196,7 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 | `config delete [profile]` | Delete configuration file | None | `--profile`, `-y` | `conductor config delete production` or `conductor config delete --profile production -y` |
 
 **Notes:**
-- `config save`: Interactive prompts for server URL, server type, and authentication method. Press Enter to keep existing values. Use `--profile <name>` to save to a named profile (e.g., `config-production.yaml`). Without it, saves to default `config.yaml`.
+- `config save`: Interactive prompts for server URL, server type, and authentication method. Press Enter to keep existing values. Always saves to a named profile `config-<name>.yaml`; `--profile <name>` supplies the name, and without it the command prompts for one (empty input is an error). It cannot write the default `config.yaml`.
 - `config list`: Shows all profiles. Default config shown as "default", named profiles show as profile name only.
 - `config delete`: Profile can be specified as positional arg or via `--profile` flag. Use `-y` to skip confirmation prompt.
 
