@@ -19,6 +19,17 @@ brew install conductor-oss/conductor/conductor
 # Manual download from: https://github.com/conductor-oss/conductor-cli/releases
 ```
 
+**Never suggest a bare `brew install conductor`.** An unrelated `conductor` cask exists in
+`homebrew/cask` (Conductor.app from conductor.build), and Homebrew resolves unqualified names
+against core/cask before third-party taps — so the bare form installs the wrong package and
+leaves no `conductor` binary on `PATH`. Tapping first does not help. Always use the
+fully-qualified `conductor-oss/conductor/conductor`.
+
+**If the cask is already installed**, installing the formula is not enough: Homebrew prints
+`conductor cask is installed, skipping link` and creates no symlink, so `conductor --version` still
+fails. Fix with `brew link conductor` (keeps both) or `brew uninstall --cask conductor` before
+installing (CLI only). Diagnose with `which conductor` and `brew info --cask conductor`.
+
 ## Authentication
 
 **Three methods** (precedence: command-line flags > environment variables > config file):
