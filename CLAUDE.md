@@ -6,6 +6,10 @@
 
 Conductor CLI (`conductor`) is a command-line tool for managing Netflix Conductor workflows, executions, tasks, webhooks, and schedules. It connects to Conductor server instances for workflow orchestration.
 
+It also runs a local Conductor server for development (`conductor server start`), runs task workers
+(`conductor worker`), and manages AI agents and skills (`conductor agent`, `conductor skill`,
+`conductor deploy`).
+
 ## Installation
 
 ```bash
@@ -27,6 +31,21 @@ brew install conductor-oss/conductor/conductor
 
 **Server URL:** `--server <url>` or `CONDUCTOR_SERVER_URL` (default: `http://localhost:8080/api`)
 
+**Server type:** `--server-type <OSS|Enterprise>` or `CONDUCTOR_SERVER_TYPE` (default: `OSS`)
+
+**Note:** OSS Conductor accepts anonymous requests, so authentication is optional when talking to a local server.
+
+**Global flags** (available on every command):
+
+| Flag | Description |
+|------|-------------|
+| `--server`, `--server-type` | Target server URL and type |
+| `--auth-token`, `--auth-key`, `--auth-secret` | Authentication credentials |
+| `--config <path>` | Config file path (overrides profile-based loading) |
+| `--profile <name>` | Load `config-<name>.yaml` |
+| `--verbose`, `-v` | Print verbose logs |
+| `--yes`, `-y` | Auto-confirm destructive operations |
+
 **Token Types:**
 - **JWT tokens with `exp` claim**: Automatically cached and refreshed before expiry (5-minute buffer)
 - **Long-lived tokens without `exp` claim**: Cached indefinitely, never trigger refresh attempts
@@ -38,8 +57,8 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 | Operation | Command | Result |
 |-----------|---------|--------|
-| **Save default profile** | `conductor --server <url> --auth-token <token> --save-config workflow list` | Creates `~/.conductor-cli/config.yaml` |
-| **Save named profile** | `conductor --server <url> --auth-token <token> --save-config=prod workflow list` | Creates `~/.conductor-cli/config-prod.yaml` |
+| **Save default profile** | `conductor config save` | Creates `~/.conductor-cli/config.yaml` |
+| **Save named profile** | `conductor config save --profile prod` | Creates `~/.conductor-cli/config-prod.yaml` |
 | **Use profile (flag)** | `conductor --profile prod workflow list` | Loads `config-prod.yaml` |
 | **Use profile (env)** | `CONDUCTOR_PROFILE=prod conductor workflow list` | Loads `config-prod.yaml` |
 
@@ -51,15 +70,50 @@ Manage multiple environments (dev, staging, prod) using profiles.
 
 ## Command Reference
 
+Commands are organized into three help groups:
+- **Conductor Management** — `workflow`, `task`, `schedule`, `webhook`, `secret`, `api-gateway`, `agent`, `skill`, `worker`
+- **CLI Configuration** — `config`, `whoami`, `update`, `completion`
+- **Development** — `server`, `code`, `deploy`, `doctor`
+
+### Server Commands
+
+Run a local single-node Conductor server for development and testing. The server JAR is
+downloaded automatically on first run (~600 MB) into `~/.conductor-cli/server/` and runs as a
+background process on port 8080.
+
+**Requirement:** Java 21 or higher on `PATH`.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `server start` | Start a local Conductor server | None | `--port`, `--foreground`/`-f`, `--version`, `--oss`, `--orkes` | `conductor server start --port 9090` |
+| `server stop` | Stop the running server | None | | `conductor server stop` |
+| `server status` | Check whether the server is running | None | | `conductor server status` |
+| `server logs` | Show server logs | None | `--follow`/`-f`, `--lines`/`-n` | `conductor server logs -f -n 200` |
+| `server update` | Re-download the server JAR | None | `--version`, `--oss`, `--orkes` | `conductor server update` |
+
+**Flags:**
+- `--port` - Port to run the server on (default: 8080)
+- `--foreground`, `-f` - Run in the foreground instead of daemonizing
+- `--version` - Server version to download and run (default: `latest`, e.g. `3.21.23`)
+- `--oss` - Use the open-source Conductor server (default)
+- `--orkes` - Use the Orkes Conductor server (coming soon)
+- `--follow`, `-f` - Follow log output like `tail -f` (logs command)
+- `--lines`, `-n` - Number of lines to show (logs command, default: 50)
+
+**Notes:**
+- This is a single-node dev server, not a cluster.
+- The server must be stopped before running `server update`.
+- Docker is a faster alternative: `docker run -p 8080:8080 conductoross/conductor:latest`
 
 ### Workflow Commands
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
 | **Definition Management** | | | | |
-| `workflow list` | List all workflows | None | `--json` | `conductor workflow list` |
+| `workflow list` | List all workflows | None | `--json`, `--csv` | `conductor workflow list` |
 | `workflow get <name>` | Get workflow definition | workflow name | | `conductor workflow get my_workflow` |
 | `workflow get <name> <version>` | Get specific version | name, version | | `conductor workflow get my_workflow 2` |
+| `workflow get-all` | Get all workflow definitions | None | | `conductor workflow get-all` |
 | `workflow create <file>` | Create/register workflow | JSON file path | `--force` | `conductor workflow create workflow.json --force` |
 | `workflow update <file>` | Update workflow | JSON file path | | `conductor workflow update workflow.json` |
 | `workflow delete <name> <version>` | Delete workflow definition | name, version | | `conductor workflow delete my_workflow 1` |
@@ -83,8 +137,11 @@ Manage multiple environments (dev, staging, prod) using profiles.
 **Flags:**
 - `--force` - Overwrite existing workflow when creating
 - `--json` - Output complete JSON instead of table (applies to list command)
+- `--csv` - Output CSV instead of table (mutually exclusive with `--json`)
 - `--sync` - Execute synchronously and wait for completion (for start command)
 - `--complete` - Include complete details (for get-execution command)
+
+**Alias:** `get-all` also accepts the legacy form `get_all`.
 
 **Table Output (workflow list):**
 Columns: NAME, VERSION, DESCRIPTION
@@ -285,11 +342,131 @@ Columns: ID, AUTH TYPE, APPLICATION ID, API KEYS
 **Table Output (route list):**
 Columns: METHOD, PATH, WORKFLOW, VERSION, EXECUTION MODE, DESCRIPTION
 
+### Agent Commands
+
+Define, run, and observe AI agents. Agent configs are YAML or JSON files.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| **Definition Management** | | | | |
+| `agent init <name>` | Create a starter agent config file | agent name | `--model`, `--strategy`/`-s`, `--format`/`-f` | `conductor agent init triage -s handoff` |
+| `agent compile <config-file>` | Compile a config and show its execution plan | config file | | `conductor agent compile triage.yaml` |
+| `agent list` | List registered agents | None | `--json`, `--csv` | `conductor agent list` |
+| `agent get <name>` | Get an agent definition | agent name | `--version` | `conductor agent get triage --version 2` |
+| `agent delete <name>` | Delete an agent definition | agent name | `--version` | `conductor agent delete triage` |
+| **Execution** | | | | |
+| `agent run [prompt]` | Start an agent and stream its output | prompt | `--name`, `--config`, `--session`, `--no-stream` | `conductor agent run --name triage "check order 123"` |
+| `agent stream <execution-id>` | Stream events from a running execution | execution ID | `--last-event-id` | `conductor agent stream exec-abc` |
+| `agent status <execution-id>` | Get detailed status of an execution | execution ID | | `conductor agent status exec-abc` |
+| `agent execution` | Search agent execution history | None | `--name`, `--status`, `--since`, `--window` | `conductor agent execution --status FAILED --since 1d` |
+| `agent respond <execution-id>` | Respond to a human-in-the-loop task | execution ID | `--approve`, `--deny`, `--reason`, `--message`/`-m` | `conductor agent respond exec-abc --approve` |
+| `agent prune` | Delete or archive old execution records | None | `--older-than`, `--archive`, `--dry-run` | `conductor agent prune --older-than 30 --dry-run` |
+
+**Flags:**
+- `--name` / `--config` - `agent run` requires exactly one: a registered agent name, or a local config file path. **Note:** on `agent run`, `--config` means the *agent* config file and shadows the global `--config` (CLI config path); use `--profile` to select CLI configuration here.
+- `--session` - Session ID for conversation continuity across runs
+- `--no-stream` - Start the agent and print the execution ID without streaming
+- `--strategy`, `-s` - Multi-agent strategy for `init` (`handoff`, `sequential`, `parallel`, ...)
+- `--format`, `-f` - Output format for `init`: `yaml` (default) or `json`
+- `--since` - Relative time window, e.g. `30m`, `1h`, `1d`
+- `--window` - Absolute-style window, e.g. `now-1h`, `now-7d`
+- `--older-than` - Delete executions older than N days (prune command)
+
+**Streamed event types:** `thinking`, `tool`, `result`, `handoff`, `message`, `waiting`, `guardrail` (PASS/FAIL), `error`, `done`
+
+**Table Output (agent list):**
+Columns: NAME, VERSION, TYPE, DESCRIPTION
+
+**Table Output (agent execution):**
+Columns: ID, AGENT, STATUS, START_TIME, DURATION
+
+### Skill Commands
+
+Package local skill directories (a directory containing `SKILL.md`) and run them as agents.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `skill register <path>` | Package and register a local skill | skill directory | `--version`, `--model`, `--agent-model` | `conductor skill register ./my-skill` |
+| `skill load <path>` | Package a local skill and deploy it as an agent | skill directory | `--model` (required), `--agent-model`, `--search-path` | `conductor skill load ./my-skill --model claude-opus-5` |
+| `skill run <path-or-name> <prompt>` | Run a local or registered skill and stream output | path or name, prompt | `--model` (required), `--agent-model`, `--param`, `--version`, `--search-path`, `--workspace`, `--no-workspace`, `--filesystem`, `--script-timeout`, `--script-output-limit`, `--workspace-file-limit` | `conductor skill run ./my-skill "summarize the logs" --model claude-opus-5` |
+| `skill serve <path-or-name>` | Start local tool workers without running the skill | path or name | same as `skill run` (minus `--param`) | `conductor skill serve ./my-skill` |
+| `skill list` | List registered skills | None | `--all-versions`, `--json`, `--csv` | `conductor skill list` |
+| `skill get <name> [version]` | Get a registered skill | skill name | `--version` | `conductor skill get my-skill` |
+| `skill pull <name> [destination]` | Download and extract a skill package | skill name | `--version` | `conductor skill pull my-skill ./out` |
+| `skill delete <name> [version]` | Delete a registered skill version | skill name | `--version` | `conductor skill delete my-skill` |
+
+**Flags:**
+- `--model` - Orchestrator and default model (required for `load`, `run`, and `serve`)
+- `--agent-model` - Sub-agent model override in `name=model` form (repeatable)
+- `--param` - Skill parameter override in `key=value` form (repeatable)
+- `--version` - Skill version or checksum prefix
+- `--search-path` - Cross-skill search directory (repeatable)
+- `--workspace` - Workspace directory exposed to workspace tools
+- `--no-workspace` - Do not expose the current workspace
+- `--filesystem` - Additional read-only filesystem root as `name=path` (repeatable)
+- `--all-versions` - List all versions instead of only the latest
+- `--script-timeout` - Skill script timeout in seconds
+- `--script-output-limit` / `--workspace-file-limit` - Maximum bytes captured from script output / returned by workspace file tools
+
+**`load` vs `run`:** `load` only publishes the agent (run it later with `agent run --name <skill>`); `run` starts local tool workers, launches the agent, and streams the execution. `serve` starts only the workers so the skill can be driven from elsewhere (e.g. the UI).
+
+### Worker Commands
+
+Run task workers that poll Conductor and execute work locally.
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `worker js <js_file>` | Run a JavaScript worker (EXPERIMENTAL) | JS file | `--type` (required), `--count`, `--worker-id`, `--domain`, `--timeout` | `conductor worker js worker.js --type my_task` |
+| `worker stdio <command> [args...]` | Poll tasks and execute a command via stdin/stdout | command | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose` | `conductor worker stdio ./handler.sh --type my_task` |
+| `worker remote` | Run a worker from the job-runner registry (EXPERIMENTAL, Orkes only) | None | `--type` (required), `--count`, `--worker-id`, `--domain`, `--timeout`, `--refresh` | `conductor worker remote --type my_task` |
+| `worker list-remote` | List workers in the job-runner registry (EXPERIMENTAL, Orkes only) | None | `--namespace` | `conductor worker list-remote` |
+
+**Flags:**
+- `--type` - Task type to poll for (required)
+- `--count` - Number of tasks to poll in each batch (default: 1)
+- `--worker-id` - Worker ID reported to the server
+- `--domain` - Task domain
+- `--timeout` / `--poll-timeout` - Poll timeout in milliseconds (default: 100)
+- `--exec-timeout` - Execution timeout in seconds for `stdio` (default: 0 = no timeout)
+- `--verbose` - Print task and result JSON to stdout (`stdio` command)
+- `--refresh` - Force refresh the worker from the registry, ignoring cache
+- `--namespace` - Registry namespace to list workers from (default: `default`)
+
+See [WORKER_JS.md](./WORKER_JS.md) and [WORKER_STDIO.md](./WORKER_STDIO.md) for the worker protocols.
+
+### Development Commands
+
+| Command | Description | Required Args | Optional Flags | Example |
+|---------|-------------|---------------|----------------|---------|
+| `code` | Generate a project from a template (interactive) | None | `--lang`/`-l`, `--framework`/`-f`, `--template`/`-t`, `--name`/`-n` | `conductor code --lang python --template hello-world` |
+| `code list` | List available templates | None | | `conductor code list` |
+| `deploy` | Deploy agents from your project to the server | None | `--agents`/`-a`, `--language`/`-l`, `--package`/`-p`, `--json` | `conductor deploy --language python` |
+| `doctor` | Check runtime and AI provider configuration | None | | `conductor doctor` |
+| `whoami` | Display information about the current user | None | | `conductor whoami` |
+
+**`code` flags:**
+- `--lang`, `-l` - Programming language
+- `--framework`, `-f` - Framework (defaults to `core`)
+- `--template`, `-t` - Template name
+- `--name`, `-n` - Project name
+
+**`deploy` flags:**
+- `--agents`, `-a` - Comma-separated agent names to deploy (default: all discovered)
+- `--language`, `-l` - Project language: `python` or `typescript` (auto-detected if omitted)
+- `--package`, `-p` - Package or path to scan for agents
+- `--json` - Output results as JSON
+
+**Notes:**
+- `deploy` discovers agents defined as module-level variables in your project. Python projects need a Python interpreter on `PATH` or the `PYTHON` environment variable set.
+- `doctor` reports Java and Python availability, the configured server URL and auth state, and which AI provider API keys are set in the environment.
+- `whoami` prints the server URL and decoded JWT claims. With no auth configured it reports `Authentication: none (OSS Conductor)`.
+
 ### Other Commands
 
 | Command | Description | Example |
 |---------|-------------|---------|
 | `update` | Update CLI to latest version | `conductor update` |
+| `completion <shell>` | Generate a shell completion script | `conductor completion zsh` |
 | `--version` | Show CLI version | `conductor --version` |
 | `--help` | Show help | `conductor --help` or `conductor workflow --help` |
 
@@ -305,6 +482,7 @@ Columns: METHOD, PATH, WORKFLOW, VERSION, EXECUTION MODE, DESCRIPTION
 - **Default:** Formatted tables for list commands, human-readable text for other commands
 - **Table format:** Tab-separated columns with headers (for `list` commands)
 - **JSON format:** Available via `--json` flag for all `list` commands
+- **CSV format:** Available via `--csv` flag. `--json` and `--csv` are mutually exclusive.
 - **Workflow ID extraction:** UUIDs in format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (36 characters with hyphens)
 - **Status output:** Single line with status value (e.g., `RUNNING`, `COMPLETED`)
 
@@ -314,6 +492,8 @@ Columns: METHOD, PATH, WORKFLOW, VERSION, EXECUTION MODE, DESCRIPTION
 - `schedule list` - Table with NAME, WORKFLOW, STATUS, CREATED TIME (or `--json`)
 - `webhook list` - Table with NAME, WEBHOOK ID, WORKFLOWS, URL (or `--json`)
 - `secret list` - Table with KEY, or KEY and TAGS with `--with-tags` (or `--json`)
+- `agent list` - Table with NAME, VERSION, TYPE, DESCRIPTION (or `--json`/`--csv`)
+- `skill list` - Table of registered skills (or `--json`/`--csv`)
 
 **Important:** To parse output reliably, redirect stderr to `/dev/null` to suppress update notifications and warnings:
 ```bash
@@ -371,14 +551,29 @@ See [Conductor documentation](https://conductor.io/content) for complete workflo
 
 ## Common Patterns
 
+### 0. Spin up a local server and run a workflow
+
+```bash
+# Start a local OSS Conductor server (downloads the JAR on first run, needs Java 21)
+conductor server start
+
+# Confirm it is up — the default server URL already points at http://localhost:8080/api
+conductor server status
+
+# Register and run a workflow; no auth needed against OSS
+conductor workflow create workflow.json --force
+conductor workflow start --workflow my_workflow --sync
+
+# Tail logs if something goes wrong, then shut down
+conductor server logs -f
+conductor server stop
+```
+
 ### 1. Deploy workflow to production
 
 ```bash
-# Save production profile
-conductor --server https://prod.conductor.io/api \
-     --auth-token prod-token-123 \
-     --save-config=production \
-     workflow list
+# Save production profile (interactive prompts for URL, server type, auth)
+conductor config save --profile production
 
 # Deploy workflow
 conductor --profile production workflow create workflow.json --force
@@ -674,6 +869,38 @@ conductor api-gateway route delete my-api GET /users
 }
 ```
 
+### 14. Build and run an agent
+
+```bash
+# Check that a model provider API key is configured
+conductor doctor
+
+# Scaffold a config, inspect the plan, then run it
+conductor agent init triage
+conductor agent compile triage.yaml
+conductor agent run --config triage.yaml "summarize open incidents"
+
+# Run a registered agent and keep conversation context across calls
+conductor agent run --name triage --session sess-001 "what changed since yesterday?"
+
+# Start without streaming, then attach to the stream later
+EXEC_ID=$(conductor agent run --name triage "long task" --no-stream 2>/dev/null | grep -oE '[a-f0-9-]{36}')
+conductor agent stream "$EXEC_ID"
+
+# Approve a human-in-the-loop step
+conductor agent respond "$EXEC_ID" --approve --reason "verified manually"
+```
+
+### 15. Run a task worker
+
+```bash
+# Execute any command per task over stdin/stdout
+conductor worker stdio ./handler.sh --type my_task --count 5 --verbose
+
+# Or run a JavaScript worker
+conductor worker js worker.js --type my_task --worker-id worker1
+```
+
 ## Error Handling
 
 ### Connection Errors
@@ -698,7 +925,7 @@ Error: 404 Not Found
 ```
 Error: Profile 'prod' doesn't exist (expected file: ~/.conductor-cli/config-prod.yaml)
 ```
-**Solution:** Create profile with `--save-config=prod` or check profile name
+**Solution:** Create profile with `conductor config save --profile prod` or check profile name
 
 ## Configuration File Format
 
