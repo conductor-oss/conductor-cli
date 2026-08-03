@@ -67,18 +67,59 @@ conductor --version
 
 ### Using Homebrew (macOS/Linux)
 
-**First time installation:**
-```bash
-# Add the Conductor tap (one-time setup)
-brew tap conductor-oss/conductor
-
-# Install the CLI
-brew install conductor
-```
-
-Or install directly in one line:
 ```bash
 brew install conductor-oss/conductor/conductor
+```
+
+> [!IMPORTANT]
+> Always use the fully-qualified name `conductor-oss/conductor/conductor`.
+>
+> A **different** package named `conductor` exists in `homebrew/cask` (the Conductor.app desktop
+> tool from conductor.build). A bare `brew install conductor` installs that app instead of this
+> CLI — even after `brew tap conductor-oss/conductor` — because Homebrew resolves unqualified
+> names against `homebrew/core` and `homebrew/cask` before third-party taps. Homebrew prints
+> `Warning: Treating conductor as a cask` when this happens, and no `conductor` binary is placed
+> on your `PATH`.
+
+Verify the installation resolved to the CLI formula and not the cask:
+
+```bash
+brew info conductor-oss/conductor/conductor   # should report "Installed"
+conductor --version
+```
+
+#### Recovering if you installed the wrong package
+
+If you already ran `brew install conductor` and got the cask, note that **installing the formula
+afterwards is not sufficient on its own**. Homebrew refuses to link a formula while a cask of the
+same name is installed, and reports:
+
+```
+==> conductor cask is installed, skipping link.
+```
+
+The formula lands in `Cellar/` but no `conductor` symlink is created in `brew --prefix`/bin, so
+`conductor --version` still fails with `command not found`. Choose one of the following.
+
+**Keep both** — install the formula, then link it explicitly:
+
+```bash
+brew install conductor-oss/conductor/conductor
+brew link conductor
+```
+
+**Keep only the CLI** — remove the cask first, then install normally:
+
+```bash
+brew uninstall --cask conductor
+brew install conductor-oss/conductor/conductor
+```
+
+Either way, confirm the CLI is on your `PATH`:
+
+```bash
+which conductor        # e.g. /opt/homebrew/bin/conductor
+conductor --version
 ```
 
 ### Manual Installation
@@ -533,7 +574,7 @@ conductor config <command> [arguments] [flags]
 
 | Command | Description |
 |---------|-------------|
-| `save` | Save configuration interactively (`--profile` for named profile) |
+| `save` | Save configuration interactively to `config-<name>.yaml` (prompts for the name if `--profile` is omitted) |
 | `list` | List all profiles |
 | `delete [profile]` | Delete a profile (`-y` to skip confirmation) |
 
@@ -951,7 +992,7 @@ Error: 404 Not Found
 ```
 Error: Profile 'prod' doesn't exist (expected file: ~/.conductor-cli/config-prod.yaml)
 ```
-**Solution:** Create the profile using `--save-config=prod` or verify the profile name
+**Solution:** Create the profile with `conductor config save --profile prod`, or verify the profile name with `conductor config list`
 
 ---
 
