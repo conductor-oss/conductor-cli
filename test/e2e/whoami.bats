@@ -2,6 +2,8 @@
 
 # E2E tests for whoami command
 
+# bats file_tags=tier:pr
+
 setup() {
     # Ensure the CLI binary exists
     if [ ! -f "./conductor" ]; then

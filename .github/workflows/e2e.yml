@@ -5,17 +5,60 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  # No `schedule:` trigger yet — deliberately. The tier:nightly suites spend model
+  # tokens on every run, so they stay opt-in via workflow_dispatch until someone
+  # owns watching them. To enable, uncomment below and drop the workflow_dispatch
+  # condition on the e2e-nightly job:
+  #
+  # schedule:
+  #   - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      run_enterprise:
+        description: 'Run E2E against the remote Enterprise server'
+        type: boolean
+        default: true
+      run_local_server:
+        description: 'Run E2E against a local OSS Conductor server'
+        type: boolean
+        default: true
+      run_nightly:
+        description: 'Run the nightly tier (live LLM + agentspan deploy tests) — spends model tokens'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   checks: write
   pull-requests: write
 
-jobs:
-  e2e-test:
-    runs-on: ubuntu-latest
+env:
+  # The server is built from source because releases are cut from conductor-oss
+  # main and no artifact is published from it: Maven's newest is a tagged RC and
+  # the S3 'latest' jar is months stale. Building means the CLI is tested against
+  # what will actually ship.
+  #
+  # TODO(#105): revisit pinning to the newest published RC instead. RCs are cut
+  # from main, so an RC is a main snapshot, and pulling a cached jar is faster and
+  # decouples this repo's CI from the server repo's build health. See the tracking
+  # issue linked in ADR-0001.
+  CONDUCTOR_SERVER_REF: 'main'
+  # Scratch directory the local server is started from. `conductor server start`
+  # writes its SQLite database relative to the working directory with no flag to
+  # override it (see #104), so it must not run from the repo root.
+  SERVER_WORKDIR: /tmp/conductor-e2e
 
+jobs:
+  # ---------------------------------------------------------------------------
+  # Remote Enterprise server. Covers the Orkes-only surface (secret, webhook,
+  # api-gateway) that a local OSS server cannot exercise.
+  # ---------------------------------------------------------------------------
+  e2e-enterprise:
+    name: E2E (Enterprise)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.run_enterprise
     steps:
     - uses: actions/checkout@v4
 
@@ -36,27 +79,321 @@ jobs:
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
 
-    - name: Run E2E tests (no credentials)
+    - name: Verify bats supports tag filtering
+      run: |
+        bats --version
+        # --filter-tags requires bats >= 1.8.0; the whole selection scheme depends
+        # on it, so fail loudly rather than silently running the wrong tests.
+        bats --help 2>&1 | grep -q -- '--filter-tags' || {
+          echo "::error::installed bats does not support --filter-tags (needs >= 1.8.0)"
+          exit 1
+        }
+
+    - name: Run unauthenticated E2E tests
       env:
         CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
+        CONDUCTOR_SERVER_TYPE: Enterprise
       run: |
-        bats test/e2e/auth.bats --show-output-of-passing-tests
+        # Deliberately no CONDUCTOR_AUTH_KEY/SECRET: these tests assert that a
+        # secured server rejects anonymous calls with actionable guidance.
+        bats --filter-tags 'unauthenticated' test/e2e/ --show-output-of-passing-tests
 
-    - name: Run other E2E tests (with credentials)
+    - name: Run authenticated E2E tests
       env:
         CONDUCTOR_SERVER_URL: ${{ secrets.CONDUCTOR_SERVER_URL }}
         CONDUCTOR_AUTH_KEY: ${{ secrets.CONDUCTOR_AUTH_KEY }}
         CONDUCTOR_AUTH_SECRET: ${{ secrets.CONDUCTOR_AUTH_SECRET }}
         CONDUCTOR_SERVER_TYPE: Enterprise
       run: |
-        bats test/e2e/workflow.bats test/e2e/rerun.bats test/e2e/schedule.bats test/e2e/webhook.bats test/e2e/secret.bats test/e2e/task.bats test/e2e/search.bats test/e2e/whoami.bats --show-output-of-passing-tests
+        # Tag-selected rather than a hand-maintained file list, so new suites are
+        # picked up automatically. This is what recovers api_gateway.bats, which
+        # existed but was in no job's file list.
+        bats --filter-tags 'tier:pr,!oss-only,!unauthenticated' test/e2e/ --show-output-of-passing-tests
 
     - name: Upload test artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: e2e-test-artifacts
+        name: e2e-artifacts-enterprise
         path: |
           test/e2e/*.log
           test/e2e/*.json
+        if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Local OSS server built from conductor-oss main. Covers the OSS code paths, the
+  # `server` command, and validates the CLI against the code that will ship —
+  # none of which the Enterprise job can do.
+  # ---------------------------------------------------------------------------
+  e2e-local-server:
+    name: E2E (local OSS server)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      inputs.run_local_server
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Build CLI
+      run: |
+        VERSION="${GITHUB_REF_NAME:-dev}"
+        COMMIT="${GITHUB_SHA:-none}"
+        DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        go build -o conductor -v -ldflags "-X github.com/conductor-oss/conductor-cli/cmd.Version=${VERSION} -X github.com/conductor-oss/conductor-cli/cmd.Commit=${COMMIT} -X github.com/conductor-oss/conductor-cli/cmd.Date=${DATE}" .
+        chmod +x conductor
+        ./conductor --version
+
+    - name: Check out Conductor server source
+      uses: actions/checkout@v4
+      with:
+        repository: conductor-oss/conductor
+        ref: ${{ env.CONDUCTOR_SERVER_REF }}
+        path: conductor-server-src
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Build Conductor server from source
+      working-directory: conductor-server-src
+      run: |
+        # Module names are prefixed in settings.gradle, so the task is
+        # :conductor-server:bootJar, not :server:bootJar.
+        ./gradlew :conductor-server:bootJar -x test --console=plain
+        ls -la server/build/libs/*-boot.jar
+
+    - name: Setup bats
+      uses: bats-core/bats-action@2.0.0
+
+    - name: Verify bats supports tag filtering
+      run: |
+        bats --version
+        bats --help 2>&1 | grep -q -- '--filter-tags' || {
+          echo "::error::installed bats does not support --filter-tags (needs >= 1.8.0)"
+          exit 1
+        }
+
+    - name: Start local Conductor server
+      run: |
+        mkdir -p "$SERVER_WORKDIR"
+        JAR=$(ls "$GITHUB_WORKSPACE"/conductor-server-src/server/build/libs/*-boot.jar | head -1)
+        echo "starting $JAR"
+        # Run from the scratch dir so the SQLite database is not written into the
+        # repository (see #104). The AI flags mirror what `conductor server start`
+        # passes, so agent workflows behave the same as under the CLI.
+        #
+        # NOTE: a source-built jar cannot be launched via `conductor server start`,
+        # which only downloads published versions. Consequently no CLI-managed pid
+        # file exists and the 6 server-dependent tests in server.bats skip rather
+        # than run. They skip loudly with a reason; see the tracking issue in
+        # ADR-0001 for closing that gap.
+        cd "$SERVER_WORKDIR"
+        nohup java -jar "$JAR" \
+          --conductor.integrations.ai.enabled=true \
+          --agentspan.embedded=true \
+          > /tmp/conductor-server.log 2>&1 &
+        echo $! > /tmp/conductor-server.pid
+
+    - name: Wait for server health
+      run: |
+        for i in $(seq 1 60); do
+          if curl -sf http://localhost:8080/health | grep -q '"healthy":true'; then
+            echo "server healthy after ${i}s"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::server did not become healthy within 60s"
+        tail -n 100 /tmp/conductor-server.log || true
+        exit 1
+
+    - name: Run OSS E2E tests
+      env:
+        CONDUCTOR_SERVER_URL: http://localhost:8080/api
+        CONDUCTOR_SERVER_TYPE: OSS
+      run: |
+        # Excludes orkes-only; includes oss-only (the server suite).
+        bats --filter-tags 'tier:pr,!orkes-only' test/e2e/ --show-output-of-passing-tests
+
+    - name: Dump server logs on failure
+      if: failure()
+      run: tail -n 200 /tmp/conductor-server.log || true
+
+    - name: Collect server log for artifacts
+      if: always()
+      # upload-artifact does not expand '~', so copy the log into the workspace.
+      run: |
+        mkdir -p e2e-logs
+        cp /tmp/conductor-server.log e2e-logs/ 2>/dev/null || true
+
+    - name: Stop local Conductor server
+      if: always()
+      run: |
+        [ -f /tmp/conductor-server.pid ] && kill "$(cat /tmp/conductor-server.pid)" 2>/dev/null || true
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-artifacts-local-server
+        path: |
+          test/e2e/*.log
+          test/e2e/*.json
+          e2e-logs/conductor.log
+        if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Nightly tier: live LLM runs and the agentspan-dependent deploy tests. Kept off
+  # the PR path because it spends provider tokens, depends on PyPI, and is
+  # non-deterministic by nature.
+  #
+  # Currently manual-only: there is no `schedule:` trigger, so this runs solely
+  # when someone dispatches the workflow with run_nightly=true. The tier is still
+  # named "nightly" because that is its intended cadence once someone owns the
+  # results; renaming the tag would churn 12 tests for no gain.
+  # ---------------------------------------------------------------------------
+  e2e-nightly:
+    name: E2E (nightly tier - LLM + deploy, manual)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.run_nightly
+    env:
+      # The `secrets` context is not available in step-level `if`, but it is in
+      # job-level `env`. Reduce the secret to a boolean here so steps can gate on
+      # it without leaking the value.
+      HAS_LLM_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.23
+
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Build CLI
+      run: |
+        VERSION="${GITHUB_REF_NAME:-dev}"
+        COMMIT="${GITHUB_SHA:-none}"
+        DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        go build -o conductor -v -ldflags "-X github.com/conductor-oss/conductor-cli/cmd.Version=${VERSION} -X github.com/conductor-oss/conductor-cli/cmd.Commit=${COMMIT} -X github.com/conductor-oss/conductor-cli/cmd.Date=${DATE}" .
+        chmod +x conductor
+        ./conductor --version
+
+    - name: Check out Conductor server source
+      uses: actions/checkout@v4
+      with:
+        repository: conductor-oss/conductor
+        ref: ${{ env.CONDUCTOR_SERVER_REF }}
+        path: conductor-server-src
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Build Conductor server from source
+      working-directory: conductor-server-src
+      run: |
+        ./gradlew :conductor-server:bootJar -x test --console=plain
+        ls -la server/build/libs/*-boot.jar
+
+    - name: Setup bats
+      uses: bats-core/bats-action@2.0.0
+
+    - name: Start local Conductor server
+      env:
+        # Agent executions run *inside* the server, not in the CLI, so the provider
+        # credential must be present in the server process's environment. Setting
+        # it only on the bats step would leave the server unable to reach the
+        # provider, and agent runs would fail with a provider auth error.
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      run: |
+        mkdir -p "$SERVER_WORKDIR"
+        JAR=$(ls "$GITHUB_WORKSPACE"/conductor-server-src/server/build/libs/*-boot.jar | head -1)
+        cd "$SERVER_WORKDIR"
+        nohup java -jar "$JAR" \
+          --conductor.integrations.ai.enabled=true \
+          --agentspan.embedded=true \
+          > /tmp/conductor-server.log 2>&1 &
+        echo $! > /tmp/conductor-server.pid
+
+    - name: Wait for server health
+      run: |
+        for i in $(seq 1 60); do
+          if curl -sf http://localhost:8080/health | grep -q '"healthy":true'; then
+            echo "server healthy after ${i}s"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::server did not become healthy within 60s"
+        exit 1
+
+    - name: Run agentspan deploy tests
+      env:
+        CONDUCTOR_SERVER_URL: http://localhost:8080/api
+        CONDUCTOR_SERVER_TYPE: OSS
+      run: |
+        # deploy.bats provisions its own fixture venv from the pinned
+        # requirements.txt and skips (rather than fails) if that is not possible.
+        bats --filter-tags 'tier:nightly,needs:agentspan' test/e2e/ --show-output-of-passing-tests
+
+    - name: Run live LLM agent tests
+      # Skipped rather than failed when no provider credential is configured, so a
+      # fork or a repo without the secret does not report a spurious failure.
+      if: env.HAS_LLM_KEY == 'true'
+      env:
+        CONDUCTOR_SERVER_URL: http://localhost:8080/api
+        CONDUCTOR_SERVER_TYPE: OSS
+      run: |
+        bats --filter-tags 'tier:nightly,needs:llm' test/e2e/ --show-output-of-passing-tests
+
+    - name: Note when LLM tests were skipped
+      if: env.HAS_LLM_KEY != 'true'
+      run: echo "::warning::ANTHROPIC_API_KEY not configured — needs:llm tests were not run"
+
+    - name: Dump server logs on failure
+      if: failure()
+      run: tail -n 200 /tmp/conductor-server.log || true
+
+    - name: Collect server log for artifacts
+      if: always()
+      # upload-artifact does not expand '~', so copy the log into the workspace.
+      run: |
+        mkdir -p e2e-logs
+        cp /tmp/conductor-server.log e2e-logs/ 2>/dev/null || true
+
+    - name: Stop local Conductor server
+      if: always()
+      run: |
+        [ -f /tmp/conductor-server.pid ] && kill "$(cat /tmp/conductor-server.pid)" 2>/dev/null || true
+
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-artifacts-nightly
+        path: |
+          test/e2e/*.log
+          test/e2e/*.json
+          e2e-logs/conductor.log
         if-no-files-found: ignore

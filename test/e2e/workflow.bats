@@ -3,6 +3,8 @@
 # E2E tests for conductor-cli
 # Tests must be run in order as they depend on each other
 
+# bats file_tags=tier:pr
+
 WORKFLOW_NAME="cli_e2e_test_workflow"
 WORKFLOW_FILE="test/e2e/test-workflow.json"
 WORKFLOW_NAME_2="cli_e2e_test_workflow_2"

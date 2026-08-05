@@ -3,6 +3,8 @@
 # E2E tests for API Gateway functionality
 # Tests service, auth config, and route management
 
+# bats file_tags=tier:pr,orkes-only
+
 SERVICE_ID="e2e_test_service"
 AUTH_CONFIG_ID="e2e_test_auth"
 WORKFLOW_NAME="cli_e2e_test_workflow_2"
@@ -12,6 +14,15 @@ setup() {
     if [ ! -f "./conductor" ]; then
         echo "ERROR: conductor binary not found. Please build it first."
         exit 1
+    fi
+
+    # API Gateway is an opt-in Orkes capability, not present on every Enterprise
+    # deployment. Where the endpoints are absent the server answers 404 with
+    # "No static resource api/gateway/...", which is a deployment fact rather than a
+    # CLI defect — so skip loudly instead of reporting 18 spurious failures.
+    if ./conductor api-gateway service list 2>&1 |
+        grep -qE 'No static resource api/gateway|API Gateway management is only available'; then
+        skip "server does not have API Gateway enabled"
     fi
 
     # Ensure test workflow exists

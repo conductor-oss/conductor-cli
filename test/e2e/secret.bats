@@ -2,6 +2,8 @@
 
 # E2E tests for secret management functionality
 
+# bats file_tags=tier:pr,orkes-only
+
 SECRET_KEY="e2e_test_secret"
 SECRET_KEY_2="e2e_test_secret_2"
 SECRET_VALUE="test_secret_value_12345"

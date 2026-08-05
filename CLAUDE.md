@@ -87,9 +87,9 @@ by hand.
 ## Command Reference
 
 Commands are organized into three help groups:
-- **Conductor Management** — `workflow`, `task`, `schedule`, `webhook`, `secret`, `api-gateway`, `agent`, `worker`
+- **Conductor Management** — `workflow`, `task`, `schedule`, `webhook`, `secret`, `api-gateway`, `agent`
 - **CLI Configuration** — `config`, `whoami`, `update`, `completion`
-- **Development** — `server`, `code`, `deploy`, `doctor`
+- **Development** — `server`, `deploy`, `doctor`, `worker`
 
 ### Server Commands
 
@@ -442,17 +442,9 @@ protocols.
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
-| `code` | Generate a project from a template (interactive) | None | `--lang`/`-l`, `--framework`/`-f`, `--template`/`-t`, `--name`/`-n` | `conductor code --lang python --template hello-world` |
-| `code list` | List available templates | None | | `conductor code list` |
 | `deploy` | Deploy agents from your project to the server | None | `--agents`/`-a`, `--language`/`-l`, `--package`/`-p`, `--json` | `conductor deploy --language python` |
 | `doctor` | Check runtime and AI provider configuration | None | | `conductor doctor` |
 | `whoami` | Display information about the current user | None | | `conductor whoami` |
-
-**`code` flags:**
-- `--lang`, `-l` - Programming language
-- `--framework`, `-f` - Framework (defaults to `core`)
-- `--template`, `-t` - Template name
-- `--name`, `-n` - Project name
 
 **`deploy` flags:**
 - `--agents`, `-a` - Comma-separated agent names to deploy (default: all discovered)

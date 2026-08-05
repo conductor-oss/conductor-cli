@@ -3,6 +3,8 @@
 # E2E tests for workflow search functionality
 # Tests must be run in order as they depend on each other
 
+# bats file_tags=tier:pr
+
 WORKFLOW_NAME="cli_e2e_test_workflow_2"
 WORKFLOW_FILE="test/e2e/test-workflow-2.json"
 

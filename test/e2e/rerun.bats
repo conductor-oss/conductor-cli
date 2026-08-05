@@ -2,6 +2,8 @@
 
 # E2E tests for workflow rerun functionality
 
+# bats file_tags=tier:pr
+
 WORKFLOW_NAME="cli_e2e_test_workflow_2"
 WORKFLOW_FILE="test/e2e/test-workflow-2.json"
 WORKFLOW_ID=""
