@@ -30,7 +30,7 @@ type sdkTokenManager interface {
 }
 
 // tokenProvider adapts a conductor-go token manager to transport.TokenProvider so
-// that agent and skill traffic reuses exactly the same JWT — including refresh and
+// that agent traffic reuses exactly the same JWT — including refresh and
 // caching — as the conductor-go SDK client.
 type tokenProvider struct {
 	manager      sdkTokenManager
