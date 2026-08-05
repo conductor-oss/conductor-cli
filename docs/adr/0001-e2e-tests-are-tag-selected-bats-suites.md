@@ -40,11 +40,18 @@ but it duplicates checkout/build/bats-setup across files and drifts.
 ## Consequences
 
 CI runs three jobs. Two run per pull request — one against a remote Orkes server for
-the Orkes-only surface, one against a pinned local OSS server — and one runs nightly
-for tests that spend model tokens or depend on PyPI. A test's venue is a property of
-the test, so adding a suite requires no CI edit; this is what recovered
+the Orkes-only surface, one against a pinned local OSS server — and a third holds the
+tests that spend model tokens or depend on PyPI. A test's venue is a property of the
+test, so adding a suite requires no CI edit; this is what recovered
 `api_gateway.bats`, whose 18 tests existed but appeared in no job's file list and so
 ran nowhere.
+
+The third job is **manual-only for now**: no `schedule:` trigger is configured, so it
+runs only on an explicit `workflow_dispatch` with `run_nightly=true`. The tier keeps
+the name `nightly` because that is the intended cadence, but scheduling was
+deliberately deferred until someone owns watching the results — an unattended cron
+that spends model tokens and reports to nobody is worse than no coverage. The cron
+line is present but commented, with the one other change needed to enable it.
 
 The local-server job exists because the remote-only arrangement could not, even in
 principle, catch certain classes of defect: it pinned `CONDUCTOR_SERVER_TYPE` to

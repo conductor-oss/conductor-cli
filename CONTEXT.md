@@ -77,9 +77,10 @@ that anonymous access is rejected is meaningless against a server that permits i
 _Avoid_: environment, target, stage
 
 **Tier**:
-When a test runs — on every pull request, or on the nightly schedule. Tests that
-cost money, depend on a third party, or are non-deterministic belong to the nightly
-tier.
+When a test is intended to run — on every pull request, or on the slower nightly
+cadence. Tests that cost money, depend on a third party, or are non-deterministic
+belong to the nightly tier. The name states intent, not current wiring: the nightly
+tier is presently triggered manually rather than on a schedule.
 _Avoid_: suite, level, category, stage
 
 **OSS-safe**:

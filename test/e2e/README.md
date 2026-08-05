@@ -41,6 +41,12 @@ Nightly tier (spends model tokens, installs `agentspan` from PyPI):
 bats --filter-tags 'tier:nightly' test/e2e/
 ```
 
+> In CI the nightly tier is **manual-only**: there is no cron trigger, so it runs
+> only via *Run workflow* on the Actions tab with `run_nightly` checked. The tag is
+> named for its intended cadence, not its current wiring. Enabling the schedule means
+> uncommenting the `schedule:` block in `.github/workflows/e2e.yml` and dropping the
+> `workflow_dispatch` condition on the `e2e-nightly` job.
+
 A single suite, or a count without running anything:
 
 ```bash
@@ -58,7 +64,7 @@ bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
 | Tag | Meaning |
 |-----|---------|
 | `tier:pr` | Runs on every pull request. Free and deterministic. |
-| `tier:nightly` | Runs on the nightly schedule. Costs money, or depends on a third party, or is non-deterministic. |
+| `tier:nightly` | Costs money, or depends on a third party, or is non-deterministic. Intended for a nightly cadence; currently run manually only. |
 | `orkes-only` | Requires Orkes Conductor. OSS refuses the operation. |
 | `oss-only` | Requires a local OSS server; meaningless against a remote Orkes server. |
 | `unauthenticated` | Needs a *secured* server reached *without* credentials. Must be excluded from authenticated runs. |

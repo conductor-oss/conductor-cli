@@ -5,10 +5,13 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
-  schedule:
-    # Nightly at 03:17 UTC. Drives the tier:nightly suites (live LLM runs and the
-    # agentspan-dependent deploy tests), which are too slow/costly for every PR.
-    - cron: '17 3 * * *'
+  # No `schedule:` trigger yet — deliberately. The tier:nightly suites spend model
+  # tokens on every run, so they stay opt-in via workflow_dispatch until someone
+  # owns watching them. To enable, uncomment below and drop the workflow_dispatch
+  # condition on the e2e-nightly job:
+  #
+  # schedule:
+  #   - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       run_enterprise:
@@ -20,7 +23,7 @@ on:
         type: boolean
         default: true
       run_nightly:
-        description: 'Run the nightly tier (live LLM + agentspan deploy tests)'
+        description: 'Run the nightly tier (live LLM + agentspan deploy tests) — spends model tokens'
         type: boolean
         default: false
 
@@ -222,13 +225,17 @@ jobs:
   # Nightly tier: live LLM runs and the agentspan-dependent deploy tests. Kept off
   # the PR path because it spends provider tokens, depends on PyPI, and is
   # non-deterministic by nature.
+  #
+  # Currently manual-only: there is no `schedule:` trigger, so this runs solely
+  # when someone dispatches the workflow with run_nightly=true. The tier is still
+  # named "nightly" because that is its intended cadence once someone owns the
+  # results; renaming the tag would churn 12 tests for no gain.
   # ---------------------------------------------------------------------------
   e2e-nightly:
-    name: E2E (nightly - LLM + deploy)
+    name: E2E (nightly tier - LLM + deploy, manual)
     runs-on: ubuntu-latest
     if: >-
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.run_nightly)
+      github.event_name == 'workflow_dispatch' && inputs.run_nightly
     env:
       # The `secrets` context is not available in step-level `if`, but it is in
       # job-level `env`. Reduce the secret to a boolean here so steps can gate on
