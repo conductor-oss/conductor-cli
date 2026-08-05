@@ -65,10 +65,9 @@ published from it: Maven Central carries only tagged RCs, and the S3 `latest` ja
 not moved since June. Building is the only way to test what will actually ship.
 
 The costs are real and tracked in #105: a Gradle build on every PR run, and this
-repo's CI becoming sensitive to the server repo's build health. A published RC is a
-`main` snapshot — when this was set up `main` was 8 commits ahead of the newest RC,
-none of them CLI-facing — so pinning an RC remains a reasonable future trade of
-fidelity for speed and isolation.
+repo's CI becoming sensitive to the server repo's build health. That choice, and the
+reasons pinning a published version was preferred but not possible, are recorded
+separately in [ADR-0002](./0002-e2e-builds-the-conductor-server-from-source.md).
 
 One consequence is worth knowing: `conductor server start` can only download
 published versions, so a source-built jar must be launched with `java -jar` directly.
