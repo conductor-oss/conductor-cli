@@ -18,7 +18,6 @@ import (
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 
 	"github.com/conductor-oss/conductor-cli/internal/agent"
-	"github.com/conductor-oss/conductor-cli/internal/skill"
 	"github.com/conductor-oss/conductor-cli/internal/transport"
 )
 
@@ -26,9 +25,9 @@ var (
 	workflowClient *client.WorkflowResourceApiService = nil
 	apiClient      *client.APIClient
 
-	// agentTransport is the shared HTTP transport for the agent and skill clients,
+	// agentTransport is the shared HTTP transport for the agent client,
 	// configured once at startup (cmd/root.go) from the same server URL and auth as
-	// apiClient. The agent/skill endpoints are not part of the conductor-go SDK.
+	// apiClient. The agent endpoints are not part of the conductor-go SDK.
 	agentTransport transport.Config
 )
 
@@ -69,13 +68,13 @@ func SetAPIClient(client *client.APIClient) {
 	apiClient = client
 }
 
-// SetTransport stores the shared transport used by the agent and skill clients.
+// SetTransport stores the shared transport used by the agent client.
 // Called once at startup after the server URL and authentication are resolved.
 func SetTransport(cfg transport.Config) {
 	agentTransport = cfg
 }
 
-// Transport returns the shared agent/skill transport configured at startup.
+// Transport returns the shared agent transport configured at startup.
 func Transport() transport.Config {
 	return agentTransport
 }
@@ -83,9 +82,4 @@ func Transport() transport.Config {
 // GetAgentService returns the agent use-case service over the shared transport.
 func GetAgentService() agent.Service {
 	return agent.NewService(agent.NewClient(agentTransport))
-}
-
-// GetSkillService returns the skill use-case service over the shared transport.
-func GetSkillService() skill.Service {
-	return skill.NewService(skill.NewClient(agentTransport))
 }

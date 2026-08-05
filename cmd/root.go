@@ -222,7 +222,7 @@ var rootCmd = &cobra.Command{
 
 		internal.SetAPIClient(apiClient)
 
-		// Share the same server URL and auth with the agent/skill transport, whose
+		// Share the same server URL and auth with the agent transport, whose
 		// endpoints are not part of the conductor-go SDK. agentTokens is nil when no
 		// credentials are configured (anonymous access).
 		internal.SetTransport(transport.Config{

@@ -7,8 +7,7 @@
 Conductor CLI (`conductor`) is a command-line tool for managing Netflix Conductor workflows, executions, tasks, webhooks, and schedules. It connects to Conductor server instances for workflow orchestration.
 
 It also runs a local Conductor server for development (`conductor server start`), runs task workers
-(`conductor worker`), and manages AI agents and skills (`conductor agent`, `conductor skill`,
-`conductor deploy`).
+(`conductor worker`), and manages AI agents (`conductor agent`, `conductor deploy`).
 
 ## Installation
 
@@ -88,7 +87,7 @@ by hand.
 ## Command Reference
 
 Commands are organized into three help groups:
-- **Conductor Management** — `workflow`, `task`, `schedule`, `webhook`, `secret`, `api-gateway`, `agent`, `skill`, `worker`
+- **Conductor Management** — `workflow`, `task`, `schedule`, `webhook`, `secret`, `api-gateway`, `agent`, `worker`
 - **CLI Configuration** — `config`, `whoami`, `update`, `completion`
 - **Development** — `server`, `code`, `deploy`, `doctor`
 
@@ -397,47 +396,6 @@ Columns: NAME, VERSION, TYPE, DESCRIPTION
 **Table Output (agent execution):**
 Columns: ID, AGENT, STATUS, START_TIME, DURATION
 
-### Skill Commands
-
-Package local skill directories (a directory containing `SKILL.md`) and run them as agents.
-
-| Command | Description | Required Args | Optional Flags | Example |
-|---------|-------------|---------------|----------------|---------|
-| `skill register <path>` | Package and register a local skill | skill directory | `--version`, `--model`, `--agent-model` | `conductor skill register ./my-skill` |
-| `skill load <path>` | Package a local skill and deploy it as an agent | skill directory | `--model` (required), `--agent-model`, `--search-path` | `conductor skill load ./my-skill --model claude-opus-5` |
-| `skill run <path-or-name> <prompt>` | Run a local or registered skill and stream output | path or name, prompt | `--model` (required), `--agent-model`, `--param`, `--version`, `--search-path`, `--workspace`, `--no-workspace`, `--filesystem`, `--script-timeout`, `--script-output-limit`, `--workspace-file-limit` | `conductor skill run ./my-skill "summarize the logs" --model claude-opus-5` |
-| `skill serve <path-or-name>` | Start local tool workers without running the skill | path or name | same as `skill run` (minus `--param`) | `conductor skill serve ./my-skill` |
-| `skill list` | List registered skills | None | `--all-versions`, `--json`, `--csv` | `conductor skill list` |
-| `skill get <name> [version]` | Get a registered skill | skill name | `--version` | `conductor skill get my-skill` |
-| `skill pull <name> [destination]` | Download and extract a skill package | skill name | `--version` | `conductor skill pull my-skill ./out` |
-| `skill delete <name> [version]` | Delete a registered skill version | skill name | `--version` | `conductor skill delete my-skill` |
-
-**Flags:**
-- `--model` - Orchestrator and default model (required for `load`, `run`, and `serve`)
-- `--agent-model` - Sub-agent model override in `name=model` form (repeatable)
-- `--param` - Skill parameter override in `key=value` form (repeatable)
-- `--version` - Skill version or checksum prefix
-- `--search-path` - Cross-skill search directory (repeatable)
-- `--workspace` - Workspace directory exposed to workspace tools
-- `--no-workspace` - Do not expose the current workspace
-- `--filesystem` - Additional read-only filesystem root as `name=path` (repeatable)
-- `--all-versions` - List all versions instead of only the latest
-- `--script-timeout` - Skill script timeout in seconds
-- `--script-output-limit` / `--workspace-file-limit` - Maximum bytes captured from script output / returned by workspace file tools
-
-**`load` vs `run`:** `load` only publishes the agent (run it later with `agent run --name <skill>`); `run` starts local tool workers, launches the agent, and streams the execution. `serve` starts only the workers so the skill can be driven from elsewhere (e.g. the UI).
-
-**Tool task types.** Each script in `scripts/` plus the built-in tools are served as the
-Conductor task type `{skillName}__{tool}` — `read_skill_file`, and with a workspace enabled
-`list_workspace_files`, `read_workspace_file`, `search_workspace`, `git_status`, `git_diff`.
-`inputParameters.command` becomes the script's argv, stdout becomes `{"result": "<stdout>"}`,
-and a non-zero exit fails the task. Script language is chosen by extension
-(`.py .sh .js .mjs .ts .rb .go .bat .cmd`).
-
-Because a tool is just a task type, a plain workflow can call one with no agent involved —
-point a `SIMPLE` task at `{skillName}__{tool}` while `skill serve` is running. See
-[WORKER_SKILL.md](./WORKER_SKILL.md).
-
 ### Worker Commands
 
 Run task workers that poll Conductor and execute work locally.
@@ -463,14 +421,13 @@ Run task workers that poll Conductor and execute work locally.
 - `--refresh` - Force refresh the worker from the registry, ignoring cache
 - `--namespace` - Registry namespace to list workers from (default: `default`)
 
-All flavours share one poll loop; they differ only in how user code runs and in the result
+Both flavours share one poll loop; they differ only in how user code runs and in the result
 shape it returns:
 
 | Flavour | Worker returns | Failure carries |
 |---------|----------------|-----------------|
 | `stdio` | `{"status","output","logs","reason"}` on stdout | `reasonForIncompletion` + logs |
 | `js` | `{status, body}` from the script; `$.task` holds the task | `output.error` |
-| skill tools | bare stdout, wrapped as `{"result": ...}` | `reasonForIncompletion` |
 
 Workers exit on Ctrl-C/SIGTERM once the in-flight batch finishes — a running task is left
 to complete and report its real result rather than being killed, which would report a
@@ -478,8 +435,8 @@ failure the worker inflicted on itself and consume one of the task's retries. A 
 signal exits immediately. Child processes receive `TASK_TYPE`, `TASK_ID`, `WORKFLOW_ID`, `EXECUTION_ID`,
 `POLL_DOMAIN`, and the CLI's own `CONDUCTOR_SERVER_URL` and credentials.
 
-See [WORKER_JS.md](./WORKER_JS.md), [WORKER_STDIO.md](./WORKER_STDIO.md) and
-[WORKER_SKILL.md](./WORKER_SKILL.md) for the worker protocols.
+See [WORKER_JS.md](./WORKER_JS.md) and [WORKER_STDIO.md](./WORKER_STDIO.md) for the worker
+protocols.
 
 ### Development Commands
 
@@ -540,7 +497,6 @@ See [WORKER_JS.md](./WORKER_JS.md), [WORKER_STDIO.md](./WORKER_STDIO.md) and
 - `webhook list` - Table with NAME, WEBHOOK ID, WORKFLOWS, URL (or `--json`)
 - `secret list` - Table with KEY, or KEY and TAGS with `--with-tags` (or `--json`)
 - `agent list` - Table with NAME, VERSION, TYPE, DESCRIPTION (or `--json`/`--csv`)
-- `skill list` - Table of registered skills (or `--json`/`--csv`)
 
 **Important:** To parse output reliably, redirect stderr to `/dev/null` to suppress update notifications and warnings:
 ```bash

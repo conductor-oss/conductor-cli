@@ -223,7 +223,6 @@ After installing, you'll get tab completion when typing `conductor <TAB>`.
   * [Workers](#workers)
     * [Stdio Workers](#stdio-workers)
     * [JavaScript Workers (Built-in)](#javascript-workers--built-in-)
-    * [Skill Workers](#skill-workers)
     * [Remote Workers (Registry-based)](#remote-workers--registry-based-)
   * [Exit Codes](#exit-codes)
   * [Error Handling](#error-handling)
@@ -853,7 +852,7 @@ conductor --config /path/to/my-config.yaml workflow list
 
 ⚠️ **EXPERIMENTAL FEATURES**
 
-The CLI supports several types of workers for processing Conductor tasks:
+The CLI supports these types of workers for processing Conductor tasks:
 
 ### Stdio Workers
 
@@ -887,19 +886,6 @@ conductor worker js --type greet_task worker.js
 ```
 
 👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
-
-### Skill Workers
-
-A skill directory (`SKILL.md` plus `scripts/`) serves each of its scripts as a
-Conductor task type via `conductor skill serve`. Scripts take their arguments from
-`inputParameters.command` and return bare stdout, so there is no result envelope to
-emit. Works with or without an agent.
-
-```bash
-conductor skill serve ./myskill
-```
-
-👉 **[Complete Skill Worker Documentation →](WORKER_SKILL.md)**
 
 ### Remote Workers (Registry-based)
 

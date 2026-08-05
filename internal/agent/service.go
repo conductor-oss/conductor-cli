@@ -21,6 +21,8 @@ import (
 )
 
 // frameworkSkill is the framework marker inferred for skill-backed agent definitions.
+// Kept after the `skill` command's removal for backward compatibility: conductor-cli
+// can no longer create these, but `agent run` must keep recognizing ones already deployed.
 const frameworkSkill = "skill"
 
 // EventSink receives streamed events. It decouples streaming from rendering: the cmd

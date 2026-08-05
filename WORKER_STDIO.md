@@ -271,5 +271,3 @@ func main() {
 | HTTP Calls | Use language's HTTP library | Built-in `http` object |
 | File System | Full access | No access |
 | Best For | Complex logic, heavy dependencies | Lightweight tasks, quick scripts |
-
-See also [Skill Workers](WORKER_SKILL.md), which run a script with no result envelope at all.

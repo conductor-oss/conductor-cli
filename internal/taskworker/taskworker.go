@@ -62,25 +62,6 @@ type Task struct {
 	Raw json.RawMessage
 }
 
-// InputData returns just the task's inputData, for handlers that want the input rather
-// than the whole task. A task with no inputData yields "null".
-//
-// model.Task.InputData is tagged omitempty, so an empty-but-non-nil map is absent from
-// Raw and also yields "null" here, where marshalling the map directly would have given
-// "{}". Handlers decode into structs, so both produce the same zero values.
-func (t Task) InputData() (json.RawMessage, error) {
-	var envelope struct {
-		InputData json.RawMessage `json:"inputData"`
-	}
-	if err := json.Unmarshal(t.Raw, &envelope); err != nil {
-		return nil, err
-	}
-	if len(envelope.InputData) == 0 {
-		return json.RawMessage("null"), nil
-	}
-	return envelope.InputData, nil
-}
-
 // Result is the outcome of executing one task.
 //
 // There is no error return alongside it: every outcome is a Result, so there is exactly

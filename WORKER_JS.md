@@ -879,4 +879,4 @@ if (parsed.error) {
 
 The JavaScript worker is designed for lightweight task processing with HTTP integration. For heavy processing or complex dependencies, consider calling external services that have full library support.
 
-See also [Stdio Workers](WORKER_STDIO.md) and [Skill Workers](WORKER_SKILL.md).
+See also [Stdio Workers](WORKER_STDIO.md).

@@ -305,34 +305,3 @@ func TestUpdateStillDeliversAfterContextCancelled(t *testing.T) {
 		t.Errorf("status = %q, want COMPLETED", got[0].result.Status)
 	}
 }
-
-func TestInputData(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-		want string
-	}{
-		{name: "present", raw: `{"taskId":"t","inputData":{"name":"Miguel"}}`, want: `{"name":"Miguel"}`},
-		{name: "absent yields null", raw: `{"taskId":"t"}`, want: `null`},
-		{name: "explicit null", raw: `{"inputData":null}`, want: `null`},
-		{name: "empty object", raw: `{"inputData":{}}`, want: `{}`},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Task{Raw: json.RawMessage(tt.raw)}.InputData()
-			if err != nil {
-				t.Fatalf("InputData() error = %v", err)
-			}
-			if string(got) != tt.want {
-				t.Errorf("InputData() = %s, want %s", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestInputDataMalformedRawErrors(t *testing.T) {
-	if _, err := (Task{Raw: json.RawMessage(`not json`)}).InputData(); err == nil {
-		t.Error("InputData() on malformed Raw returned nil error")
-	}
-}

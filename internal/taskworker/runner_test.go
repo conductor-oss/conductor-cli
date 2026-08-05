@@ -156,14 +156,6 @@ func TestTaskFromModelCarriesFullTaskAsRaw(t *testing.T) {
 			t.Errorf("Raw is missing %q — it must be the full task, not just inputData", key)
 		}
 	}
-
-	input, err := polled.Task.InputData()
-	if err != nil {
-		t.Fatalf("InputData() error = %v", err)
-	}
-	if string(input) != `{"name":"Miguel"}` {
-		t.Errorf("InputData() = %s", input)
-	}
 }
 
 func assertTaskResultEqual(t *testing.T, got *model.TaskResult, want model.TaskResult) {

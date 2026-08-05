@@ -11,7 +11,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-// Package transport is the shared HTTP transport for the agent and skill clients.
+// Package transport is the shared HTTP transport for the agent client.
 // Those endpoints are not part of the conductor-go SDK, so the CLI owns a small,
 // interface-bounded transport that reuses Conductor's resolved server URL and JWT
 // (see cmd/root.go) — one backend, one auth path. No file paths, ports, or URLs are
@@ -38,7 +38,7 @@ type TokenProvider interface {
 	Token(ctx context.Context) (string, error)
 }
 
-// Config is the shared transport for agent and skill traffic. BaseURL and Tokens are
+// Config is the shared transport for agent traffic. BaseURL and Tokens are
 // resolved once at startup from the same source as the conductor-go client, so these
 // calls reuse Conductor's server URL and authentication — no second config, no second
 // auth path.
@@ -134,9 +134,9 @@ func (c Config) applyAuth(ctx context.Context, req *http.Request) error {
 }
 
 // APIError is a non-2xx response from the Conductor server. It mirrors the server's
-// JSON error shape ({status, message, error}) so agent and skill errors read
-// consistently with the rest of the CLI (cf. cmd.parseAPIError, which does the same
-// for SDK-surfaced errors).
+// JSON error shape ({status, message, error}) so agent errors read consistently with
+// the rest of the CLI (cf. cmd.parseAPIError, which does the same for SDK-surfaced
+// errors).
 type APIError struct {
 	Status  int
 	Method  string
