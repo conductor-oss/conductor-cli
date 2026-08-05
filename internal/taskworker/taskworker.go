@@ -63,8 +63,11 @@ type Task struct {
 }
 
 // InputData returns just the task's inputData, for handlers that want the input rather
-// than the whole task. A task with no inputData yields "null", matching what the skill
-// worker produced previously by marshalling a nil map.
+// than the whole task. A task with no inputData yields "null".
+//
+// model.Task.InputData is tagged omitempty, so an empty-but-non-nil map is absent from
+// Raw and also yields "null" here, where marshalling the map directly would have given
+// "{}". Handlers decode into structs, so both produce the same zero values.
 func (t Task) InputData() (json.RawMessage, error) {
 	var envelope struct {
 		InputData json.RawMessage `json:"inputData"`
@@ -182,7 +185,10 @@ func (w *Worker) Run(ctx context.Context, taskType string, h Handler) {
 			continue
 		}
 
-		log.Infof("Polled %d task(s)", len(polled))
+		// Debug, not Info: skill run starts one loop per tool type and streams agent output
+		// to the same terminal, so an Info line here buries the stream. Poll *errors* stay
+		// at Error — a silently idle worker is the failure this logging exists to surface.
+		log.Debugf("Polled %d task(s)", len(polled))
 		w.runBatch(ctx, polled, h)
 	}
 }

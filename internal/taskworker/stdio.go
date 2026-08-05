@@ -72,13 +72,21 @@ func (h *StdioHandler) Handle(ctx context.Context, t Task) Result {
 		fmt.Println("==================")
 	}
 
+	// The child is deliberately detached from the loop's cancellation. A task already
+	// running should finish and report its real result, which is what Run promises
+	// ("returns once the in-flight batch finishes"). Killing it on Ctrl-C instead makes
+	// the worker report a FAILED it inflicted on itself — and because results are
+	// delivered on a context that outlives cancellation, the server sees that failure
+	// and consumes one of the task's retries. A child that will not finish is handled by
+	// the second interrupt, which exits the process outright.
+	execCtx := context.WithoutCancel(ctx)
 	if h.opts.ExecTimeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, h.opts.ExecTimeout)
+		execCtx, cancel = context.WithTimeout(execCtx, h.opts.ExecTimeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, h.opts.Command, h.opts.Args...)
+	cmd := exec.CommandContext(execCtx, h.opts.Command, h.opts.Args...)
 	cmd.Env = append(cmd.Environ(),
 		"TASK_TYPE="+t.Type,
 		"TASK_ID="+t.ID,
@@ -106,9 +114,9 @@ func (h *StdioHandler) Handle(ctx context.Context, t Task) Result {
 
 // printResultBanner reports a result under --verbose. The banner distinguishes failures
 // so they stand out in a stream of task output.
-func printResultBanner(status string, result Result) {
+func printResultBanner(result Result) {
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	if Status(status) == StatusFailed {
+	if result.Status == StatusFailed {
 		fmt.Println("=== Task Result (Error) ===")
 		fmt.Println(string(resultJSON))
 		fmt.Println("===========================")
@@ -133,7 +141,7 @@ func (h *StdioHandler) runAndParse(cmd *exec.Cmd, stdout, stderr *bytes.Buffer) 
 			Logs:   []string{stderrOutput},
 		}
 		if h.opts.Verbose {
-			printResultBanner(string(StatusFailed), failure)
+			printResultBanner(failure)
 		}
 		return failure
 	}
@@ -149,7 +157,7 @@ func (h *StdioHandler) runAndParse(cmd *exec.Cmd, stdout, stderr *bytes.Buffer) 
 			Logs:   []string{stdoutOutput},
 		}
 		if h.opts.Verbose {
-			printResultBanner(string(StatusFailed), failure)
+			printResultBanner(failure)
 		}
 		return failure
 	}
@@ -158,7 +166,7 @@ func (h *StdioHandler) runAndParse(cmd *exec.Cmd, stdout, stderr *bytes.Buffer) 
 	// sees what it actually sent rather than the rewritten failure — which is the whole
 	// point of asking for verbose output.
 	if h.opts.Verbose {
-		printResultBanner(parsed.Status, Result{
+		printResultBanner(Result{
 			Status: Status(parsed.Status),
 			Output: parsed.Output,
 			Logs:   parsed.Logs,

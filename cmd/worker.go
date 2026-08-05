@@ -725,8 +725,10 @@ func workerPollFlags(cmd *cobra.Command) (taskworker.RunnerOptions, time.Duratio
 	return opts, time.Duration(execSeconds) * time.Second
 }
 
-// addPollTimeoutFlags registers the two timeout flags on a worker subcommand, plus the
-// deprecated --timeout alias that `worker js` and `worker remote` shipped with.
+// addPollTimeoutFlags registers the timeout flags on a worker subcommand, plus a hidden
+// deprecated --timeout alias. `worker js` and `worker remote` shipped with --timeout;
+// `worker stdio` did not, but it accepts the alias too so that one spelling works
+// everywhere rather than the alias being another per-command difference.
 //
 // The alias is hidden rather than removed so existing invocations keep working; it maps
 // to --poll-timeout only. See workerPollFlags and issue #91.

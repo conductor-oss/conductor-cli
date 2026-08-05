@@ -17,11 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -120,8 +117,11 @@ func runSkillRun(cmd *cobra.Command, args []string) error {
 
 	// One signal-aware context governs both the workers and the stream; cancelling
 	// it (Ctrl-C) stops everything. Workers are also cancelled when the execution
-	// ends normally.
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	// ends normally. A second interrupt exits outright, so a stream or tool script
+	// that ignores cancellation cannot leave the process unkillable.
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	stop := interruptWithEscalation(cancel)
 	defer stop()
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
@@ -153,7 +153,9 @@ func runSkillServe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	stop := interruptWithEscalation(cancel)
 	defer stop()
 	startSkillWorkers(ctx, buildSkillWorkerRegistry(cfg, local, ws, scriptOptions(), skillWorkspaceFileLimit))
 

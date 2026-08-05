@@ -472,8 +472,10 @@ shape it returns:
 | `js` | `{status, body}` from the script; `$.task` holds the task | `output.error` |
 | skill tools | bare stdout, wrapped as `{"result": ...}` | `reasonForIncompletion` |
 
-Workers exit on Ctrl-C/SIGTERM once the in-flight batch finishes; a second signal exits
-immediately. Child processes receive `TASK_TYPE`, `TASK_ID`, `WORKFLOW_ID`, `EXECUTION_ID`,
+Workers exit on Ctrl-C/SIGTERM once the in-flight batch finishes — a running task is left
+to complete and report its real result rather than being killed, which would report a
+failure the worker inflicted on itself and consume one of the task's retries. A second
+signal exits immediately. Child processes receive `TASK_TYPE`, `TASK_ID`, `WORKFLOW_ID`, `EXECUTION_ID`,
 `POLL_DOMAIN`, and the CLI's own `CONDUCTOR_SERVER_URL` and credentials.
 
 See [WORKER_JS.md](./WORKER_JS.md), [WORKER_STDIO.md](./WORKER_STDIO.md) and

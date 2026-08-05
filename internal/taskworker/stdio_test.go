@@ -153,14 +153,39 @@ func TestStdioHandlerExecTimeoutKillsChild(t *testing.T) {
 	}
 }
 
-func TestStdioHandlerCancelledContextStopsChild(t *testing.T) {
-	h := NewStdioHandler(StdioOptions{Command: "sleep", Args: []string{"30"}})
+// TestStdioHandlerCancelledContextLetsTaskFinish pins that shutdown does not fail an
+// in-flight task. Killing the child on Ctrl-C made the worker report
+// "worker execution failed: signal: killed" — a failure it inflicted on itself, which the
+// server then counts against the task's retries. The child is detached from the loop
+// context so it finishes and reports its real result.
+func TestStdioHandlerCancelledContextLetsTaskFinish(t *testing.T) {
+	h := NewStdioHandler(shWorker(`sleep 0.3; echo '{"status":"COMPLETED","output":{"done":true}}'`))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
+	cancel() // already shutting down when the task starts
+
+	got := h.Handle(ctx, stdioTask())
+
+	if got.Status != StatusCompleted {
+		t.Errorf("Status = %q, want COMPLETED — shutdown must not fail an in-flight task", got.Status)
+	}
+	if strings.Contains(got.Reason, "killed") {
+		t.Errorf("Reason = %q — the child was killed by shutdown", got.Reason)
+	}
+	if got.Output["done"] != true {
+		t.Errorf("Output = %v, want the worker's real result", got.Output)
+	}
+}
+
+// TestStdioHandlerExecTimeoutStillAppliesAfterCancel guards the other half: detaching the
+// child from cancellation must not also detach it from its execution timeout.
+func TestStdioHandlerExecTimeoutStillAppliesAfterCancel(t *testing.T) {
+	opts := StdioOptions{Command: "sleep", Args: []string{"30"}}
+	opts.ExecTimeout = 100 * time.Millisecond
+	h := NewStdioHandler(opts)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
 
 	start := time.Now()
 	got := h.Handle(ctx, stdioTask())
@@ -169,7 +194,7 @@ func TestStdioHandlerCancelledContextStopsChild(t *testing.T) {
 		t.Errorf("Status = %q, want FAILED", got.Status)
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
-		t.Errorf("took %v — cancelling the context did not stop the child", elapsed)
+		t.Errorf("took %v — the exec timeout stopped applying once the child was detached", elapsed)
 	}
 }
 
