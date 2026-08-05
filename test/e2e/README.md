@@ -25,6 +25,22 @@ export CONDUCTOR_SERVER_TYPE=OSS
 bats --filter-tags 'tier:pr,!orkes-only' test/e2e/
 ```
 
+To test against the code that will actually ship, build the server from source
+instead — releases are cut from `conductor-oss/conductor` `main`, and no artifact is
+published from it:
+
+```bash
+cd ../conductor && git checkout main && git pull
+./gradlew :conductor-server:bootJar -x test        # note the conductor- prefix
+mkdir -p /tmp/conductor-e2e && cd /tmp/conductor-e2e
+java -jar ../../conductor/server/build/libs/*-boot.jar \
+  --conductor.integrations.ai.enabled=true --agentspan.embedded=true
+```
+
+This is what CI does. Because `conductor server start` can only download published
+versions, a source-built jar has no CLI-managed pid file, so the six server-dependent
+tests in `server.bats` skip. See #105.
+
 Against an Orkes server:
 
 ```bash

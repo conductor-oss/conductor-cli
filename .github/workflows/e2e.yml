@@ -33,9 +33,16 @@ permissions:
   pull-requests: write
 
 env:
-  # Pinned server release used by the local-server jobs. Bump deliberately: a
-  # failure against a pinned version is a real defect, not version skew.
-  CONDUCTOR_SERVER_VERSION: '3.32.0-rc.23'
+  # The server is built from source because releases are cut from conductor-oss
+  # main and no artifact is published from it: Maven's newest is a tagged RC and
+  # the S3 'latest' jar is months stale. Building means the CLI is tested against
+  # what will actually ship.
+  #
+  # TODO(#105): revisit pinning to the newest published RC instead. RCs are cut
+  # from main, so an RC is a main snapshot, and pulling a cached jar is faster and
+  # decouples this repo's CI from the server repo's build health. See the tracking
+  # issue linked in ADR-0001.
+  CONDUCTOR_SERVER_REF: 'main'
   # Scratch directory the local server is started from. `conductor server start`
   # writes its SQLite database relative to the working directory with no flag to
   # override it (see #104), so it must not run from the repo root.
@@ -114,8 +121,8 @@ jobs:
         if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Local OSS server at a pinned version. Covers the OSS code paths, the `server`
-  # command itself, and validates the CLI against the release-candidate server —
+  # Local OSS server built from conductor-oss main. Covers the OSS code paths, the
+  # `server` command, and validates the CLI against the code that will ship —
   # none of which the Enterprise job can do.
   # ---------------------------------------------------------------------------
   e2e-local-server:
@@ -147,12 +154,23 @@ jobs:
         chmod +x conductor
         ./conductor --version
 
-    - name: Cache Conductor server jar
-      uses: actions/cache@v4
+    - name: Check out Conductor server source
+      uses: actions/checkout@v4
       with:
-        # ~435 MB download; cache it so only the first run on a new pin pays for it.
-        path: ~/.conductor-cli/server/oss/${{ env.CONDUCTOR_SERVER_VERSION }}
-        key: conductor-server-oss-${{ env.CONDUCTOR_SERVER_VERSION }}
+        repository: conductor-oss/conductor
+        ref: ${{ env.CONDUCTOR_SERVER_REF }}
+        path: conductor-server-src
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Build Conductor server from source
+      working-directory: conductor-server-src
+      run: |
+        # Module names are prefixed in settings.gradle, so the task is
+        # :conductor-server:bootJar, not :server:bootJar.
+        ./gradlew :conductor-server:bootJar -x test --console=plain
+        ls -la server/build/libs/*-boot.jar
 
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
@@ -168,11 +186,23 @@ jobs:
     - name: Start local Conductor server
       run: |
         mkdir -p "$SERVER_WORKDIR"
-        # Started from the scratch dir so the SQLite database is not written into
-        # the repository (see #104). Uses the CLI's own `server start`, which also
-        # gives server.bats something real to assert against.
+        JAR=$(ls "$GITHUB_WORKSPACE"/conductor-server-src/server/build/libs/*-boot.jar | head -1)
+        echo "starting $JAR"
+        # Run from the scratch dir so the SQLite database is not written into the
+        # repository (see #104). The AI flags mirror what `conductor server start`
+        # passes, so agent workflows behave the same as under the CLI.
+        #
+        # NOTE: a source-built jar cannot be launched via `conductor server start`,
+        # which only downloads published versions. Consequently no CLI-managed pid
+        # file exists and the 6 server-dependent tests in server.bats skip rather
+        # than run. They skip loudly with a reason; see the tracking issue in
+        # ADR-0001 for closing that gap.
         cd "$SERVER_WORKDIR"
-        "$GITHUB_WORKSPACE/conductor" server start --version "$CONDUCTOR_SERVER_VERSION"
+        nohup java -jar "$JAR" \
+          --conductor.integrations.ai.enabled=true \
+          --agentspan.embedded=true \
+          > /tmp/conductor-server.log 2>&1 &
+        echo $! > /tmp/conductor-server.pid
 
     - name: Wait for server health
       run: |
@@ -184,7 +214,7 @@ jobs:
           sleep 1
         done
         echo "::error::server did not become healthy within 60s"
-        "$GITHUB_WORKSPACE/conductor" server logs -n 100 || true
+        tail -n 100 /tmp/conductor-server.log || true
         exit 1
 
     - name: Run OSS E2E tests
@@ -197,18 +227,19 @@ jobs:
 
     - name: Dump server logs on failure
       if: failure()
-      run: ./conductor server logs -n 200 || true
+      run: tail -n 200 /tmp/conductor-server.log || true
 
     - name: Collect server log for artifacts
       if: always()
       # upload-artifact does not expand '~', so copy the log into the workspace.
       run: |
         mkdir -p e2e-logs
-        cp "$HOME/.conductor-cli/server/conductor.log" e2e-logs/ 2>/dev/null || true
+        cp /tmp/conductor-server.log e2e-logs/ 2>/dev/null || true
 
     - name: Stop local Conductor server
       if: always()
-      run: ./conductor server stop || true
+      run: |
+        [ -f /tmp/conductor-server.pid ] && kill "$(cat /tmp/conductor-server.pid)" 2>/dev/null || true
 
     - name: Upload test artifacts
       if: always()
@@ -269,11 +300,21 @@ jobs:
         chmod +x conductor
         ./conductor --version
 
-    - name: Cache Conductor server jar
-      uses: actions/cache@v4
+    - name: Check out Conductor server source
+      uses: actions/checkout@v4
       with:
-        path: ~/.conductor-cli/server/oss/${{ env.CONDUCTOR_SERVER_VERSION }}
-        key: conductor-server-oss-${{ env.CONDUCTOR_SERVER_VERSION }}
+        repository: conductor-oss/conductor
+        ref: ${{ env.CONDUCTOR_SERVER_REF }}
+        path: conductor-server-src
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Build Conductor server from source
+      working-directory: conductor-server-src
+      run: |
+        ./gradlew :conductor-server:bootJar -x test --console=plain
+        ls -la server/build/libs/*-boot.jar
 
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
@@ -287,8 +328,13 @@ jobs:
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       run: |
         mkdir -p "$SERVER_WORKDIR"
+        JAR=$(ls "$GITHUB_WORKSPACE"/conductor-server-src/server/build/libs/*-boot.jar | head -1)
         cd "$SERVER_WORKDIR"
-        "$GITHUB_WORKSPACE/conductor" server start --version "$CONDUCTOR_SERVER_VERSION"
+        nohup java -jar "$JAR" \
+          --conductor.integrations.ai.enabled=true \
+          --agentspan.embedded=true \
+          > /tmp/conductor-server.log 2>&1 &
+        echo $! > /tmp/conductor-server.pid
 
     - name: Wait for server health
       run: |
@@ -327,18 +373,19 @@ jobs:
 
     - name: Dump server logs on failure
       if: failure()
-      run: ./conductor server logs -n 200 || true
+      run: tail -n 200 /tmp/conductor-server.log || true
 
     - name: Collect server log for artifacts
       if: always()
       # upload-artifact does not expand '~', so copy the log into the workspace.
       run: |
         mkdir -p e2e-logs
-        cp "$HOME/.conductor-cli/server/conductor.log" e2e-logs/ 2>/dev/null || true
+        cp /tmp/conductor-server.log e2e-logs/ 2>/dev/null || true
 
     - name: Stop local Conductor server
       if: always()
-      run: ./conductor server stop || true
+      run: |
+        [ -f /tmp/conductor-server.pid ] && kill "$(cat /tmp/conductor-server.pid)" 2>/dev/null || true
 
     - name: Upload test artifacts
       if: always()

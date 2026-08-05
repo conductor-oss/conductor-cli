@@ -56,8 +56,25 @@ line is present but commented, with the one other change needed to enable it.
 The local-server job exists because the remote-only arrangement could not, even in
 principle, catch certain classes of defect: it pinned `CONDUCTOR_SERVER_TYPE` to
 `Enterprise`, so OSS code paths were never exercised, and it tested against a server
-of unknown version rather than the release candidate. The first run of the new job
+of unknown version rather than the code being released. The first run of the new job
 found `schedule pause`/`resume` completely broken on OSS (#101).
+
+That job **builds the server from `conductor-oss/conductor` at `main`** rather than
+downloading a published jar, because releases are cut from `main` and nothing is
+published from it: Maven Central carries only tagged RCs, and the S3 `latest` jar has
+not moved since June. Building is the only way to test what will actually ship.
+
+The costs are real and tracked in #105: a Gradle build on every PR run, and this
+repo's CI becoming sensitive to the server repo's build health. A published RC is a
+`main` snapshot — when this was set up `main` was 8 commits ahead of the newest RC,
+none of them CLI-facing — so pinning an RC remains a reasonable future trade of
+fidelity for speed and isolation.
+
+One consequence is worth knowing: `conductor server start` can only download
+published versions, so a source-built jar must be launched with `java -jar` directly.
+No CLI-managed pid file exists, and the six server-dependent tests in `server.bats`
+skip in CI. They skip with a stated reason rather than failing, and #105 proposes a
+`--jar` flag that would close the gap.
 
 The scheme depends on bats >= 1.8.0. Both server-backed jobs assert that
 `--filter-tags` is supported before running, because a bats that ignored the flag
