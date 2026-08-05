@@ -4,6 +4,8 @@
 # These tests verify that the CLI provides helpful error messages when authentication fails
 # This test assumes no credentials are set.
 
+# bats file_tags=tier:pr,orkes-only
+
 setup() {
     # Ensure the CLI binary exists
     if [ ! -f "./conductor" ]; then

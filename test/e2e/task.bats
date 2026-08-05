@@ -3,6 +3,8 @@
 # E2E tests for task definition CRUD and task execution operations
 # Tests must be run in order as they depend on each other
 
+# bats file_tags=tier:pr
+
 TASK_NAME="cli_e2e_test_task"
 TASK_FILE="test/e2e/test-task.json"
 WORKFLOW_NAME="cli_e2e_test_workflow"
@@ -115,6 +117,8 @@ EOF
     [[ "$output" == "RUNNING" ]]
 }
 
+# task signal is Orkes-only (see the note on test 13).
+# bats test_tags=orkes-only
 @test "9. Signal WAIT task asynchronously" {
     WORKFLOW_ID=$(cat /tmp/task_signal_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -125,6 +129,8 @@ EOF
     echo "$output" | grep -q "Task signal sent asynchronously"
 }
 
+# Depends on test 9 having delivered the signal, so Orkes-only too.
+# bats test_tags=orkes-only
 @test "10. Verify workflow completes after async signal" {
     WORKFLOW_ID=$(cat /tmp/task_signal_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -169,6 +175,9 @@ EOF
     echo "Started workflow UUID: $WORKFLOW_ID"
 }
 
+# task signal / signal-sync are Orkes-only; OSS Conductor rejects them with
+# "signal operations are only available in Orkes Conductor (Enterprise)".
+# bats test_tags=orkes-only
 @test "13. Signal WAIT task synchronously" {
     WORKFLOW_ID=$(cat /tmp/task_signal_sync_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
@@ -181,6 +190,8 @@ EOF
     [[ "$output" == *"\"status\""* ]]
 }
 
+# Depends on test 13 having delivered the signal, so it is Orkes-only too.
+# bats test_tags=orkes-only
 @test "14. Verify workflow completes after sync signal" {
     WORKFLOW_ID=$(cat /tmp/task_signal_sync_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]

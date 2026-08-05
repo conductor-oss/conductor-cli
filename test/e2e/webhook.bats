@@ -2,6 +2,8 @@
 
 # E2E tests for webhook functionality
 
+# bats file_tags=tier:pr,orkes-only
+
 WEBHOOK_FILE="test/e2e/webhook.json"
 WEBHOOK_NAME="custom_webhook_1"
 WEBHOOK_ID=""

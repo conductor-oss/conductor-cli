@@ -26,3 +26,16 @@ go.work
 .idea/
 conductorosstest.db
 conductor-cli
+
+# E2E deploy fixture virtualenv (provisioned by test/e2e/deploy.bats)
+test/e2e/fixtures/**/.venv/
+
+# Local Conductor server SQLite database. `conductor server start` writes this
+# relative to the current working directory with no flag to override — see #104.
+c123.db
+c123.db-shm
+c123.db-wal
+
+# Python bytecode from the E2E deploy fixture
+__pycache__/
+*.pyc

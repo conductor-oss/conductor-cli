@@ -3,6 +3,8 @@
 # E2E tests for API Gateway functionality
 # Tests service, auth config, and route management
 
+# bats file_tags=tier:pr,orkes-only
+
 SERVICE_ID="e2e_test_service"
 AUTH_CONFIG_ID="e2e_test_auth"
 WORKFLOW_NAME="cli_e2e_test_workflow_2"

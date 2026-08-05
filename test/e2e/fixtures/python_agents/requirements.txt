@@ -1,0 +1,2 @@
+# Pinned so SDK drift cannot silently break CI. Bump deliberately.
+agentspan==0.2.0

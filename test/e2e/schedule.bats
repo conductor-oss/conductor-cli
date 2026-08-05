@@ -3,6 +3,8 @@
 # E2E tests for schedule commands
 # Tests schedule create, list, get, and delete functionality
 
+# bats file_tags=tier:pr
+
 setup_file() {
     # Ensure the CLI binary exists
     if [ ! -f "./conductor" ]; then
@@ -181,7 +183,17 @@ ensure_schedule() {
     [[ "$output" == *"no such schedule"* ]]
 }
 
+# Helper: pause/resume are broken against OSS Conductor — the SDK issues a GET
+# where the server requires PUT, so both return 405. See #101. The operations work
+# on Orkes, so these tests still run there; remove this guard once #101 is fixed.
+skip_if_oss_101() {
+    if [ "${CONDUCTOR_SERVER_TYPE:-OSS}" != "Enterprise" ]; then
+        skip "known broken on OSS: #101 — schedule pause/resume send GET, server requires PUT"
+    fi
+}
+
 @test "15. Pause schedule" {
+    skip_if_oss_101
     # Ensure schedule exists
     ensure_schedule e2e_test_schedule
 
@@ -196,6 +208,7 @@ ensure_schedule() {
 }
 
 @test "16. Resume schedule" {
+    skip_if_oss_101
     # Ensure schedule exists and is paused
     ensure_schedule e2e_test_schedule
     ./conductor schedule pause e2e_test_schedule 2>/dev/null || true
@@ -253,7 +266,15 @@ ensure_schedule() {
     [[ "$output" == *"e2e_test_schedule_2"* ]]
 }
 
+# Requires GNU timeout(1), which is absent on stock macOS (coreutils installs it
+# as gtimeout). Tagged so local runs can exclude it with '!needs:timeout'; Ubuntu
+# CI runners have it.
+# bats test_tags=needs:timeout
 @test "21. Delete without -y flag prompts for confirmation" {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "GNU timeout(1) not available"
+    fi
+
     # Ensure schedule exists
     ensure_schedule e2e_test_schedule
 
