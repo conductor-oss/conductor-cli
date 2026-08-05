@@ -427,15 +427,26 @@ Package local skill directories (a directory containing `SKILL.md`) and run them
 
 **`load` vs `run`:** `load` only publishes the agent (run it later with `agent run --name <skill>`); `run` starts local tool workers, launches the agent, and streams the execution. `serve` starts only the workers so the skill can be driven from elsewhere (e.g. the UI).
 
+**Tool task types.** Each script in `scripts/` plus the built-in tools are served as the
+Conductor task type `{skillName}__{tool}` — `read_skill_file`, and with a workspace enabled
+`list_workspace_files`, `read_workspace_file`, `search_workspace`, `git_status`, `git_diff`.
+`inputParameters.command` becomes the script's argv, stdout becomes `{"result": "<stdout>"}`,
+and a non-zero exit fails the task. Script language is chosen by extension
+(`.py .sh .js .mjs .ts .rb .go .bat .cmd`).
+
+Because a tool is just a task type, a plain workflow can call one with no agent involved —
+point a `SIMPLE` task at `{skillName}__{tool}` while `skill serve` is running. See
+[WORKER_SKILL.md](./WORKER_SKILL.md).
+
 ### Worker Commands
 
 Run task workers that poll Conductor and execute work locally.
 
 | Command | Description | Required Args | Optional Flags | Example |
 |---------|-------------|---------------|----------------|---------|
-| `worker js <js_file>` | Run a JavaScript worker (EXPERIMENTAL) | JS file | `--type` (required), `--count`, `--worker-id`, `--domain`, `--timeout` | `conductor worker js worker.js --type my_task` |
+| `worker js <js_file>` | Run a JavaScript worker (EXPERIMENTAL) | JS file | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout` | `conductor worker js worker.js --type my_task` |
 | `worker stdio <command> [args...]` | Poll tasks and execute a command via stdin/stdout | command | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose` | `conductor worker stdio ./handler.sh --type my_task` |
-| `worker remote` | Run a worker from the job-runner registry (EXPERIMENTAL, Orkes only) | None | `--type` (required), `--count`, `--worker-id`, `--domain`, `--timeout`, `--refresh` | `conductor worker remote --type my_task` |
+| `worker remote` | Run a worker from the job-runner registry (EXPERIMENTAL, Orkes only) | None | `--type` (required), `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--refresh` | `conductor worker remote --type my_task` |
 | `worker list-remote` | List workers in the job-runner registry (EXPERIMENTAL, Orkes only) | None | `--namespace` | `conductor worker list-remote` |
 
 **Flags:**
@@ -443,13 +454,32 @@ Run task workers that poll Conductor and execute work locally.
 - `--count` - Number of tasks to poll in each batch (default: 1)
 - `--worker-id` - Worker ID reported to the server
 - `--domain` - Task domain
-- `--timeout` / `--poll-timeout` - Poll timeout in milliseconds (default: 100)
-- `--exec-timeout` - Execution timeout in seconds for `stdio` (default: 0 = no timeout)
+- `--poll-timeout` - Server-side long-poll wait in milliseconds (default: 100)
+- `--exec-timeout` - Per-task execution timeout in seconds. `stdio` and `remote` only — a
+  JavaScript worker runs in-process with no interrupt, so there is nothing to time out.
+  Default 0 (no timeout) for `stdio`, 100 for `remote`.
+- `--timeout` - Deprecated hidden alias for `--poll-timeout`
 - `--verbose` - Print task and result JSON to stdout (`stdio` command)
 - `--refresh` - Force refresh the worker from the registry, ignoring cache
 - `--namespace` - Registry namespace to list workers from (default: `default`)
 
-See [WORKER_JS.md](./WORKER_JS.md) and [WORKER_STDIO.md](./WORKER_STDIO.md) for the worker protocols.
+All flavours share one poll loop; they differ only in how user code runs and in the result
+shape it returns:
+
+| Flavour | Worker returns | Failure carries |
+|---------|----------------|-----------------|
+| `stdio` | `{"status","output","logs","reason"}` on stdout | `reasonForIncompletion` + logs |
+| `js` | `{status, body}` from the script; `$.task` holds the task | `output.error` |
+| skill tools | bare stdout, wrapped as `{"result": ...}` | `reasonForIncompletion` |
+
+Workers exit on Ctrl-C/SIGTERM once the in-flight batch finishes — a running task is left
+to complete and report its real result rather than being killed, which would report a
+failure the worker inflicted on itself and consume one of the task's retries. A second
+signal exits immediately. Child processes receive `TASK_TYPE`, `TASK_ID`, `WORKFLOW_ID`, `EXECUTION_ID`,
+`POLL_DOMAIN`, and the CLI's own `CONDUCTOR_SERVER_URL` and credentials.
+
+See [WORKER_JS.md](./WORKER_JS.md), [WORKER_STDIO.md](./WORKER_STDIO.md) and
+[WORKER_SKILL.md](./WORKER_SKILL.md) for the worker protocols.
 
 ### Development Commands
 

@@ -17,11 +17,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -29,6 +26,7 @@ import (
 	"github.com/conductor-oss/conductor-cli/internal"
 	"github.com/conductor-oss/conductor-cli/internal/agent"
 	"github.com/conductor-oss/conductor-cli/internal/skillworker"
+	"github.com/conductor-oss/conductor-cli/internal/taskworker"
 )
 
 // Skill run/serve flag defaults.
@@ -119,8 +117,11 @@ func runSkillRun(cmd *cobra.Command, args []string) error {
 
 	// One signal-aware context governs both the workers and the stream; cancelling
 	// it (Ctrl-C) stops everything. Workers are also cancelled when the execution
-	// ends normally.
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	// ends normally. A second interrupt exits outright, so a stream or tool script
+	// that ignores cancellation cannot leave the process unkillable.
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	stop := interruptWithEscalation(cancel)
 	defer stop()
 	workerCtx, cancelWorkers := context.WithCancel(ctx)
 	defer cancelWorkers()
@@ -152,7 +153,9 @@ func runSkillServe(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	stop := interruptWithEscalation(cancel)
 	defer stop()
 	startSkillWorkers(ctx, buildSkillWorkerRegistry(cfg, local, ws, scriptOptions(), skillWorkspaceFileLimit))
 
@@ -173,9 +176,10 @@ func scriptOptions() skillworker.ScriptOptions {
 // They run until ctx is cancelled.
 func startSkillWorkers(ctx context.Context, registry map[string]skillworker.ToolHandler) {
 	taskClient := internal.GetTaskClient()
+	opts := skillworker.RunnerOptions()
 	for taskType, handler := range registry {
-		w := skillworker.NewWorker(skillworker.NewConductorRunner(taskClient))
-		go w.Run(ctx, taskType, handler)
+		w := taskworker.NewWorker(taskworker.NewConductorRunner(taskClient, opts), taskworker.Config{})
+		go w.Run(ctx, taskType, skillworker.AsTaskHandler(handler))
 	}
 }
 
