@@ -548,8 +548,8 @@ conductor worker <command> [arguments] [flags]
 | Command | Description |
 |---------|-------------|
 | `stdio <program> [args...]` | Run stdio worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--verbose`) |
-| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--timeout`) |
-| `remote` | Run remote worker (`--type`, `--count`, `--worker-id`, `--domain`, `--refresh`) |
+| `js <file>` | Run JavaScript worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`) |
+| `remote` | Run remote worker (`--type`, `--count`, `--worker-id`, `--domain`, `--poll-timeout`, `--exec-timeout`, `--refresh`) |
 | `list-remote` | List remote workers (`--namespace`) |
 
 **Worker Options:**
@@ -579,22 +579,6 @@ conductor config <command> [arguments] [flags]
 | `delete [profile]` | Delete a profile (`-y` to skip confirmation) |
 
 ---
-
-### Code Generation Commands
-
-Generate worker scaffold code for a given language and template.
-
-```
-conductor code [flags]
-```
-
-| Flag | Description |
-|------|-------------|
-| `-l, --lang` | Programming language (e.g. `python`, `java`, `go`) |
-| `-t, --template` | Template name |
-| `-n, --name` | Project name |
-
-> **Note:** `conductor code` prompts interactively for any fields not supplied as flags (including task name). It cannot be used non-interactively via pipe or in CI — passing all inputs via flags is not yet fully supported. Use `conductor code list` to see available templates.
 
 ### Other Commands
 
@@ -868,7 +852,7 @@ conductor --config /path/to/my-config.yaml workflow list
 
 ⚠️ **EXPERIMENTAL FEATURES**
 
-The CLI supports two types of workers for processing Conductor tasks:
+The CLI supports these types of workers for processing Conductor tasks:
 
 ### Stdio Workers
 
@@ -895,13 +879,13 @@ Execute tasks using **JavaScript** scripts with built-in utilities (HTTP, crypto
 
 **Best for:** Prototyping, Lightweight tasks, quick scripts, HTTP integrations
 
-👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
-
 **Quick example:**
 ```bash
 # Run a JavaScript worker
 conductor worker js --type greet_task worker.js
 ```
+
+👉 **[Complete JavaScript Worker Documentation →](WORKER_JS.md)**
 
 ### Remote Workers (Registry-based)
 

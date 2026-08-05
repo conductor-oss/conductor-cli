@@ -11,7 +11,6 @@
  * specific language governing permissions and limitations under the License.
  */
 
-
 package cmd
 
 import (
@@ -23,13 +22,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/conductor-oss/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal/transport"
+	"github.com/conductor-oss/conductor-cli/internal/updater"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
 	sdklog "github.com/conductor-sdk/conductor-go/sdk/log"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	cc "github.com/ivanpirog/coloredcobra"
-	"github.com/conductor-oss/conductor-cli/internal"
-	"github.com/conductor-oss/conductor-cli/internal/transport"
-	"github.com/conductor-oss/conductor-cli/internal/updater"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -81,7 +80,6 @@ func isEnterpriseServer() bool {
 var localOnlyCommands = map[string]bool{
 	"config": true,
 	"server": true,
-	"code":   true,
 	"update": true,
 }
 

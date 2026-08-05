@@ -28,7 +28,11 @@ conductor worker js --type <task_type> <js_file>
 - `--count` - Number of tasks to poll in each batch (default: 1)
 - `--worker-id` - Worker ID for identification
 - `--domain` - Domain for task polling
-- `--timeout` - Timeout in milliseconds (default: 100)
+- `--poll-timeout` - Poll timeout in milliseconds (default: 100)
+- `--timeout` - Deprecated alias for `--poll-timeout`
+
+There is no execution timeout for JavaScript workers: scripts run in-process and the
+interpreter has no interrupt wired, so a script that loops forever blocks its worker.
 
 ### Example
 
@@ -874,3 +878,5 @@ if (parsed.error) {
 | Custom Go functions | Modify `injectUtilities()` and rebuild |
 
 The JavaScript worker is designed for lightweight task processing with HTTP integration. For heavy processing or complex dependencies, consider calling external services that have full library support.
+
+See also [Stdio Workers](WORKER_STDIO.md).
