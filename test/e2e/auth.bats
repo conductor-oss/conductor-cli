@@ -3,8 +3,16 @@
 # E2E tests for authentication error handling
 # These tests verify that the CLI provides helpful error messages when authentication fails
 # This test assumes no credentials are set.
+#
+# Tagged both orkes-only and unauthenticated, because it needs a *secured* server
+# reached *without* credentials:
+#   - orkes-only:      against OSS, anonymous access is legitimate, so commands
+#                      succeed and the "should fail" assertions are invalid.
+#   - unauthenticated: it must be excluded from any run that supplies
+#                      CONDUCTOR_AUTH_KEY/SECRET, or the calls succeed and the
+#                      same assertions fail for the opposite reason.
 
-# bats file_tags=tier:pr,orkes-only
+# bats file_tags=tier:pr,orkes-only,unauthenticated
 
 setup() {
     # Ensure the CLI binary exists
