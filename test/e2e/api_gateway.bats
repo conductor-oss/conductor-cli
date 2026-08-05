@@ -16,6 +16,15 @@ setup() {
         exit 1
     fi
 
+    # API Gateway is an opt-in Orkes capability, not present on every Enterprise
+    # deployment. Where the endpoints are absent the server answers 404 with
+    # "No static resource api/gateway/...", which is a deployment fact rather than a
+    # CLI defect — so skip loudly instead of reporting 18 spurious failures.
+    if ./conductor api-gateway service list 2>&1 |
+        grep -qE 'No static resource api/gateway|API Gateway management is only available'; then
+        skip "server does not have API Gateway enabled"
+    fi
+
     # Ensure test workflow exists
     if [ ! -f "test/e2e/test-workflow-2.json" ]; then
         echo "ERROR: test-workflow-2.json not found"

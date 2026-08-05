@@ -39,6 +39,17 @@ require_llm() {
     fi
 }
 
+# Helper: skip when the server has no Agents API. Not every Conductor deployment
+# enables it — including the Enterprise server CI targets, which answers
+# "Agents API is not available on this Conductor server". That is a deployment fact,
+# not a CLI defect, so skip rather than fail. Applied per test rather than in
+# setup() so the offline `agent init` tests still run everywhere.
+require_agents_api() {
+    if ./conductor agent list 2>&1 | grep -q 'Agents API is not available'; then
+        skip "server has no Agents API enabled"
+    fi
+}
+
 # Helper: write an agent config that uses a known-good model.
 write_agent_config() {
     local path="$1"
@@ -97,6 +108,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "4. Agent list succeeds" {
+    require_agents_api
     run bash -c "./conductor agent list 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -104,6 +116,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "5. Agent list --json produces valid JSON" {
+    require_agents_api
     run bash -c "./conductor agent list --json 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -112,6 +125,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "6. Agent get for an unknown name fails" {
+    require_agents_api
     run bash -c "./conductor agent get e2e_agent_definitely_absent 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
@@ -119,6 +133,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "7. Agent delete for an unknown name fails" {
+    require_agents_api
     run bash -c "./conductor agent delete e2e_agent_definitely_absent -y 2>&1"
     echo "Output: $output"
     [ "$status" -ne 0 ]
@@ -128,6 +143,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "8. Agent execution search succeeds" {
+    require_agents_api
     run bash -c "./conductor agent execution 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -135,6 +151,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "9. Agent execution --name filter succeeds" {
+    require_agents_api
     run bash -c "./conductor agent execution --name e2e_agent_definitely_absent 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -143,6 +160,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "10. Agent execution --status filter succeeds" {
+    require_agents_api
     run bash -c "./conductor agent execution --status FAILED 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -150,6 +168,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "11. Agent prune --dry-run does not delete" {
+    require_agents_api
     run bash -c "./conductor agent prune --older-than 3650 --dry-run 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -173,6 +192,7 @@ run_bounded() {
 
 # bats test_tags=tier:nightly,needs:llm
 @test "13. Agent run --config completes and returns an execution id" {
+    require_agents_api
     require_llm
     write_agent_config "$BATS_TEST_TMPDIR/run.yaml"
 
@@ -185,6 +205,7 @@ run_bounded() {
 
 # bats test_tags=tier:nightly,needs:llm
 @test "14. Agent run registers the agent, then run --name works" {
+    require_agents_api
     require_llm
     write_agent_config "$BATS_TEST_TMPDIR/run2.yaml"
     ./conductor agent run --config "$BATS_TEST_TMPDIR/run2.yaml" "Reply with one word" --no-stream >/dev/null 2>&1
@@ -200,6 +221,7 @@ run_bounded() {
 
 # bats test_tags=tier:nightly,needs:llm
 @test "15. Agent status reports a terminal state for a finished run" {
+    require_agents_api
     require_llm
     write_agent_config "$BATS_TEST_TMPDIR/run3.yaml"
     out=$(./conductor agent run --config "$BATS_TEST_TMPDIR/run3.yaml" "Reply with one word" --no-stream 2>&1)
