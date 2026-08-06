@@ -181,7 +181,6 @@ run_bounded() {
 # {"agentConfig": ...}, so compile fails for every input.
 # bats test_tags=tier:pr
 @test "12. Agent compile returns an execution plan" {
-    skip "known broken: #96 — CLI sends a bare config, server rejects it"
     write_agent_config "$BATS_TEST_TMPDIR/compile.yaml"
     run bash -c "./conductor agent compile '$BATS_TEST_TMPDIR/compile.yaml' 2>&1"
     echo "Output: $output"
