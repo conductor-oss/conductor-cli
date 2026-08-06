@@ -32,7 +32,7 @@ jobs:
         go build -x -v -ldflags "-X github.com/conductor-oss/conductor-cli/cmd.Version=${VERSION} -X github.com/conductor-oss/conductor-cli/cmd.Commit=${COMMIT} -X github.com/conductor-oss/conductor-cli/cmd.Date=${DATE}" ./...
     
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic -json ./... > test-results.json
+      run: go test -v -race -json ./... > test-results.json
     
     - name: Convert test results to JUnit format
       if: always()
@@ -47,10 +47,3 @@ jobs:
         name: Go Tests
         path: test-results.xml
         reporter: java-junit
-    
-    - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: coverage.out
-        flags: unittests
-        name: codecov-umbrella
