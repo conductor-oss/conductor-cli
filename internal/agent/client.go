@@ -258,9 +258,11 @@ func (c *restClient) Delete(ctx context.Context, name string, version *int) erro
 	return c.doJSON(ctx, http.MethodDelete, agentPath(name, version), nil, nil)
 }
 
+// Compile asks the server to compile a config into a WorkflowDef without registering
+// or running it.
 func (c *restClient) Compile(ctx context.Context, def json.RawMessage) (json.RawMessage, error) {
 	var out json.RawMessage
-	if err := c.doJSON(ctx, http.MethodPost, pathCompile, def, &out); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, pathCompile, startRequest{AgentConfig: def}, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
