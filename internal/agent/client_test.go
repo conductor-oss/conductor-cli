@@ -19,6 +19,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/conductor-oss/conductor-cli/internal/transport"
@@ -141,14 +143,23 @@ func TestDeployNormalizesErrorResponse(t *testing.T) {
 
 func TestSearchExecutionsSetsQuery(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != pathWorkflowSearch {
+			t.Errorf("path = %q, want %q", r.URL.Path, pathWorkflowSearch)
+		}
 		q := r.URL.Query()
-		if q.Get(queryAgentName) != "greeter" || q.Get(queryStatus) != "FAILED" {
-			t.Errorf("query = %v", q)
+		if got, want := q.Get(queryQuery), "workflowType='greeter' AND status='FAILED'"; got != want {
+			t.Errorf("query = %q, want %q", got, want)
+		}
+		if q.Get(queryClassifier) != classifierAgent || q.Get(queryTopLevelOnly) != valueTrue {
+			t.Errorf("scope params = %v", q)
+		}
+		if q.Get(queryFreeText) != freeTextAll {
+			t.Errorf("freeText = %q, want %q", q.Get(queryFreeText), freeTextAll)
 		}
 		if q.Get(querySort) != sortExecutions {
 			t.Errorf("sort = %q, want %q", q.Get(querySort), sortExecutions)
 		}
-		_, _ = w.Write([]byte(`{"totalHits":1,"results":[{"executionId":"e1","status":"FAILED"}]}`))
+		_, _ = w.Write([]byte(`{"totalHits":1,"results":[{"workflowId":"e1","workflowType":"greeter","status":"FAILED","classifier":"agent"}]}`))
 	})
 	page, err := c.SearchExecutions(context.Background(), ExecutionFilter{
 		AgentName: "greeter", Status: "FAILED", Size: 10,
@@ -156,8 +167,82 @@ func TestSearchExecutionsSetsQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SearchExecutions: %v", err)
 	}
-	if page.TotalHits != 1 || len(page.Results) != 1 || page.Results[0].ExecutionID != "e1" {
-		t.Errorf("page = %+v", page)
+	if page.TotalHits != 1 || len(page.Results) != 1 {
+		t.Fatalf("page = %+v", page)
+	}
+	if got := page.Results[0]; got.ExecutionID != "e1" || got.AgentName != "greeter" {
+		t.Errorf("result = %+v, want executionId e1 / agentName greeter", got)
+	}
+}
+
+// Regression guard for #97: the time range must ride in "query", not "freeText".
+func TestSearchExecutionsSendsStartTimeAsStructuredQuery(t *testing.T) {
+	var got url.Values
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		_, _ = w.Write([]byte(`{"totalHits":0,"results":[]}`))
+	})
+	if _, err := c.SearchExecutions(context.Background(), ExecutionFilter{
+		StartTimeFrom: 1786120404085, StartTimeTo: 1786124004085, Size: 10,
+	}); err != nil {
+		t.Fatalf("SearchExecutions: %v", err)
+	}
+	if want := "startTime>1786120404085 AND startTime<1786124004085"; got.Get(queryQuery) != want {
+		t.Errorf("query = %q, want %q", got.Get(queryQuery), want)
+	}
+	if strings.Contains(got.Get(queryFreeText), "startTime") {
+		t.Errorf("freeText = %q, must not carry the time range", got.Get(queryFreeText))
+	}
+}
+
+func TestExecutionQueryClauses(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter ExecutionFilter
+		want   string
+	}{
+		{"empty", ExecutionFilter{}, ""},
+		{"since only", ExecutionFilter{StartTimeFrom: 5}, "startTime>5"},
+		{"window", ExecutionFilter{StartTimeFrom: 5, StartTimeTo: 9}, "startTime>5 AND startTime<9"},
+		{"name and time", ExecutionFilter{AgentName: "triage", StartTimeFrom: 5}, "workflowType='triage' AND startTime>5"},
+		{"status", ExecutionFilter{Status: "FAILED"}, "status='FAILED'"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := executionQueryClauses(tt.filter)
+			if err != nil {
+				t.Fatalf("executionQueryClauses: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExecutionQueryClausesRejectsQuotedValues(t *testing.T) {
+	for _, f := range []ExecutionFilter{
+		{AgentName: `x' OR status='FAILED`},
+		{Status: `x"`},
+	} {
+		if _, err := executionQueryClauses(f); err == nil {
+			t.Errorf("executionQueryClauses(%+v) = nil error, want error", f)
+		}
+	}
+}
+
+func TestSearchExecutionsDropsNonAgentResults(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"totalHits":2,"results":[
+			{"workflowId":"a1","workflowType":"triage","classifier":"agent"},
+			{"workflowId":"w1","workflowType":"order_flow","classifier":"workflow"}]}`))
+	})
+	page, err := c.SearchExecutions(context.Background(), ExecutionFilter{Size: 10})
+	if err != nil {
+		t.Fatalf("SearchExecutions: %v", err)
+	}
+	if len(page.Results) != 1 || page.Results[0].ExecutionID != "a1" {
+		t.Errorf("results = %+v, want only the agent execution", page.Results)
 	}
 }
 
