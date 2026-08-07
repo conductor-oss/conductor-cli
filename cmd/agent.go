@@ -20,6 +20,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -176,16 +177,17 @@ Time formats for --since and --window: 30s, 5m, 1h, 6h, 1d, 7d, 1mo, 1y`,
 		if err != nil {
 			return err
 		}
-		freeText, err := buildExecutionFreeText(execSince, execWindow)
+		from, to, err := buildExecutionWindow(execSince, execWindow)
 		if err != nil {
 			return err
 		}
 		page, err := internal.GetAgentService().SearchExecutions(cmd.Context(), agent.ExecutionFilter{
-			AgentName: execName,
-			Status:    execStatus,
-			FreeText:  freeText,
-			Start:     0,
-			Size:      defaultExecutionSearchSize,
+			AgentName:     execName,
+			Status:        execStatus,
+			StartTimeFrom: from,
+			StartTimeTo:   to,
+			Start:         0,
+			Size:          defaultExecutionSearchSize,
 		})
 		if err != nil {
 			return err
@@ -413,38 +415,28 @@ func formatMillis(ms int64) string {
 	return (time.Duration(ms) * time.Millisecond).String()
 }
 
-// buildExecutionFreeText converts the --since / --window flags into the server's
-// freeText time-range query.
-func buildExecutionFreeText(since, window string) (string, error) {
-	freeText := ""
+// buildExecutionWindow resolves --since / --window into epoch-ms bounds, where zero
+// means unbounded. Given both, the windows intersect: the later lower bound wins.
+func buildExecutionWindow(since, window string) (from, to int64, err error) {
+	now := time.Now()
 	if since != "" {
 		dur, err := parseTimeSpec(since)
 		if err != nil {
-			return "", fmt.Errorf("invalid --since value: %w", err)
+			return 0, 0, fmt.Errorf("invalid --since value: %w", err)
 		}
-		start := time.Now().Add(-dur).UnixMilli()
-		freeText = fmt.Sprintf("startTime:[%d TO *]", start)
+		from = now.Add(-dur).UnixMilli()
 	}
 	if window != "" {
-		spec := window
-		const relativePrefix = "now-"
-		if len(spec) > len(relativePrefix) && spec[:len(relativePrefix)] == relativePrefix {
-			spec = spec[len(relativePrefix):]
-		}
-		dur, err := parseTimeSpec(spec)
+		dur, err := parseTimeSpec(strings.TrimPrefix(window, "now-"))
 		if err != nil {
-			return "", fmt.Errorf("invalid --window value: %w", err)
+			return 0, 0, fmt.Errorf("invalid --window value: %w", err)
 		}
-		end := time.Now().UnixMilli()
-		start := time.Now().Add(-dur).UnixMilli()
-		q := fmt.Sprintf("startTime:[%d TO %d]", start, end)
-		if freeText != "" {
-			freeText += " AND " + q
-		} else {
-			freeText = q
+		if start := now.Add(-dur).UnixMilli(); start > from {
+			from = start
 		}
+		to = now.UnixMilli()
 	}
-	return freeText, nil
+	return from, to, nil
 }
 
 var timeSpecPattern = regexp.MustCompile(`^(\d+)(s|m|h|d|mo|y)$`)

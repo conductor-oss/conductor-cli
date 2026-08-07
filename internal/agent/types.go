@@ -57,12 +57,14 @@ type AgentSummary struct {
 }
 
 // ExecutionFilter narrows an execution search. Start/Size paginate.
+// StartTimeFrom/StartTimeTo are epoch milliseconds; zero means unbounded.
 type ExecutionFilter struct {
-	AgentName string
-	Status    string
-	FreeText  string
-	Start     int
-	Size      int
+	AgentName     string
+	Status        string
+	StartTimeFrom int64
+	StartTimeTo   int64
+	Start         int
+	Size          int
 }
 
 // ExecutionPage is one page of execution-search results.
