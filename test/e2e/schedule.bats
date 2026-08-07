@@ -183,17 +183,7 @@ ensure_schedule() {
     [[ "$output" == *"no such schedule"* ]]
 }
 
-# Helper: pause/resume are broken against OSS Conductor — the SDK issues a GET
-# where the server requires PUT, so both return 405. See #101. The operations work
-# on Orkes, so these tests still run there; remove this guard once #101 is fixed.
-skip_if_oss_101() {
-    if [ "${CONDUCTOR_SERVER_TYPE:-OSS}" != "Enterprise" ]; then
-        skip "known broken on OSS: #101 — schedule pause/resume send GET, server requires PUT"
-    fi
-}
-
 @test "15. Pause schedule" {
-    skip_if_oss_101
     # Ensure schedule exists
     ensure_schedule e2e_test_schedule
 
@@ -208,7 +198,6 @@ skip_if_oss_101() {
 }
 
 @test "16. Resume schedule" {
-    skip_if_oss_101
     # Ensure schedule exists and is paused
     ensure_schedule e2e_test_schedule
     ./conductor schedule pause e2e_test_schedule 2>/dev/null || true
