@@ -87,27 +87,22 @@ profile name and `--profile default` both mean `~/.conductor-cli/config.yaml`, f
 `delete` and profile selection alike. The CLI never creates `config-default.yaml`; if one exists
 from an older build it is ignored, and `config list`/`config show` warn that it is unused.
 
-**Two kinds of flag.** *Value* flags carry a setting: `--server`, `--server-type`, `--auth-key`,
-`--auth-secret`, `--auth-token`. *Selector* flags carry no setting and only choose which file to
-read: `--config <path>`, `--profile <name>`.
+**Precedence.** Rank 1 wins over rank 2, rank 2 over rank 3, and so on.
 
-**Precedence, highest first:**
+| Rank | Source | Example |
+|------|--------|---------|
+| 1 | Command-line value flags | `--server`, `--auth-token` |
+| 2 | File chosen by `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
+| 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
+| 4 | Default config file | `~/.conductor-cli/config.yaml` |
+| 5 | Built-in defaults | `server-type: OSS` |
 
-1. Value flags — applied per setting
-2. The file named by `--config` or `--profile`
-3. Environment variables (`CONDUCTOR_SERVER_URL`, `CONDUCTOR_AUTH_TOKEN`, ...)
-4. `~/.conductor-cli/config.yaml`
-5. Built-in defaults
+Ranks 2-4 are winner-takes-all: only the highest one present is used, and it supplies *every*
+setting. The ranks below it are not read. Rank 1 is different — it applies per setting, so
+`--server` overrides only the server URL.
 
-**Levels 2-4 are winner-takes-all.** The highest one present supplies *every* setting, and the
-levels below it are not consulted at all — they never merge. Only value flags layer on top, per
-setting.
-
-| Condition | Source |
-|-----------|--------|
-| `--config <path>` or `--profile <name>` given | That file. Environment variables are ignored. |
-| Any `CONDUCTOR_*` setting variable is set | The environment. `config.yaml` is **not read**. |
-| Neither | `~/.conductor-cli/config.yaml` |
+`--config` and `--profile` are not rank 1. They carry no settings; they only choose the file in
+rank 2.
 
 Setting one variable therefore switches the whole configuration onto the environment: if
 `CONDUCTOR_SERVER_URL` is set and `config.yaml` holds an auth token, that token is *not* used.
