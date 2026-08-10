@@ -755,7 +755,7 @@ auth-secret   -                           default
 auth-token    ****                        config.yaml
 ```
 
-The CLI uses the first source in this list:
+Configuration comes from exactly one source, never a mix. Flags override individual settings.
 
 | Order | Source | Example |
 |-------|--------|---------|
@@ -763,13 +763,6 @@ The CLI uses the first source in this list:
 | 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
 | 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
 | 4 | The default config file | `~/.conductor-cli/config.yaml` |
-| 5 | Built-in defaults | `server-type: OSS` |
-
-That source supplies all settings. The CLI does not read the sources below it.
-
-A flag is different. It changes only its own setting.
-
-`--config` and `--profile` do not hold settings. They select the file on line 2.
 
 So exporting `CONDUCTOR_SERVER_URL` switches the whole configuration onto the environment — an
 auth token sitting in `config.yaml` is not used, and `config show` says so:

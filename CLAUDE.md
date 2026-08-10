@@ -87,7 +87,7 @@ profile name and `--profile default` both mean `~/.conductor-cli/config.yaml`, f
 `delete` and profile selection alike. The CLI never creates `config-default.yaml`; if one exists
 from an older build it is ignored, and `config list`/`config show` warn that it is unused.
 
-**Where settings come from.** The CLI uses the first source in this list:
+**Configuration comes from exactly one source, never a mix.** Flags override individual settings.
 
 | Order | Source | Example |
 |-------|--------|---------|
@@ -95,13 +95,9 @@ from an older build it is ignored, and `config list`/`config show` warn that it 
 | 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
 | 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
 | 4 | The default config file | `~/.conductor-cli/config.yaml` |
-| 5 | Built-in defaults | `server-type: OSS` |
 
-That source supplies all settings. The CLI does not read the sources below it.
-
-A flag is different. It changes only its own setting.
-
-`--config` and `--profile` do not hold settings. They select the file on line 2.
+So exporting `CONDUCTOR_SERVER_URL` switches everything onto the environment. A token in
+`config.yaml` is no longer used.
 
 Setting one variable therefore switches the whole configuration onto the environment: if
 `CONDUCTOR_SERVER_URL` is set and `config.yaml` holds an auth token, that token is *not* used.
