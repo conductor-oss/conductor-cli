@@ -49,8 +49,9 @@ func TestGetConfigPath(t *testing.T) {
 		wantSuffix  string
 	}{
 		{
-			// Cached tokens have somewhere to go now that config.yaml is
-			// writable (#98).
+			// This used to return an error, so with no profile selected the
+			// cached token had no file to be written to and was refetched on
+			// every run (#98).
 			name:        "empty profile is the default config",
 			profileName: "",
 			wantSuffix:  filepath.Join(".conductor-cli", "config.yaml"),
