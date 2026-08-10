@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/conductor-oss/conductor-cli/internal/transport"
 )
@@ -32,6 +33,8 @@ import (
 // prefix (see cmd/root.go) — mirroring the conductor-go SDK, whose base is also
 // ".../api" and whose resource paths omit it. Do not re-add "/api" here.
 const (
+	pathWorkflowSearch = "/workflow/search" // execution search; see SearchExecutions
+
 	pathAgents     = "/agent"                  // base; "/{name}" appended
 	pathStart      = "/agent/start"            //
 	pathDeploy     = "/agent/deploy"           // publish/activate without starting
@@ -53,9 +56,15 @@ const (
 	queryAgentName     = "agentName"
 	queryStatus        = "status"
 	queryFreeText      = "freeText"
+	queryQuery         = "query"
+	queryClassifier    = "classifier"
+	queryTopLevelOnly  = "topLevelOnly"
 	queryOlderThanDays = "olderThanDays"
 	queryArchiveTasks  = "archiveTasks"
 	sortExecutions     = "startTime:DESC"
+	freeTextAll        = "*"
+	classifierAgent    = "agent"
+	quoteChars         = `'"`
 	valueTrue          = "true"
 )
 
@@ -268,25 +277,93 @@ func (c *restClient) Compile(ctx context.Context, def json.RawMessage) (json.Raw
 	return out, nil
 }
 
+// SearchExecutions returns one page of agent executions matching filter, newest
+// first. It searches /workflow/search scoped to classifier=agent, because
+// /agent/executions cannot filter on startTime (#97).
 func (c *restClient) SearchExecutions(ctx context.Context, filter ExecutionFilter) (ExecutionPage, error) {
+	clauses, err := executionQueryClauses(filter)
+	if err != nil {
+		return ExecutionPage{}, err
+	}
 	q := url.Values{}
 	q.Set(queryStart, strconv.Itoa(filter.Start))
 	q.Set(querySize, strconv.Itoa(filter.Size))
 	q.Set(querySort, sortExecutions)
-	if filter.AgentName != "" {
-		q.Set(queryAgentName, filter.AgentName)
+	q.Set(queryFreeText, freeTextAll)
+	q.Set(queryClassifier, classifierAgent)
+	q.Set(queryTopLevelOnly, valueTrue)
+	if clauses != "" {
+		q.Set(queryQuery, clauses)
 	}
-	if filter.Status != "" {
-		q.Set(queryStatus, filter.Status)
-	}
-	if filter.FreeText != "" {
-		q.Set(queryFreeText, filter.FreeText)
-	}
-	var page ExecutionPage
-	if err := c.doJSON(ctx, http.MethodGet, pathExecutions+"?"+q.Encode(), nil, &page); err != nil {
+
+	var result workflowSearchResult
+	if err := c.doJSON(ctx, http.MethodGet, pathWorkflowSearch+"?"+q.Encode(), nil, &result); err != nil {
 		return ExecutionPage{}, err
 	}
-	return page, nil
+	return result.toExecutionPage(), nil
+}
+
+// executionQueryClauses renders filter as a Conductor search expression, e.g.
+// "workflowType='triage' AND startTime>1786120404085". Returns "" for an empty
+// filter, and an error if a value contains a quote.
+func executionQueryClauses(filter ExecutionFilter) (string, error) {
+	var clauses []string
+	if filter.AgentName != "" {
+		if strings.ContainsAny(filter.AgentName, quoteChars) {
+			return "", fmt.Errorf("agent name must not contain quotes: %q", filter.AgentName)
+		}
+		clauses = append(clauses, fmt.Sprintf("workflowType='%s'", filter.AgentName))
+	}
+	if filter.Status != "" {
+		if strings.ContainsAny(filter.Status, quoteChars) {
+			return "", fmt.Errorf("status must not contain quotes: %q", filter.Status)
+		}
+		clauses = append(clauses, fmt.Sprintf("status='%s'", filter.Status))
+	}
+	// ">=" is rejected by both query parsers with a 500.
+	if filter.StartTimeFrom > 0 {
+		clauses = append(clauses, fmt.Sprintf("startTime>%d", filter.StartTimeFrom))
+	}
+	if filter.StartTimeTo > 0 {
+		clauses = append(clauses, fmt.Sprintf("startTime<%d", filter.StartTimeTo))
+	}
+	return strings.Join(clauses, " AND "), nil
+}
+
+// workflowSearchResult decodes the fields the execution list needs from the
+// SearchResult<WorkflowSummary> returned by /workflow/search.
+type workflowSearchResult struct {
+	TotalHits int64 `json:"totalHits"`
+	Results   []struct {
+		WorkflowID    string `json:"workflowId"`
+		WorkflowType  string `json:"workflowType"`
+		Version       int    `json:"version"`
+		Status        string `json:"status"`
+		StartTime     string `json:"startTime"`
+		EndTime       string `json:"endTime"`
+		ExecutionTime int64  `json:"executionTime"`
+		Classifier    string `json:"classifier"`
+	} `json:"results"`
+}
+
+func (r workflowSearchResult) toExecutionPage() ExecutionPage {
+	page := ExecutionPage{TotalHits: r.TotalHits}
+	for _, w := range r.Results {
+		// A server that ignores the classifier param returns plain workflows too.
+		if w.Classifier != "" && w.Classifier != classifierAgent {
+			continue
+		}
+		page.Results = append(page.Results, ExecutionSummary{
+			ExecutionID:   w.WorkflowID,
+			AgentName:     w.WorkflowType,
+			Version:       w.Version,
+			Status:        w.Status,
+			StartTime:     w.StartTime,
+			EndTime:       w.EndTime,
+			ExecutionTime: w.ExecutionTime,
+		})
+	}
+	return page
 }
 
 func (c *restClient) GetExecution(ctx context.Context, id string) (json.RawMessage, error) {

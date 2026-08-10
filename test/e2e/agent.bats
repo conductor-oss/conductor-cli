@@ -241,11 +241,10 @@ run_bounded() {
     [ "$status_val" != "RUNNING" ]
 }
 
-# Regression guard for #97: --since and --window return nothing even when
-# matching executions exist.
+# Regression guard for #97: --since and --window returned nothing even when
+# matching executions existed.
 # bats test_tags=tier:nightly,needs:llm
 @test "16. Agent execution --since finds a just-created execution" {
-    skip "known broken: #97 — --since/--window always return no results"
     require_llm
     write_agent_config "$BATS_TEST_TMPDIR/run4.yaml"
     ./conductor agent run --config "$BATS_TEST_TMPDIR/run4.yaml" "Reply with one word" --no-stream >/dev/null 2>&1
@@ -254,6 +253,27 @@ run_bounded() {
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" != *"No executions found"* ]]
+}
+
+# The wide window alone passes even when the server ignores the bound. The narrow
+# window is the half that fails in that case.
+# bats test_tags=tier:nightly,needs:llm
+@test "16b. Agent execution time filter excludes executions outside the window" {
+    require_llm
+    write_agent_config "$BATS_TEST_TMPDIR/run4b.yaml"
+    ./conductor agent run --config "$BATS_TEST_TMPDIR/run4b.yaml" "Reply with one word" --no-stream >/dev/null 2>&1
+
+    run bash -c "./conductor agent execution --window now-7d 2>&1"
+    echo "Wide window output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"No executions found"* ]]
+
+    # The execution above is now outside the window.
+    sleep 6
+    run bash -c "./conductor agent execution --since 2s 2>&1"
+    echo "Narrow window output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"No executions found"* ]]
 }
 
 # Regression guard for #102: agent stream never exits once the execution is
