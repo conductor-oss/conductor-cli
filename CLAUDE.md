@@ -87,8 +87,16 @@ profile name and `--profile default` both mean `~/.conductor-cli/config.yaml`, f
 `delete` and profile selection alike. The CLI never creates `config-default.yaml`; if one exists
 from an older build it is ignored, and `config list`/`config show` warn that it is unused.
 
-**Configuration comes from exactly one source, never a mix.** Below command-line flags, which
-override individual settings, the CLI picks a single source and uses it for everything:
+**Precedence, highest first:**
+
+1. Command-line flags (`--server`, `--auth-token`, ...) — applied per setting
+2. A named file: `--config <path>` or `--profile <name>`
+3. Environment variables (`CONDUCTOR_SERVER_URL`, `CONDUCTOR_AUTH_TOKEN`, ...)
+4. `~/.conductor-cli/config.yaml`
+5. Built-in defaults
+
+**Levels 2-4 are winner-takes-all.** The highest one present supplies *every* setting, and the
+levels below it are not consulted at all — they never merge. Only flags layer on top per setting.
 
 | Condition | Source |
 |-----------|--------|
