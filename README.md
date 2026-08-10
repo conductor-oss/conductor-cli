@@ -755,16 +755,20 @@ auth-secret   -                           default
 auth-token    ****                        config.yaml
 ```
 
+There are two kinds of flag. *Value* flags carry a setting: `--server`, `--server-type`,
+`--auth-key`, `--auth-secret`, `--auth-token`. *Selector* flags carry no setting and only choose
+which file to read: `--config <path>`, `--profile <name>`.
+
 Precedence, highest first:
 
-1. Command-line flags (`--server`, `--auth-token`, ...) — applied per setting
-2. A named file: `--config <path>` or `--profile <name>`
+1. Value flags — applied per setting
+2. The file named by `--config` or `--profile`
 3. Environment variables (`CONDUCTOR_SERVER_URL`, `CONDUCTOR_AUTH_TOKEN`, ...)
 4. `~/.conductor-cli/config.yaml`
 5. Built-in defaults
 
 Levels 2-4 are winner-takes-all: the highest one present supplies *every* setting, and the levels
-below it are not consulted at all. They never merge. Only flags layer on top per setting.
+below it are not consulted at all. They never merge. Only value flags layer on top, per setting.
 
 | Condition | Source |
 |-----------|--------|
