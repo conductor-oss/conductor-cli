@@ -110,25 +110,78 @@ func writeConfig(t *testing.T, dir, name, body string) string {
 	return path
 }
 
-func TestSourceOfDefaultProfileMergesEnvOverFile(t *testing.T) {
-	dir := t.TempDir()
-	file := writeConfig(t, dir, "config.yaml", "server: http://from-file\nauth-token: tok\n")
+func TestEnvActiveDetectsAnyConfigVariable(t *testing.T) {
+	for _, env := range envVars {
+		os.Unsetenv(env)
+	}
+	if EnvActive() {
+		t.Fatal("EnvActive() = true with no variables set")
+	}
 
+	// Any one variable selects the environment; it is all-or-nothing.
+	t.Setenv("CONDUCTOR_AUTH_TOKEN", "tok")
+	if !EnvActive() {
+		t.Error("EnvActive() = false with CONDUCTOR_AUTH_TOKEN set")
+	}
+}
+
+func TestEnvActiveIgnoresProfileSelector(t *testing.T) {
+	for _, env := range envVars {
+		os.Unsetenv(env)
+	}
+	// CONDUCTOR_PROFILE picks a file; it carries no setting of its own, so it
+	// must not switch the CLI onto the environment and away from that file.
+	t.Setenv("CONDUCTOR_PROFILE", "prod")
+	if EnvActive() {
+		t.Error("EnvActive() = true for CONDUCTOR_PROFILE alone")
+	}
+}
+
+func TestEnvActiveTreatsEmptyAsUnset(t *testing.T) {
+	for _, env := range envVars {
+		os.Unsetenv(env)
+	}
+	// An exported-but-empty variable is how shells leave a cleared value; it
+	// must not take the config file out of play.
+	t.Setenv("CONDUCTOR_SERVER_URL", "")
+	if EnvActive() {
+		t.Error("EnvActive() = true for an empty CONDUCTOR_SERVER_URL")
+	}
+}
+
+func TestSourceOfEnvSuppliesEverythingWhenActive(t *testing.T) {
+	dir := t.TempDir()
+	// The file holds an auth-token the environment does not. With the
+	// environment active the file is not read at all, so that token must not
+	// leak into the result — this is the merge the old behaviour produced.
+	file := writeConfig(t, dir, "config.yaml", "server: http://from-file\nauth-token: tok\n")
 	t.Setenv("CONDUCTOR_SERVER_URL", "http://from-env")
 	os.Unsetenv("CONDUCTOR_AUTH_TOKEN")
 
-	r := NewResolution("", file, nil)
+	// envBound=true means initConfig skipped the file, so no file is passed.
+	r := NewResolution("", "", true, nil)
 
-	// This merge is the behaviour users cannot currently see: env wins for the
-	// key it sets, and the file still supplies the rest.
 	if got := r.SourceOf("server"); got.Kind != SourceEnv || got.Detail != "CONDUCTOR_SERVER_URL" {
 		t.Errorf("server source = %+v, want env CONDUCTOR_SERVER_URL", got)
 	}
-	if got := r.SourceOf("auth-token"); got.Kind != SourceFile || got.Detail != file {
-		t.Errorf("auth-token source = %+v, want file %s", got, file)
+	if got := r.SourceOf("auth-token"); got.Kind != SourceDefault {
+		t.Errorf("auth-token source = %+v, want default — the file must not contribute", got)
 	}
-	if got := r.SourceOf("server-type"); got.Kind != SourceDefault {
-		t.Errorf("server-type source = %+v, want default", got)
+	_ = file
+}
+
+func TestSourceOfFileSuppliesEverythingWhenEnvUnset(t *testing.T) {
+	dir := t.TempDir()
+	file := writeConfig(t, dir, "config.yaml", "server: http://from-file\nauth-token: tok\n")
+	for _, env := range envVars {
+		os.Unsetenv(env)
+	}
+
+	r := NewResolution("", file, false, nil)
+	for _, key := range []string{"server", "auth-token"} {
+		if got := r.SourceOf(key); got.Kind != SourceFile || got.Detail != file {
+			t.Errorf("%s source = %+v, want file %s", key, got, file)
+		}
 	}
 }
 
@@ -136,12 +189,11 @@ func TestSourceOfNamedProfileIgnoresEnv(t *testing.T) {
 	dir := t.TempDir()
 	file := writeConfig(t, dir, "config-prod.yaml", "server: http://from-profile\n")
 
-	// The environment is set but not bound: cmd/root.go skips BindEnv when a
-	// named profile is active, so reporting env here would name a value that is
-	// not the one in use.
+	// The environment is set but not the active source: naming a file wins, so
+	// reporting env here would name a value that is not the one in use.
 	t.Setenv("CONDUCTOR_SERVER_URL", "http://from-env")
 
-	r := NewResolution("prod", file, nil)
+	r := NewResolution("prod", file, false, nil)
 	if r.EnvBound {
 		t.Error("EnvBound = true for a named profile, want false")
 	}
@@ -150,31 +202,19 @@ func TestSourceOfNamedProfileIgnoresEnv(t *testing.T) {
 	}
 }
 
-func TestSourceOfDefaultAliasBehavesLikeNoProfile(t *testing.T) {
-	dir := t.TempDir()
-	file := writeConfig(t, dir, "config.yaml", "server: http://from-file\n")
-	t.Setenv("CONDUCTOR_SERVER_URL", "http://from-env")
-
-	// "default" is an alias, so it must not flip the environment off the way a
-	// named profile does.
-	empty := NewResolution("", file, nil)
-	alias := NewResolution("default", file, nil)
-	if empty.SourceOf("server") != alias.SourceOf("server") {
-		t.Errorf("--profile default disagrees with no profile: %+v vs %+v",
-			alias.SourceOf("server"), empty.SourceOf("server"))
-	}
-}
-
 func TestSourceOfFlagBeatsEverything(t *testing.T) {
-	dir := t.TempDir()
-	file := writeConfig(t, dir, "config.yaml", "server: http://from-file\n")
 	t.Setenv("CONDUCTOR_SERVER_URL", "http://from-env")
 
+	// Flags remain per-key: overriding the server must not force the user to
+	// re-supply every credential.
 	changed := func(key string) bool { return key == "server" }
-	r := NewResolution("", file, changed)
+	r := NewResolution("", "", true, changed)
 
 	if got := r.SourceOf("server"); got.Kind != SourceFlag {
 		t.Errorf("server source = %+v, want flag", got)
+	}
+	if got := r.SourceOf("auth-token"); got.Kind == SourceFlag {
+		t.Errorf("auth-token source = %+v, want the active source, not flag", got)
 	}
 }
 
@@ -185,7 +225,7 @@ func TestSourceOfEmptyFileValueIsNotASource(t *testing.T) {
 	file := writeConfig(t, dir, "config.yaml", "server: \"\"\n")
 	os.Unsetenv("CONDUCTOR_SERVER_URL")
 
-	r := NewResolution("", file, nil)
+	r := NewResolution("", file, false, nil)
 	if got := r.SourceOf("server"); got.Kind != SourceDefault {
 		t.Errorf("server source = %+v, want default", got)
 	}
@@ -193,7 +233,7 @@ func TestSourceOfEmptyFileValueIsNotASource(t *testing.T) {
 
 func TestSourceOfMissingFileFallsBackCleanly(t *testing.T) {
 	os.Unsetenv("CONDUCTOR_SERVER_URL")
-	r := NewResolution("", filepath.Join(t.TempDir(), "absent.yaml"), nil)
+	r := NewResolution("", filepath.Join(t.TempDir(), "absent.yaml"), false, nil)
 	if got := r.SourceOf("server"); got.Kind != SourceDefault {
 		t.Errorf("server source = %+v, want default", got)
 	}

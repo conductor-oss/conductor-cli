@@ -94,6 +94,24 @@ func EnvVar(key string) string {
 	return envVars[key]
 }
 
+// EnvActive reports whether any configuration environment variable is set.
+//
+// The environment is an all-or-nothing source: if it supplies anything, it
+// supplies everything, and the default config file is not read. Blending the two
+// per key meant a user could not answer "where is this value coming from" without
+// checking both, so setting one variable now selects the environment outright.
+//
+// CONDUCTOR_PROFILE is deliberately excluded — it chooses a config file rather
+// than carrying a setting of its own.
+func EnvActive() bool {
+	for _, env := range envVars {
+		if os.Getenv(env) != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // IsSecret reports whether key's value must be masked when displayed.
 func IsSecret(key string) bool {
 	return secretKeys[key]

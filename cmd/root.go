@@ -287,8 +287,23 @@ func isSavingConfig() bool {
 	return false
 }
 
+// envIsActiveSource is true when the environment supplied this invocation's
+// configuration, meaning no config file was read.
+var envIsActiveSource bool
+
 func initConfig() {
 	activeProfile = effectiveProfile()
+
+	// Naming a file is an explicit choice and wins over the ambient environment:
+	// --config names a path, --profile names one of the CLI's own files.
+	namedFile := cfgFile != "" || !cliconfig.IsDefault(activeProfile)
+
+	// Below flags, exactly one source supplies configuration. Naming a file
+	// selects that file; otherwise setting any CONDUCTOR_* variable selects the
+	// environment wholesale and the default config.yaml is not read. The two
+	// never merge: a value blended from both leaves no answer to "where did this
+	// come from".
+	envIsActiveSource = !namedFile && cliconfig.EnvActive()
 
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
@@ -317,10 +332,7 @@ func initConfig() {
 		viper.SetConfigName(cliconfig.FileName(activeProfile))
 	}
 
-	// Bind environment variables only for the default configuration. Selecting a
-	// named profile is an explicit choice, so it wins over ambient environment;
-	// CLI flags (via BindPFlag) still override everything either way.
-	if cliconfig.IsDefault(activeProfile) {
+	if envIsActiveSource {
 		viper.SetEnvPrefix("CONDUCTOR")
 		viper.AutomaticEnv()
 
@@ -329,12 +341,12 @@ func initConfig() {
 		viper.BindEnv("auth-secret", "CONDUCTOR_AUTH_SECRET")
 		viper.BindEnv("auth-token", "CONDUCTOR_AUTH_TOKEN")
 		viper.BindEnv("server-type", "CONDUCTOR_SERVER_TYPE")
-	}
-
-	// A missing config file is not an error: the CLI also runs on flags and
-	// environment alone. Only a file that was read counts as a source.
-	if err := viper.ReadInConfig(); err == nil {
-		loadedConfigFile = viper.ConfigFileUsed()
+	} else {
+		// A missing config file is not an error: the CLI also runs on flags
+		// alone. Only a file that was read counts as a source.
+		if err := viper.ReadInConfig(); err == nil {
+			loadedConfigFile = viper.ConfigFileUsed()
+		}
 	}
 
 	if viper.GetBool("verbose") {
@@ -342,13 +354,15 @@ func initConfig() {
 	}
 }
 
-// reportConfigSources prints where each setting came from. It reports the file
-// and the environment together: they merge key by key for the default
-// configuration, so naming only one of them hides the other's contribution.
+// reportConfigSources prints where each setting came from, so that a surprising
+// server URL can be traced without guessing between the environment and a file.
 func reportConfigSources() {
-	res := cliconfig.NewResolution(activeProfile, loadedConfigFile, rootFlagChanged)
+	res := cliconfig.NewResolution(activeProfile, loadedConfigFile, envIsActiveSource, rootFlagChanged)
 
-	if res.File != "" {
+	switch {
+	case res.EnvBound:
+		fmt.Fprintf(os.Stdout, "Using environment variables (config file not read)\n")
+	case res.File != "":
 		fmt.Fprintf(os.Stdout, "Using config file: %s\n", res.File)
 	}
 	for _, key := range cliconfig.Keys {
@@ -370,7 +384,7 @@ func rootFlagChanged(key string) bool {
 // activeResolution describes the configuration state this invocation resolved,
 // including which flags cmd actually saw.
 func activeResolution(cmd *cobra.Command) cliconfig.Resolution {
-	return cliconfig.NewResolution(activeProfile, loadedConfigFile, func(key string) bool {
+	return cliconfig.NewResolution(activeProfile, loadedConfigFile, envIsActiveSource, func(key string) bool {
 		f := cmd.Flags().Lookup(key)
 		return f != nil && f.Changed
 	})

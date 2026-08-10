@@ -453,10 +453,12 @@ var configShowCmd = &cobra.Command{
 	Short: "Show the effective configuration and where each value came from",
 	Long: `Show the configuration the CLI actually resolved, with the origin of each value.
 
-Values come from, in order of precedence: command-line flags, environment
-variables, the config file, then built-in defaults. Environment variables are
-only consulted for the default configuration — selecting a named profile with
---profile makes that profile win over the environment.
+Command-line flags override individual settings. Everything else comes from a
+single source, never a mix of two:
+
+  --config <path> or --profile <name>   that file; environment ignored
+  any CONDUCTOR_* variable set          the environment; config file not read
+  otherwise                             ~/.conductor-cli/config.yaml
 
 Secrets are masked unless --show-secrets is passed.
 
@@ -510,10 +512,15 @@ Examples:
 		} else {
 			fmt.Printf("Profile: %s\n", res.Profile)
 		}
-		if res.File == "" {
-			fmt.Printf("File:    (none)\n")
-		} else {
-			fmt.Printf("File:    %s\n", res.File)
+		switch {
+		case res.EnvBound:
+			// Say plainly that the file was skipped; an unexplained "(none)"
+			// next to an existing config.yaml reads like a bug.
+			fmt.Printf("Source:  environment variables (config file not read)\n")
+		case res.File != "":
+			fmt.Printf("Source:  %s\n", res.File)
+		default:
+			fmt.Printf("Source:  none (built-in defaults)\n")
 		}
 		fmt.Println()
 

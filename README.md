@@ -745,20 +745,39 @@ conductor config show
 
 ```
 Profile: default
-File:    /Users/you/.conductor-cli/config.yaml
+Source:  /Users/you/.conductor-cli/config.yaml
+
+KEY           VALUE                       SOURCE
+server        http://localhost:8080/api   config.yaml
+server-type   OSS                         config.yaml
+auth-key      -                           default
+auth-secret   -                           default
+auth-token    ****                        config.yaml
+```
+
+Configuration comes from exactly one source, never a mix of two. Command-line flags override
+individual settings; below them the CLI picks a single source:
+
+| Condition | Source |
+|-----------|--------|
+| `--config <path>` or `--profile <name>` given | That file. Environment variables are ignored. |
+| Any `CONDUCTOR_*` setting variable is set | The environment. `config.yaml` is **not read**. |
+| Neither | `~/.conductor-cli/config.yaml` |
+
+So exporting `CONDUCTOR_SERVER_URL` switches the whole configuration onto the environment — an
+auth token sitting in `config.yaml` is not used, and `config show` says so:
+
+```
+Profile: default
+Source:  environment variables (config file not read)
 
 KEY           VALUE                      SOURCE
 server        http://from-env:9999/api   env CONDUCTOR_SERVER_URL
-server-type   OSS                        config.yaml
-auth-key      -                          default
-auth-secret   -                          default
-auth-token    ****                       config.yaml
+server-type   OSS                        default
+auth-token    -                          default
 ```
 
-Environment variables and the default config merge key by key: the environment wins for the keys
-it sets, and the config file supplies the rest. Selecting a named profile with `--profile` turns
-the environment off, so the profile wins. Secrets are masked unless you pass `--show-secrets`;
-`--json` prints the same data for scripts.
+Secrets are masked unless you pass `--show-secrets`; `--json` prints the same data for scripts.
 
 **Deleting Profiles:**
 

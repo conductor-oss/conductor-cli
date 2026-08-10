@@ -181,13 +181,68 @@ isolated_home() {
     [[ "$output" == *"from-file"* ]]
     [[ "$output" == *"config.yaml"* ]]
 
-    # With the environment set, the merge is visible: env wins for server, the
-    # file still supplies server-type.
     run bash -c "HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor config show 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"env CONDUCTOR_SERVER_URL"* ]]
     [[ "$output" == *"from-env"* ]]
+    [[ "$output" == *"config file not read"* ]]
+    rm -rf "$home"
+}
+
+@test "14. Setting an env var takes the config file out of play entirely" {
+    local home
+    home="$(isolated_home)"
+    # The file carries a token the environment does not. The environment sets
+    # only the server URL; the token must not be picked up from the file.
+    printf 'server: http://from-file:8080/api\nauth-token: tok-from-file\nserver-type: OSS\n' \
+        > "$home/.conductor-cli/config.yaml"
+
+    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor config show 2>&1"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"from-env"* ]]
+    [[ "$output" != *"from-file"* ]]
+    # auth-token has no value at all, rather than the file's.
+    [[ "$output" != *"****"* ]]
+    rm -rf "$home"
+}
+
+@test "15. Naming a file beats the environment" {
+    local home
+    home="$(isolated_home)"
+    printf 'server: http://from-profile:7777/api\nserver-type: OSS\n' > "$home/.conductor-cli/config-e2eprof.yaml"
+    printf 'server: http://from-explicit:6666/api\nserver-type: OSS\n' > "$home/explicit.yaml"
+
+    # --profile names one of the CLI's files.
+    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor --profile e2eprof config show 2>&1"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"from-profile"* ]]
+    [[ "$output" != *"from-env"* ]]
+
+    # --config names an arbitrary path.
+    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor --config '$home/explicit.yaml' config show 2>&1"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"from-explicit"* ]]
+    [[ "$output" != *"from-env"* ]]
+    rm -rf "$home"
+}
+
+@test "16. A flag overrides one key without discarding the rest" {
+    local home
+    home="$(isolated_home)"
+    printf 'server: http://from-file:8080/api\nauth-token: tok-from-file\nserver-type: OSS\n' \
+        > "$home/.conductor-cli/config.yaml"
+
+    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL= ./conductor --server http://from-flag:1111/api config show 2>&1"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"from-flag"* ]]
+    [[ "$output" == *"flag --server"* ]]
+    # The token still comes from the file: flags are per-key, not a source switch.
+    [[ "$output" == *"****"* ]]
     rm -rf "$home"
 }
 

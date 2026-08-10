@@ -31,7 +31,9 @@ installing (CLI only). Diagnose with `which conductor` and `brew info --cask con
 
 ## Authentication
 
-**Three methods** (precedence: command-line flags > environment variables > config file):
+**Three methods.** Command-line flags override individual settings. Below them, credentials come
+from a single source — the environment or a config file, never both at once (see
+[Profile Management](#profile-management)):
 
 | Method | Command-line Flags | Environment Variables |
 |--------|-------------------|----------------------|
@@ -85,11 +87,20 @@ profile name and `--profile default` both mean `~/.conductor-cli/config.yaml`, f
 `delete` and profile selection alike. The CLI never creates `config-default.yaml`; if one exists
 from an older build it is ignored, and `config list`/`config show` warn that it is unused.
 
-**Environment variables and the default config merge, key by key.** With no profile selected,
-both are live: an environment variable wins for the key it sets, and `config.yaml` still supplies
-every key the environment leaves unset. Selecting a *named* profile turns the environment off
-entirely, so the profile wins. Run `conductor config show` to see which source produced each
-value.
+**Configuration comes from exactly one source, never a mix.** Below command-line flags, which
+override individual settings, the CLI picks a single source and uses it for everything:
+
+| Condition | Source |
+|-----------|--------|
+| `--config <path>` or `--profile <name>` given | That file. Environment variables are ignored. |
+| Any `CONDUCTOR_*` setting variable is set | The environment. `config.yaml` is **not read**. |
+| Neither | `~/.conductor-cli/config.yaml` |
+
+Setting one variable therefore switches the whole configuration onto the environment: if
+`CONDUCTOR_SERVER_URL` is set and `config.yaml` holds an auth token, that token is *not* used.
+`CONDUCTOR_PROFILE` does not count — it selects a file rather than carrying a setting.
+
+Run `conductor config show` to see the active source and where each value came from.
 
 ## Command Reference
 

@@ -71,9 +71,10 @@ type Resolution struct {
 	Profile string
 	// File is the config file that was loaded, or "" when none was found.
 	File string
-	// EnvBound reports whether environment variables are in play. They are not
-	// when a named profile is selected — cmd/root.go skips BindEnv so that an
-	// explicitly chosen profile wins over ambient environment.
+	// EnvBound reports whether the environment is the active source. Exactly one
+	// of EnvBound and File is in play: naming a file (--config or --profile)
+	// ignores the environment, and setting any configuration variable means the
+	// default config file is not read at all.
 	EnvBound bool
 	// fileKeys are the keys the loaded file supplied.
 	fileKeys map[string]bool
@@ -81,19 +82,20 @@ type Resolution struct {
 	flagChanged func(key string) bool
 }
 
-// NewResolution builds a Resolution for the given effective profile and config
-// file. A file that cannot be read contributes no keys, matching the CLI's
-// behaviour of running on flags and environment alone.
+// NewResolution builds a Resolution describing what the CLI loaded: the
+// effective profile, the config file that was read (empty when none was), and
+// whether the environment is the active source. A file that cannot be read
+// contributes no keys.
 //
 // flagChanged may be nil, in which case no key is attributed to a flag.
-func NewResolution(profile, file string, flagChanged func(key string) bool) Resolution {
+func NewResolution(profile, file string, envBound bool, flagChanged func(key string) bool) Resolution {
 	if flagChanged == nil {
 		flagChanged = func(string) bool { return false }
 	}
 	return Resolution{
 		Profile:     profile,
 		File:        file,
-		EnvBound:    IsDefault(profile),
+		EnvBound:    envBound,
 		fileKeys:    readKeys(file),
 		flagChanged: flagChanged,
 	}
@@ -106,10 +108,10 @@ func (r Resolution) IsDefaultProfile() bool {
 
 // SourceOf returns where key's effective value came from.
 //
-// The order mirrors viper's precedence — flag, environment, file, default — with
-// the environment step skipped when a named profile is active. Getting that skip
-// wrong would report a set CONDUCTOR_SERVER_URL as the live source while the
-// profile's value is the one actually used.
+// Flags override individual keys; below them exactly one source supplies the
+// rest, either the environment or a file. The environment step is skipped
+// whenever a file is the active source, so a set but unused CONDUCTOR_SERVER_URL
+// is never reported as live.
 func (r Resolution) SourceOf(key string) Source {
 	if r.flagChanged(key) {
 		return Source{Kind: SourceFlag, Detail: key}
