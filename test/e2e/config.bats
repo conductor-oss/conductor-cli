@@ -107,6 +107,13 @@ isolated_home() {
     echo "$home"
 }
 
+# Any configuration variable switches the CLI onto the environment and stops it
+# reading the config file. CI exports CONDUCTOR_SERVER_URL and
+# CONDUCTOR_SERVER_TYPE for the whole run, so a test that wants the file to be
+# the active source has to clear all of them — clearing only the one it cares
+# about leaves the others holding the CLI on the environment.
+NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR_AUTH_KEY -u CONDUCTOR_AUTH_SECRET -u CONDUCTOR_AUTH_TOKEN"
+
 @test "8. Save with an empty profile name writes the default config" {
     local home
     home="$(isolated_home)"
@@ -175,7 +182,7 @@ isolated_home() {
     printf 'server: http://from-file:8080/api\nserver-type: OSS\n' > "$home/.conductor-cli/config.yaml"
 
     # File supplies the value when the environment does not.
-    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL= ./conductor config show 2>&1"
+    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"from-file"* ]]
@@ -236,7 +243,7 @@ isolated_home() {
     printf 'server: http://from-file:8080/api\nauth-token: tok-from-file\nserver-type: OSS\n' \
         > "$home/.conductor-cli/config.yaml"
 
-    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL= ./conductor --server http://from-flag:1111/api config show 2>&1"
+    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor --server http://from-flag:1111/api config show 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"from-flag"* ]]
@@ -251,13 +258,13 @@ isolated_home() {
     home="$(isolated_home)"
     printf 'server: http://x:8080/api\nauth-token: supersecrettoken\n' > "$home/.conductor-cli/config.yaml"
 
-    run bash -c "HOME='$home' ./conductor config show 2>&1"
+    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" != *"supersecrettoken"* ]]
     [[ "$output" == *"****"* ]]
 
-    run bash -c "HOME='$home' ./conductor config show --show-secrets 2>&1"
+    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show --show-secrets 2>&1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"supersecrettoken"* ]]
     rm -rf "$home"
