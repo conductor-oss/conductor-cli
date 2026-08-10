@@ -58,11 +58,10 @@ jobs:
         chmod +x dist/conductor_*
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
-        # No `body`/`body_path` — it would overwrite the notes on a published draft.
-        # This only applies when the step creates the release itself.
-        generate_release_notes: true
+        # No `body`/`body_path` and no `generate_release_notes`: the notes are
+        # written by whoever cuts the release. This step only uploads the binaries.
         files: |
           dist/conductor_linux_amd64
           dist/conductor_linux_arm64
