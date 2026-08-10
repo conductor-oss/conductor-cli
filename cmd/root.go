@@ -154,8 +154,6 @@ var rootCmd = &cobra.Command{
 			url = url + "/api"
 		}
 
-		log.Debug("Using Server ", url)
-
 		httpSettings := settings.NewHttpSettings(url)
 
 		var apiClient *client.APIClient
