@@ -205,13 +205,23 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     printf 'server: http://from-file:8080/api\nauth-token: tok-from-file\nserver-type: OSS\n' \
         > "$home/.conductor-cli/config.yaml"
 
-    run bash -c "HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor config show 2>&1"
+    # Only the server URL comes from the environment. The auth variables are
+    # cleared because the Enterprise runner exports real ones, and a "****" from
+    # the environment is not evidence about the file either way.
+    run bash -c "env -u CONDUCTOR_AUTH_KEY -u CONDUCTOR_AUTH_SECRET -u CONDUCTOR_AUTH_TOKEN \
+        HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor config show 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" == *"from-env"* ]]
     [[ "$output" != *"from-file"* ]]
-    # auth-token has no value at all, rather than the file's.
-    [[ "$output" != *"****"* ]]
+    [[ "$output" == *"config file not read"* ]]
+
+    # The file's auth-token must not be picked up: no value, and no attribution
+    # to the config file.
+    token_row="$(echo "$output" | grep '^auth-token')"
+    echo "auth-token row: $token_row"
+    [[ "$token_row" != *"config.yaml"* ]]
+    [[ "$token_row" != *"****"* ]]
     rm -rf "$home"
 }
 
