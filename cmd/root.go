@@ -180,18 +180,9 @@ var rootCmd = &cobra.Command{
 			cachedExpiry := viper.GetInt64("cached-token-expiry")
 
 			// initConfig already resolved the profile; reuse it.
-			configPath, err := getConfigPath(activeProfile)
+			configPath, err := tokenCachePath(activeProfile)
 			if err != nil {
 				return fmt.Errorf("failed to get config path: %w", err)
-			}
-
-			// Only cache into the default config if it already exists.
-			// Creating it would plant a config.yaml on users running from the
-			// environment.
-			if cliconfig.IsDefault(activeProfile) {
-				if _, statErr := os.Stat(configPath); statErr != nil {
-					configPath = ""
-				}
 			}
 
 			tokenManager := NewCachedTokenManager(

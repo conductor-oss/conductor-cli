@@ -194,6 +194,23 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     rm -rf "$home"
 }
 
+@test "13. config show masks secrets unless asked" {
+    local home
+    home="$(isolated_home)"
+    printf 'server: http://x:8080/api\nauth-token: supersecrettoken\n' > "$home/.conductor-cli/config.yaml"
+
+    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show 2>&1"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"supersecrettoken"* ]]
+    [[ "$output" == *"****"* ]]
+
+    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show --show-secrets 2>&1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"supersecrettoken"* ]]
+    rm -rf "$home"
+}
+
 @test "14. Setting an env var takes the config file out of play entirely" {
     local home
     home="$(isolated_home)"
@@ -254,22 +271,5 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     [[ "$output" == *"flag --server"* ]]
     # Token still from the file: flags are per-key, not a source switch.
     [[ "$output" == *"****"* ]]
-    rm -rf "$home"
-}
-
-@test "13. config show masks secrets unless asked" {
-    local home
-    home="$(isolated_home)"
-    printf 'server: http://x:8080/api\nauth-token: supersecrettoken\n' > "$home/.conductor-cli/config.yaml"
-
-    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show 2>&1"
-    echo "Output: $output"
-    [ "$status" -eq 0 ]
-    [[ "$output" != *"supersecrettoken"* ]]
-    [[ "$output" == *"****"* ]]
-
-    run bash -c "$NO_CONFIG_ENV HOME='$home' ./conductor config show --show-secrets 2>&1"
-    [ "$status" -eq 0 ]
-    [[ "$output" == *"supersecrettoken"* ]]
     rm -rf "$home"
 }

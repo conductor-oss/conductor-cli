@@ -86,6 +86,87 @@ func TestGetConfigPath(t *testing.T) {
 	}
 }
 
+func TestTokenCachePath(t *testing.T) {
+	// Each case runs against its own HOME so the developer's real
+	// ~/.conductor-cli is never read or written.
+	newHome := func(t *testing.T, withDefaultConfig bool) string {
+		t.Helper()
+		home := t.TempDir()
+		dir := filepath.Join(home, ".conductor-cli")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if withDefaultConfig {
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("server: http://x\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return home
+	}
+
+	t.Run("default config absent disables caching", func(t *testing.T) {
+		// The guard that matters: someone running from environment variables
+		// must not have a config.yaml created for them, because it would then
+		// supply every setting on a later run with the environment unset.
+		t.Setenv("HOME", newHome(t, false))
+
+		got, err := tokenCachePath("")
+		if err != nil {
+			t.Fatalf("tokenCachePath(\"\") error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("tokenCachePath(\"\") = %q, want empty so no file is created", got)
+		}
+	})
+
+	t.Run("default config present is cached to", func(t *testing.T) {
+		home := newHome(t, true)
+		t.Setenv("HOME", home)
+
+		got, err := tokenCachePath("")
+		if err != nil {
+			t.Fatalf("tokenCachePath(\"\") error: %v", err)
+		}
+		want := filepath.Join(home, ".conductor-cli", "config.yaml")
+		if got != want {
+			t.Errorf("tokenCachePath(\"\") = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("default alias behaves like an empty name", func(t *testing.T) {
+		t.Setenv("HOME", newHome(t, false))
+
+		empty, err := tokenCachePath("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		alias, err := tokenCachePath("default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if empty != alias {
+			t.Errorf("tokenCachePath(\"default\") = %q, want %q", alias, empty)
+		}
+	})
+
+	t.Run("named profile is cached to even when its file is missing", func(t *testing.T) {
+		// initConfig exits when a named profile's file is absent, so reaching
+		// here means it exists. The guard must not extend to named profiles, or
+		// key/secret users would silently lose token caching.
+		home := newHome(t, false)
+		t.Setenv("HOME", home)
+
+		got, err := tokenCachePath("production")
+		if err != nil {
+			t.Fatalf("tokenCachePath(production) error: %v", err)
+		}
+		want := filepath.Join(home, ".conductor-cli", "config-production.yaml")
+		if got != want {
+			t.Errorf("tokenCachePath(production) = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestReadConfigFile(t *testing.T) {
 	t.Run("file does not exist returns empty map", func(t *testing.T) {
 		mgr := &CachedTokenManager{

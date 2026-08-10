@@ -201,3 +201,24 @@ func getConfigPath(profileName string) (string, error) {
 	}
 	return cliconfig.Resolve(configDir, profileName), nil
 }
+
+// tokenCachePath returns the file a refreshed token should be cached in, or ""
+// to disable caching.
+//
+// Caching is disabled when the default config file does not exist. Creating it
+// would plant a config.yaml on someone who deliberately runs from environment
+// variables, and that file would then supply every setting on any later run
+// where the environment is unset. A named profile always has a file already —
+// initConfig exits if it does not — so it is always cached to.
+func tokenCachePath(profileName string) (string, error) {
+	path, err := getConfigPath(profileName)
+	if err != nil {
+		return "", err
+	}
+	if cliconfig.IsDefault(profileName) {
+		if _, err := os.Stat(path); err != nil {
+			return "", nil
+		}
+	}
+	return path, nil
+}
