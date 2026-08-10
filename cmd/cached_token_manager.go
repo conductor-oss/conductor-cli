@@ -193,7 +193,7 @@ func getCurrentTimeUnix() int64 {
 }
 
 // getConfigPath returns the path to the config file for the given profile.
-// An empty name, like "default", resolves to the default config.yaml.
+// An empty name and "default" both resolve to config.yaml.
 func getConfigPath(profileName string) (string, error) {
 	configDir, err := cliconfig.Dir()
 	if err != nil {

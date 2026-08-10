@@ -833,12 +833,22 @@ export CONDUCTOR_SERVER_URL=http://localhost:8080/api
 export CONDUCTOR_AUTH_KEY=your-api-key
 export CONDUCTOR_AUTH_SECRET=your-api-secret
 
-# Server type (OSS or Enterprise, defaults to Enterprise)
+# Server type (OSS or Enterprise, defaults to OSS)
 export CONDUCTOR_SERVER_TYPE=OSS
 
 # Profile selection
 export CONDUCTOR_PROFILE=production
 ```
+
+If you set any of `CONDUCTOR_SERVER_URL`, `CONDUCTOR_SERVER_TYPE`, `CONDUCTOR_AUTH_KEY`,
+`CONDUCTOR_AUTH_SECRET` or `CONDUCTOR_AUTH_TOKEN`, the CLI takes every setting from the
+environment and does not read `~/.conductor-cli/config.yaml`. Set all the values you need, or use
+`--profile` to read a file instead. See [Configuration Precedence](#configuration-precedence).
+
+`CONDUCTOR_PROFILE` is different. It selects which file to read, so it does not switch the CLI to
+the environment.
+
+Run `conductor config show` to see the active source and the origin of each value.
 
 #### Disabling Colored Output
 

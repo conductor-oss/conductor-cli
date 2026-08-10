@@ -227,7 +227,7 @@ Examples:
 }
 
 // interactiveSaveConfig prompts for settings and writes profileName's config
-// file, returning the path. An empty name, like "default", writes config.yaml.
+// file, returning the path. An empty name and "default" both write config.yaml.
 func interactiveSaveConfig(profileName string) (string, error) {
 	configDir, err := cliconfig.Dir()
 	if err != nil {

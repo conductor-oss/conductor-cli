@@ -99,6 +99,9 @@ from an older build it is ignored, and `config list`/`config show` warn that it 
 So exporting `CONDUCTOR_SERVER_URL` switches everything onto the environment. A token in
 `config.yaml` is no longer used.
 
+`CONDUCTOR_PROFILE` is different. It selects which file to read, so it does not switch the CLI to
+the environment.
+
 Setting one variable therefore switches the whole configuration onto the environment: if
 `CONDUCTOR_SERVER_URL` is set and `config.yaml` holds an auth token, that token is *not* used.
 `CONDUCTOR_PROFILE` does not count — it selects a file rather than carrying a setting.
