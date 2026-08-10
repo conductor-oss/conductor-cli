@@ -104,13 +104,31 @@ func TestTokenCachePath(t *testing.T) {
 		return home
 	}
 
+	t.Run("environment as the active source disables caching", func(t *testing.T) {
+		// The config file exists, but the environment supplied this run's
+		// credentials. Writing the token into that file would store it against
+		// the identity the file holds: a later run with the environment unset
+		// would pair the file's key and secret with a token minted from
+		// different credentials.
+		home := newHome(t, true)
+		t.Setenv("HOME", home)
+
+		got, err := tokenCachePath("", true)
+		if err != nil {
+			t.Fatalf("tokenCachePath with envActive error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("tokenCachePath with envActive = %q, want empty so the file is not written", got)
+		}
+	})
+
 	t.Run("default config absent disables caching", func(t *testing.T) {
-		// The guard that matters: someone running from environment variables
-		// must not have a config.yaml created for them, because it would then
-		// supply every setting on a later run with the environment unset.
+		// Creating the file would leave a config.yaml on someone who runs from
+		// environment variables, and it would then supply every setting on a
+		// later run with the environment unset.
 		t.Setenv("HOME", newHome(t, false))
 
-		got, err := tokenCachePath("")
+		got, err := tokenCachePath("", false)
 		if err != nil {
 			t.Fatalf("tokenCachePath(\"\") error: %v", err)
 		}
@@ -123,7 +141,7 @@ func TestTokenCachePath(t *testing.T) {
 		home := newHome(t, true)
 		t.Setenv("HOME", home)
 
-		got, err := tokenCachePath("")
+		got, err := tokenCachePath("", false)
 		if err != nil {
 			t.Fatalf("tokenCachePath(\"\") error: %v", err)
 		}
@@ -136,11 +154,11 @@ func TestTokenCachePath(t *testing.T) {
 	t.Run("default alias behaves like an empty name", func(t *testing.T) {
 		t.Setenv("HOME", newHome(t, false))
 
-		empty, err := tokenCachePath("")
+		empty, err := tokenCachePath("", false)
 		if err != nil {
 			t.Fatal(err)
 		}
-		alias, err := tokenCachePath("default")
+		alias, err := tokenCachePath("default", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -156,7 +174,7 @@ func TestTokenCachePath(t *testing.T) {
 		home := newHome(t, false)
 		t.Setenv("HOME", home)
 
-		got, err := tokenCachePath("production")
+		got, err := tokenCachePath("production", false)
 		if err != nil {
 			t.Fatalf("tokenCachePath(production) error: %v", err)
 		}

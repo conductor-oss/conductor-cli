@@ -179,8 +179,8 @@ var rootCmd = &cobra.Command{
 			cachedToken := viper.GetString("cached-token")
 			cachedExpiry := viper.GetInt64("cached-token-expiry")
 
-			// initConfig already resolved the profile; reuse it.
-			configPath, err := tokenCachePath(activeProfile)
+			// initConfig already resolved the profile and the active source.
+			configPath, err := tokenCachePath(activeProfile, envIsActiveSource)
 			if err != nil {
 				return fmt.Errorf("failed to get config path: %w", err)
 			}
