@@ -755,22 +755,21 @@ auth-secret   -                           default
 auth-token    ****                        config.yaml
 ```
 
-Rank 1 wins over rank 2, rank 2 over rank 3, and so on.
+The CLI uses the first source in this list:
 
-| Rank | Source | Example |
-|------|--------|---------|
-| 1 | Command-line value flags | `--server`, `--auth-token` |
-| 2 | File chosen by `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
+| Order | Source | Example |
+|-------|--------|---------|
+| 1 | Flags | `--server`, `--auth-token` |
+| 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
 | 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
-| 4 | Default config file | `~/.conductor-cli/config.yaml` |
+| 4 | The default config file | `~/.conductor-cli/config.yaml` |
 | 5 | Built-in defaults | `server-type: OSS` |
 
-Ranks 2-4 are winner-takes-all: only the highest one present is used, and it supplies *every*
-setting. The ranks below it are not read. Rank 1 is different — it applies per setting, so
-`--server` overrides only the server URL.
+That source supplies all settings. The CLI does not read the sources below it.
 
-`--config` and `--profile` are not rank 1. They carry no settings; they only choose the file in
-rank 2.
+A flag is different. It changes only its own setting.
+
+`--config` and `--profile` do not hold settings. They select the file on line 2.
 
 So exporting `CONDUCTOR_SERVER_URL` switches the whole configuration onto the environment — an
 auth token sitting in `config.yaml` is not used, and `config show` says so:
