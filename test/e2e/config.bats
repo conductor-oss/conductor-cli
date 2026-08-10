@@ -190,7 +190,7 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     [ "$status" -eq 0 ]
     [[ "$output" == *"env CONDUCTOR_SERVER_URL"* ]]
     [[ "$output" == *"from-env"* ]]
-    [[ "$output" == *"config file not read"* ]]
+    [[ "$output" == *"Source: environment variables"* ]]
     rm -rf "$home"
 }
 
@@ -209,7 +209,7 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     [ "$status" -eq 0 ]
     [[ "$output" == *"from-env"* ]]
     [[ "$output" != *"from-file"* ]]
-    [[ "$output" == *"config file not read"* ]]
+    [[ "$output" == *"Source: environment variables"* ]]
 
     # The file's auth-token must not be picked up.
     token_row="$(echo "$output" | grep '^auth-token')"

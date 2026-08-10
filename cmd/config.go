@@ -452,7 +452,7 @@ Command-line flags override individual settings. Everything else comes from a
 single source, never a mix of two:
 
   --config <path> or --profile <name>   that file; environment ignored
-  any CONDUCTOR_* variable set          the environment; config file not read
+  any CONDUCTOR_* variable set          the environment; the config file is not read
   otherwise                             ~/.conductor-cli/config.yaml
 
 Secrets are masked unless --show-secrets is passed.
@@ -507,7 +507,7 @@ Examples:
 		// selects a file the CLI did not read.
 		switch {
 		case res.EnvBound:
-			fmt.Printf("Source: environment variables (config file not read)\n")
+			fmt.Printf("Source: environment variables\n")
 		case res.File != "":
 			fmt.Printf("Source: %s\n", res.File)
 		default:

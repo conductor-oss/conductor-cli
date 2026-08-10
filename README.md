@@ -758,7 +758,7 @@ When an environment variable is set, the config file is not read at all — see
 [Configuration Precedence](#configuration-precedence):
 
 ```
-Source: environment variables (config file not read)
+Source: environment variables
 
 KEY           VALUE                      SOURCE
 server        http://from-env:9999/api   env CONDUCTOR_SERVER_URL

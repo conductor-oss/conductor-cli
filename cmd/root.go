@@ -348,7 +348,7 @@ func reportConfigSources() {
 
 	switch {
 	case res.EnvBound:
-		fmt.Fprintf(os.Stdout, "Using environment variables (config file not read)\n")
+		fmt.Fprintf(os.Stdout, "Using environment variables\n")
 	case res.File != "":
 		fmt.Fprintf(os.Stdout, "Using config file: %s\n", res.File)
 	}
