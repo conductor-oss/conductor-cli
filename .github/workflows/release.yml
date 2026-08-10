@@ -57,28 +57,12 @@ jobs:
         # Make binaries executable
         chmod +x dist/conductor_*
 
-    - name: Generate changelog
-      id: changelog
-      run: |
-        # Get the previous tag
-        PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-
-        if [ -z "$PREV_TAG" ]; then
-          # First release - use all commits
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
-        else
-          # Get commits since previous tag
-          CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
-        fi
-
-        # Write changelog to file
-        echo "$CHANGELOG" > CHANGELOG.txt
-        cat CHANGELOG.txt
-
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        body_path: CHANGELOG.txt
+        # No `body`/`body_path` — it would overwrite the notes on a published draft.
+        # This only applies when the step creates the release itself.
+        generate_release_notes: true
         files: |
           dist/conductor_linux_amd64
           dist/conductor_linux_arm64
