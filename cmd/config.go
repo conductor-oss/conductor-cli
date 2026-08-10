@@ -67,8 +67,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		profileName := profile
 
-		// Only prompt when --profile was not given; an empty answer means the
-		// default configuration rather than an error (#98).
+		// An empty answer means the default config rather than an error (#98).
 		if profileName == "" && !cmd.Flags().Changed("profile") {
 			reader := bufio.NewReader(os.Stdin)
 			fmt.Fprintf(os.Stdout, "Profile name (empty for default): ")
@@ -138,9 +137,8 @@ Examples:
 			if strings.HasPrefix(name, "config-") && strings.HasSuffix(name, ".yaml") {
 				profileName := strings.TrimPrefix(name, "config-")
 				profileName = strings.TrimSuffix(profileName, ".yaml")
-				// "default" refers to config.yaml, so a config-default.yaml is
-				// unreachable. Listing it would print "default" twice for two
-				// different files; warnStrayDefaultFile explains it instead.
+				// Unreachable: "default" refers to config.yaml. Listing it would
+				// print "default" twice. warnStrayDefaultFile explains it.
 				if cliconfig.IsDefault(profileName) {
 					continue
 				}
@@ -189,8 +187,8 @@ Examples:
 			profileName = profile
 		}
 
-		// Deleting always names its target: an empty name would silently mean
-		// the default config, which is too easy to trigger by accident.
+		// Deleting always names its target; an empty name is too easy to hit by
+		// accident.
 		if profileName == "" {
 			return fmt.Errorf("profile name is required (use positional argument or --profile flag, or 'default' for the default config)")
 		}
@@ -228,9 +226,8 @@ Examples:
 	SilenceUsage: true,
 }
 
-// interactiveSaveConfig prompts for settings and writes them to profileName's
-// config file, returning the path written. An empty name (or "default") writes
-// the default config.yaml.
+// interactiveSaveConfig prompts for settings and writes profileName's config
+// file, returning the path. An empty name, like "default", writes config.yaml.
 func interactiveSaveConfig(profileName string) (string, error) {
 	configDir, err := cliconfig.Dir()
 	if err != nil {
@@ -436,10 +433,8 @@ func ReadLineRaw(limit int) (string, error) {
 	}
 }
 
-// warnStrayDefaultFile tells the user about a config-default.yaml, which no
-// longer loads now that "default" refers to config.yaml. Earlier builds created
-// such files, and silently ignoring one leaves the user believing settings are
-// active when they are not.
+// warnStrayDefaultFile reports a config-default.yaml, which no longer loads.
+// Ignoring one silently leaves the user believing its settings are active.
 func warnStrayDefaultFile(configDir string) {
 	if stray := cliconfig.StrayDefaultFile(configDir); stray != "" {
 		fmt.Fprintf(os.Stderr,
@@ -514,8 +509,8 @@ Examples:
 		}
 		switch {
 		case res.EnvBound:
-			// Say plainly that the file was skipped; an unexplained "(none)"
-			// next to an existing config.yaml reads like a bug.
+			// Say the file was skipped; a bare "(none)" beside an existing
+			// config.yaml reads like a bug.
 			fmt.Printf("Source:  environment variables (config file not read)\n")
 		case res.File != "":
 			fmt.Printf("Source:  %s\n", res.File)

@@ -38,8 +38,8 @@ type Source struct {
 	Detail string
 }
 
-// String renders the source for display, e.g. "env CONDUCTOR_SERVER_URL". File
-// sources carry their full path, for output that does not otherwise name it.
+// String renders the source, e.g. "env CONDUCTOR_SERVER_URL". Files carry their
+// full path.
 func (s Source) String() string {
 	switch s.Kind {
 	case SourceFlag:
@@ -53,8 +53,8 @@ func (s Source) String() string {
 	}
 }
 
-// ShortString is String with file sources reduced to a bare file name, for
-// output that already states the full path once.
+// ShortString is String with files reduced to a bare name, for output that
+// already states the path once.
 func (s Source) ShortString() string {
 	if s.Kind == SourceFile {
 		return filepath.Base(s.Detail)
@@ -62,19 +62,15 @@ func (s Source) ShortString() string {
 	return s.String()
 }
 
-// Resolution is the configuration state the CLI resolved at startup: which file
-// was loaded, whether environment variables participate, and which keys the file
-// actually supplied. It answers "where did this value come from" per key.
+// Resolution is the config state the CLI resolved at startup. It answers "where
+// did this value come from" per key.
 type Resolution struct {
-	// Profile is the effective profile name. Empty or "default" means the
-	// default configuration.
+	// Profile is the effective profile name; "" or "default" is the default config.
 	Profile string
-	// File is the config file that was loaded, or "" when none was found.
+	// File is the config file that was loaded, or "" when none was.
 	File string
 	// EnvBound reports whether the environment is the active source. Exactly one
-	// of EnvBound and File is in play: naming a file (--config or --profile)
-	// ignores the environment, and setting any configuration variable means the
-	// default config file is not read at all.
+	// of EnvBound and File is ever in play.
 	EnvBound bool
 	// fileKeys are the keys the loaded file supplied.
 	fileKeys map[string]bool
@@ -82,12 +78,8 @@ type Resolution struct {
 	flagChanged func(key string) bool
 }
 
-// NewResolution builds a Resolution describing what the CLI loaded: the
-// effective profile, the config file that was read (empty when none was), and
-// whether the environment is the active source. A file that cannot be read
-// contributes no keys.
-//
-// flagChanged may be nil, in which case no key is attributed to a flag.
+// NewResolution builds a Resolution from what the CLI loaded. An unreadable file
+// contributes no keys. flagChanged may be nil.
 func NewResolution(profile, file string, envBound bool, flagChanged func(key string) bool) Resolution {
 	if flagChanged == nil {
 		flagChanged = func(string) bool { return false }
@@ -101,17 +93,15 @@ func NewResolution(profile, file string, envBound bool, flagChanged func(key str
 	}
 }
 
-// IsDefaultProfile reports whether the default configuration is in effect.
+// IsDefaultProfile reports whether the default config is in effect.
 func (r Resolution) IsDefaultProfile() bool {
 	return IsDefault(r.Profile)
 }
 
-// SourceOf returns where key's effective value came from.
-//
-// Flags override individual keys; below them exactly one source supplies the
-// rest, either the environment or a file. The environment step is skipped
-// whenever a file is the active source, so a set but unused CONDUCTOR_SERVER_URL
-// is never reported as live.
+// SourceOf returns where key's effective value came from. Flags override
+// individual keys; below them one source supplies the rest. The environment is
+// skipped when a file is active, so a set but unused variable is never reported
+// as live.
 func (r Resolution) SourceOf(key string) Source {
 	if r.flagChanged(key) {
 		return Source{Kind: SourceFlag, Detail: key}
@@ -127,10 +117,8 @@ func (r Resolution) SourceOf(key string) Source {
 	return Source{Kind: SourceDefault}
 }
 
-// readKeys returns the top-level keys present in the YAML file at path. A
-// missing or malformed file yields no keys rather than an error: the CLI still
-// runs on flags and environment, and the caller only needs to know what the file
-// contributed.
+// readKeys returns the top-level keys in the YAML file at path. A missing or
+// malformed file yields no keys rather than an error.
 func readKeys(path string) map[string]bool {
 	keys := map[string]bool{}
 	if path == "" {
@@ -145,8 +133,7 @@ func readKeys(path string) map[string]bool {
 		return keys
 	}
 	for k, v := range raw {
-		// A key present but empty supplies nothing, and reporting it as the
-		// source would point at a file that did not set the value.
+		// A blank key supplies nothing; naming the file would misdirect.
 		if s, ok := v.(string); ok && s == "" {
 			continue
 		}

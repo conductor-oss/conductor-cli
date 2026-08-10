@@ -97,8 +97,8 @@ save_profile() {
     [ "$status" -eq 0 ]
 }
 
-# The default config lives at a fixed path inside HOME, so these tests run
-# against a throwaway HOME. Without it they would overwrite the developer's real
+# The default config lives at a fixed path inside HOME, so these tests use a
+# throwaway one. Without it they would overwrite the developer's real
 # ~/.conductor-cli/config.yaml.
 isolated_home() {
     local home
@@ -107,11 +107,9 @@ isolated_home() {
     echo "$home"
 }
 
-# Any configuration variable switches the CLI onto the environment and stops it
-# reading the config file. CI exports CONDUCTOR_SERVER_URL and
-# CONDUCTOR_SERVER_TYPE for the whole run, so a test that wants the file to be
-# the active source has to clear all of them — clearing only the one it cares
-# about leaves the others holding the CLI on the environment.
+# Any config variable switches the CLI onto the environment. CI exports
+# CONDUCTOR_SERVER_URL and CONDUCTOR_SERVER_TYPE for the whole run, so tests that
+# want the file to win must clear all of them, not just the one they care about.
 NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR_AUTH_KEY -u CONDUCTOR_AUTH_SECRET -u CONDUCTOR_AUTH_TOKEN"
 
 @test "8. Save with an empty profile name writes the default config" {
@@ -125,8 +123,7 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     rm -rf "$home"
 }
 
-# Regression guard for #98: the default profile (~/.conductor-cli/config.yaml)
-# was still read but could not be created or updated through the CLI.
+# Regression guard for #98: config.yaml was read but not writable.
 @test "9. Default profile can be managed through the CLI" {
     local home
     home="$(isolated_home)"
@@ -155,7 +152,7 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     [ "$status" -eq 0 ]
     [[ "$output" == *"config.yaml"* ]]
 
-    # The alias must not create a second, unreachable config-default.yaml.
+    # The alias must not create a second, unreachable file.
     [ -f "$home/.conductor-cli/config.yaml" ]
     [ ! -f "$home/.conductor-cli/config-default.yaml" ]
     rm -rf "$home"
@@ -200,14 +197,12 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
 @test "14. Setting an env var takes the config file out of play entirely" {
     local home
     home="$(isolated_home)"
-    # The file carries a token the environment does not. The environment sets
-    # only the server URL; the token must not be picked up from the file.
+    # The file carries a token the environment does not; it must not be used.
     printf 'server: http://from-file:8080/api\nauth-token: tok-from-file\nserver-type: OSS\n' \
         > "$home/.conductor-cli/config.yaml"
 
-    # Only the server URL comes from the environment. The auth variables are
-    # cleared because the Enterprise runner exports real ones, and a "****" from
-    # the environment is not evidence about the file either way.
+    # Clear the auth variables: the Enterprise runner exports real ones, and a
+    # "****" sourced from the environment says nothing about the file.
     run bash -c "env -u CONDUCTOR_AUTH_KEY -u CONDUCTOR_AUTH_SECRET -u CONDUCTOR_AUTH_TOKEN \
         HOME='$home' CONDUCTOR_SERVER_URL=http://from-env:9999/api ./conductor config show 2>&1"
     echo "Output: $output"
@@ -216,8 +211,7 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     [[ "$output" != *"from-file"* ]]
     [[ "$output" == *"config file not read"* ]]
 
-    # The file's auth-token must not be picked up: no value, and no attribution
-    # to the config file.
+    # The file's auth-token must not be picked up.
     token_row="$(echo "$output" | grep '^auth-token')"
     echo "auth-token row: $token_row"
     [[ "$token_row" != *"config.yaml"* ]]
@@ -258,7 +252,7 @@ NO_CONFIG_ENV="env -u CONDUCTOR_SERVER_URL -u CONDUCTOR_SERVER_TYPE -u CONDUCTOR
     [ "$status" -eq 0 ]
     [[ "$output" == *"from-flag"* ]]
     [[ "$output" == *"flag --server"* ]]
-    # The token still comes from the file: flags are per-key, not a source switch.
+    # Token still from the file: flags are per-key, not a source switch.
     [[ "$output" == *"****"* ]]
     rm -rf "$home"
 }

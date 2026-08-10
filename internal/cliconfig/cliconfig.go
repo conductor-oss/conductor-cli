@@ -11,13 +11,12 @@
  * specific language governing permissions and limitations under the License.
  */
 
-// Package cliconfig resolves which configuration file the CLI reads and writes,
-// and explains where each resolved setting came from.
+// Package cliconfig resolves which config file the CLI reads and writes, and
+// where each resolved setting came from.
 //
-// Both questions used to be answered in three different places — config save,
-// config delete and initConfig each rebuilt the file name inline — which is how
-// the default config.yaml ended up readable but unwritable (#98). Everything
-// funnels through Resolve here so a rule can only be changed in one place.
+// Save, delete and initConfig each rebuilt the file name inline, which is how
+// config.yaml ended up readable but unwritable (#98). They all go through
+// Resolve now.
 package cliconfig
 
 import (
@@ -28,21 +27,20 @@ import (
 // DirName is the CLI's configuration directory, relative to the user's home.
 const DirName = ".conductor-cli"
 
-// DefaultProfileName is the name that refers to the default configuration file.
-// It is an alias, not a profile of its own: `--profile default` and no --profile
-// at all select the same file and the same precedence rules.
+// DefaultProfileName is an alias for the default config file, not a profile of
+// its own: `--profile default` and no --profile select the same file.
 const DefaultProfileName = "default"
 
-// defaultFileName is the file the CLI loads when no named profile is selected.
-// viper would find this name on its own, but relying on that default is what
-// made the read path outlive the write path in #98, so it is stated explicitly.
+// defaultFileName is loaded when no named profile is selected. Stated
+// explicitly: relying on viper's identical built-in default is what let the read
+// path outlive the write path (#98).
 const defaultFileName = "config"
 
 // Keys are the settings the CLI resolves from flags, environment and file.
 var Keys = []string{"server", "server-type", "auth-key", "auth-secret", "auth-token"}
 
-// envVars maps a config key to the environment variable bound to it. It mirrors
-// the BindEnv calls in cmd/root.go; the two must agree or reported sources lie.
+// envVars mirrors the BindEnv calls in cmd/root.go. The two must agree, or
+// reported sources lie.
 var envVars = map[string]string{
 	"server":      "CONDUCTOR_SERVER_URL",
 	"server-type": "CONDUCTOR_SERVER_TYPE",
@@ -67,14 +65,14 @@ func Dir() (string, error) {
 	return filepath.Join(home, DirName), nil
 }
 
-// IsDefault reports whether profile names the default configuration. An empty
-// name and "default" both do.
+// IsDefault reports whether profile names the default config. "" and "default"
+// both do.
 func IsDefault(profile string) bool {
 	return profile == "" || profile == DefaultProfileName
 }
 
-// FileName returns the bare config file name for profile, without a directory
-// or extension — the form viper's SetConfigName expects.
+// FileName returns the bare file name for profile, as viper's SetConfigName
+// expects it.
 func FileName(profile string) string {
 	if IsDefault(profile) {
 		return defaultFileName
@@ -82,9 +80,8 @@ func FileName(profile string) string {
 	return "config-" + profile
 }
 
-// Resolve returns the absolute path of profile's config file within dir.
-// The default configuration is config.yaml; every named profile is
-// config-<profile>.yaml.
+// Resolve returns the path of profile's config file within dir: config.yaml for
+// the default, config-<profile>.yaml otherwise.
 func Resolve(dir, profile string) string {
 	return filepath.Join(dir, FileName(profile)+".yaml")
 }
@@ -94,15 +91,12 @@ func EnvVar(key string) string {
 	return envVars[key]
 }
 
-// EnvActive reports whether any configuration environment variable is set.
+// EnvActive reports whether any config environment variable is set. The
+// environment is all-or-nothing: one variable selects it for everything, and the
+// default config file is not read.
 //
-// The environment is an all-or-nothing source: if it supplies anything, it
-// supplies everything, and the default config file is not read. Blending the two
-// per key meant a user could not answer "where is this value coming from" without
-// checking both, so setting one variable now selects the environment outright.
-//
-// CONDUCTOR_PROFILE is deliberately excluded — it chooses a config file rather
-// than carrying a setting of its own.
+// CONDUCTOR_PROFILE is excluded — it chooses a file rather than carrying a
+// setting.
 func EnvActive() bool {
 	for _, env := range envVars {
 		if os.Getenv(env) != "" {
@@ -117,8 +111,8 @@ func IsSecret(key string) bool {
 	return secretKeys[key]
 }
 
-// Mask renders value safely for display. Empty stays empty so that "unset" and
-// "set but hidden" remain distinguishable.
+// Mask hides a secret for display. Empty stays empty, so "unset" and "set but
+// hidden" stay distinguishable.
 func Mask(key, value string) string {
 	if value != "" && IsSecret(key) {
 		return "****"
@@ -126,13 +120,9 @@ func Mask(key, value string) string {
 	return value
 }
 
-// StrayDefaultFile returns the path of a config-default.yaml in dir, or "" when
-// there is none.
-//
-// "default" now aliases config.yaml, so a literal config-default.yaml is
-// unreachable — earlier builds would happily create one via
-// `config save --profile default`. It is reported so the CLI can warn instead
-// of silently ignoring settings the user believes are active.
+// StrayDefaultFile returns the path of a config-default.yaml in dir, or "".
+// Earlier builds could create one; it is unreachable now that "default" aliases
+// config.yaml, so callers warn rather than ignore it silently.
 func StrayDefaultFile(dir string) string {
 	path := filepath.Join(dir, "config-"+DefaultProfileName+".yaml")
 	if _, err := os.Stat(path); err != nil {
