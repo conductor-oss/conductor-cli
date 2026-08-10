@@ -93,11 +93,6 @@ func NewResolution(profile, file string, envBound bool, flagChanged func(key str
 	}
 }
 
-// IsDefaultProfile reports whether the default config is in effect.
-func (r Resolution) IsDefaultProfile() bool {
-	return IsDefault(r.Profile)
-}
-
 // SourceOf returns where key's effective value came from. Flags override
 // individual keys; below them one source supplies the rest. The environment is
 // skipped when a file is active, so a set but unused variable is never reported

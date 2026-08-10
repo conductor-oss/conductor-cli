@@ -744,8 +744,7 @@ conductor config show
 ```
 
 ```
-Profile: default
-Source:  /Users/you/.conductor-cli/config.yaml
+Source: /Users/you/.conductor-cli/config.yaml
 
 KEY           VALUE                       SOURCE
 server        http://localhost:8080/api   config.yaml
@@ -755,21 +754,11 @@ auth-secret   -                           default
 auth-token    ****                        config.yaml
 ```
 
-Configuration comes from exactly one source, never a mix. Flags override individual settings.
-
-| Order | Source | Example |
-|-------|--------|---------|
-| 1 | Flags | `--server`, `--auth-token` |
-| 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
-| 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
-| 4 | The default config file | `~/.conductor-cli/config.yaml` |
-
-So exporting `CONDUCTOR_SERVER_URL` switches the whole configuration onto the environment — an
-auth token sitting in `config.yaml` is not used, and `config show` says so:
+When an environment variable is set, the config file is not read at all — see
+[Configuration Precedence](#configuration-precedence):
 
 ```
-Profile: default
-Source:  environment variables (config file not read)
+Source: environment variables (config file not read)
 
 KEY           VALUE                      SOURCE
 server        http://from-env:9999/api   env CONDUCTOR_SERVER_URL
@@ -803,11 +792,17 @@ conductor --profile nonexistent workflow list
 
 ### Configuration Precedence
 
-The CLI can be configured using command-line flags, environment variables, or a configuration file. Configuration is handled with the following precedence (highest to lowest):
+Configuration comes from exactly one source, never a mix. Flags override individual settings.
 
-1. Command-line flags
-2. Environment variables
-3. Configuration file
+| Order | Source | Example |
+|-------|--------|---------|
+| 1 | Flags | `--server`, `--auth-token` |
+| 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
+| 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
+| 4 | The default config file | `~/.conductor-cli/config.yaml` |
+
+So exporting `CONDUCTOR_SERVER_URL` switches everything onto the environment. A token in
+`config.yaml` is not used. Run `conductor config show` to see the active source.
 
 ### Command-line Flags
 

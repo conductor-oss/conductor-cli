@@ -502,20 +502,16 @@ Examples:
 			return nil
 		}
 
-		if res.IsDefaultProfile() {
-			fmt.Printf("Profile: default\n")
-		} else {
-			fmt.Printf("Profile: %s\n", res.Profile)
-		}
+		// Only the active source is named. Printing a profile alongside
+		// "environment variables" contradicts itself, because the profile
+		// selects a file the CLI did not read.
 		switch {
 		case res.EnvBound:
-			// Say the file was skipped; a bare "(none)" beside an existing
-			// config.yaml reads like a bug.
-			fmt.Printf("Source:  environment variables (config file not read)\n")
+			fmt.Printf("Source: environment variables (config file not read)\n")
 		case res.File != "":
-			fmt.Printf("Source:  %s\n", res.File)
+			fmt.Printf("Source: %s\n", res.File)
 		default:
-			fmt.Printf("Source:  none (built-in defaults)\n")
+			fmt.Printf("Source: built-in defaults\n")
 		}
 		fmt.Println()
 
