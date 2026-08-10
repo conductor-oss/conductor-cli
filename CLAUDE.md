@@ -31,7 +31,9 @@ installing (CLI only). Diagnose with `which conductor` and `brew info --cask con
 
 ## Authentication
 
-**Three methods** (precedence: command-line flags > environment variables > config file):
+**Three methods.** Command-line flags override individual settings. Below them, credentials come
+from a single source — the environment or a config file, never both at once (see
+[Profile Management](#profile-management)):
 
 | Method | Command-line Flags | Environment Variables |
 |--------|-------------------|----------------------|
@@ -68,21 +70,43 @@ Manage multiple environments (dev, staging, prod) using profiles.
 | Operation | Command | Result |
 |-----------|---------|--------|
 | **Save named profile** | `conductor config save --profile prod` | Creates `~/.conductor-cli/config-prod.yaml` |
-| **Save (prompted)** | `conductor config save` | Prompts `Profile name:`, then creates `config-<name>.yaml` |
+| **Save default** | `conductor config save` | Prompts `Profile name (empty for default):`; Enter creates `config.yaml` |
+| **Save default (no prompt)** | `conductor config save --profile default` | Creates `config.yaml` |
 | **Use profile (flag)** | `conductor --profile prod workflow list` | Loads `config-prod.yaml` |
 | **Use profile (env)** | `CONDUCTOR_PROFILE=prod conductor workflow list` | Loads `config-prod.yaml` |
+| **Inspect what is active** | `conductor config show` | Prints each value and where it came from |
 
 **Precedence:** `--profile` flag > `CONDUCTOR_PROFILE` env var > default config
 
 **Profile directory:** `~/.conductor-cli/`
-- `config.yaml` - default profile
+- `config.yaml` - default configuration
 - `config-<name>.yaml` - named profiles
 
-**`config save` always writes a named profile.** It has no code path that creates the default
-`config.yaml` — without `--profile` it prompts for a name and errors if the name is empty. An
-existing `config.yaml` is still *loaded* as the default, but cannot be created or updated through
-the CLI (see conductor-cli issue #98). To use the default config, write `~/.conductor-cli/config.yaml`
-by hand.
+**`default` is an alias for the default configuration, not a profile of its own.** An empty
+profile name and `--profile default` both mean `~/.conductor-cli/config.yaml`, for `save`,
+`delete` and profile selection alike. The CLI never creates `config-default.yaml`; if one exists
+from an older build it is ignored, and `config list`/`config show` warn that it is unused.
+
+**Configuration comes from exactly one source, never a mix.** Flags override individual settings.
+
+| Order | Source | Example |
+|-------|--------|---------|
+| 1 | Flags | `--server`, `--auth-token` |
+| 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
+| 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
+| 4 | The default config file | `~/.conductor-cli/config.yaml` |
+
+So exporting `CONDUCTOR_SERVER_URL` switches everything onto the environment. A token in
+`config.yaml` is no longer used.
+
+`CONDUCTOR_PROFILE` is different. It selects which file to read, so it does not switch the CLI to
+the environment.
+
+Setting one variable therefore switches the whole configuration onto the environment: if
+`CONDUCTOR_SERVER_URL` is set and `config.yaml` holds an auth token, that token is *not* used.
+`CONDUCTOR_PROFILE` does not count — it selects a file rather than carrying a setting.
+
+Run `conductor config show` to see the active source and where each value came from.
 
 ## Command Reference
 
@@ -192,12 +216,17 @@ Columns: NAME, EXECUTABLE, DESCRIPTION, OWNER, TIMEOUT POLICY, TIMEOUT (s), RETR
 |---------|-------------|---------------|----------------|---------|
 | `config save` | Interactively save configuration | None | `--profile` | `conductor config save` or `conductor config save --profile production` |
 | `config list` | List all configuration profiles | None | None | `conductor config list` |
+| `config show` | Show the effective config and each value's source | None | `--json`, `--show-secrets` | `conductor config show` |
 | `config delete [profile]` | Delete configuration file | None | `--profile`, `-y` | `conductor config delete production` or `conductor config delete --profile production -y` |
 
 **Notes:**
-- `config save`: Interactive prompts for server URL, server type, and authentication method. Press Enter to keep existing values. Always saves to a named profile `config-<name>.yaml`; `--profile <name>` supplies the name, and without it the command prompts for one (empty input is an error). It cannot write the default `config.yaml`.
+- `config save`: Interactive prompts for server URL, server type, and authentication method. Press Enter to keep existing values. `--profile <name>` writes `config-<name>.yaml`; an empty name at the prompt, or `--profile default`, writes the default `config.yaml`.
 - `config list`: Shows all profiles. Default config shown as "default", named profiles show as profile name only.
-- `config delete`: Profile can be specified as positional arg or via `--profile` flag. Use `-y` to skip confirmation prompt.
+- `config show`: Prints `KEY`, `VALUE` and `SOURCE` for every setting, where source is the flag, the environment variable, the config file, or `default`. Secrets are masked unless `--show-secrets` is passed.
+- `config delete`: Profile can be specified as positional arg or via `--profile` flag. Use `default` to delete the default `config.yaml`. Use `-y` to skip confirmation prompt.
+
+**Table Output (config show):**
+Columns: KEY, VALUE, SOURCE
 
 ### Webhook Commands
 

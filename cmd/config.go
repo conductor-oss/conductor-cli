@@ -16,16 +16,25 @@ package cmd
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"golang.org/x/term"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
+	"text/tabwriter"
 
+	"github.com/conductor-oss/conductor-cli/internal/cliconfig"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
+)
+
+// Flags for `config show`.
+var (
+	configShowJSON    bool
+	configShowSecrets bool
 )
 
 var configCmd = &cobra.Command{
@@ -37,39 +46,41 @@ var configCmd = &cobra.Command{
 var configSaveCmd = &cobra.Command{
 	Use:   "save",
 	Short: "Save configuration to file (interactive)",
-	Long: `Interactively configure and save server and authentication settings to a named profile.
+	Long: `Interactively configure and save server and authentication settings.
 
-The configuration will be saved to ~/.conductor-cli/config-<profile>.yaml.
-A profile name is required — you will be prompted if --profile is not specified.
+Named profiles are saved to ~/.conductor-cli/config-<profile>.yaml. The default
+configuration is saved to ~/.conductor-cli/config.yaml — leave the profile name
+empty at the prompt, or pass --profile default.
 
 If a configuration already exists, you can press Enter to keep existing values.
 
 Examples:
-  # Interactively save (will prompt for profile name)
+  # Save the default configuration (press Enter at the profile prompt)
   conductor config save
 
-  # Save to a named profile directly
+  # Same thing, without the prompt
+  conductor config save --profile default
+
+  # Save to a named profile
   conductor config save --profile production
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		profileName := profile
 
-		if profileName == "" {
+		// An empty answer means the default config rather than an error (#98).
+		if profileName == "" && !cmd.Flags().Changed("profile") {
 			reader := bufio.NewReader(os.Stdin)
-			fmt.Fprintf(os.Stdout, "Profile name: ")
+			fmt.Fprintf(os.Stdout, "Profile name (empty for default): ")
 			input, _ := reader.ReadString('\n')
 			profileName = strings.TrimSpace(input)
-			if profileName == "" {
-				return fmt.Errorf("profile name is required")
-			}
 		}
 
-		if err := interactiveSaveConfig(profileName); err != nil {
+		configPath, err := interactiveSaveConfig(profileName)
+		if err != nil {
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		configFileName := fmt.Sprintf("config-%s.yaml", profileName)
-		fmt.Fprintf(os.Stdout, "✓ Configuration saved to ~/.conductor-cli/%s\n", configFileName)
+		fmt.Fprintf(os.Stdout, "✓ Configuration saved to %s\n", configPath)
 		return nil
 	},
 	SilenceUsage: true,
@@ -80,25 +91,26 @@ var configListCmd = &cobra.Command{
 	Short: "List all configuration profiles",
 	Long: `List all configuration profiles in ~/.conductor-cli directory.
 
-Shows all named profiles (config-<profile>.yaml).
+Shows the default configuration (config.yaml) as "default", plus every named
+profile (config-<profile>.yaml).
 
 Examples:
   # List all config profiles
   conductor config list
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		home, err := os.UserHomeDir()
+		configDir, err := cliconfig.Dir()
 		if err != nil {
 			return err
 		}
-
-		configDir := filepath.Join(home, ".conductor-cli")
 
 		// Check if config directory exists
 		if _, err := os.Stat(configDir); os.IsNotExist(err) {
 			fmt.Println("No configuration files found")
 			return nil
 		}
+
+		warnStrayDefaultFile(configDir)
 
 		// Read all files in config directory
 		files, err := os.ReadDir(configDir)
@@ -125,6 +137,11 @@ Examples:
 			if strings.HasPrefix(name, "config-") && strings.HasSuffix(name, ".yaml") {
 				profileName := strings.TrimPrefix(name, "config-")
 				profileName = strings.TrimSuffix(profileName, ".yaml")
+				// Unreachable: "default" refers to config.yaml. Listing it would
+				// print "default" twice. warnStrayDefaultFile explains it.
+				if cliconfig.IsDefault(profileName) {
+					continue
+				}
 				fmt.Println(profileName)
 				hasConfigs = true
 			}
@@ -157,12 +174,10 @@ Examples:
   conductor config delete production -y
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		home, err := os.UserHomeDir()
+		configDir, err := cliconfig.Dir()
 		if err != nil {
 			return err
 		}
-
-		configDir := filepath.Join(home, ".conductor-cli")
 
 		// Get profile name from either positional arg or --profile flag
 		var profileName string
@@ -172,12 +187,13 @@ Examples:
 			profileName = profile
 		}
 
+		// Deleting always names its target; an empty name is too easy to hit by
+		// accident.
 		if profileName == "" {
-			return fmt.Errorf("profile name is required (use positional argument or --profile flag)")
+			return fmt.Errorf("profile name is required (use positional argument or --profile flag, or 'default' for the default config)")
 		}
 
-		configFileName := fmt.Sprintf("config-%s.yaml", profileName)
-		configPath := filepath.Join(configDir, configFileName)
+		configPath := cliconfig.Resolve(configDir, profileName)
 
 		// Check if config file exists
 		if _, err := os.Stat(configPath); os.IsNotExist(err) {
@@ -210,25 +226,20 @@ Examples:
 	SilenceUsage: true,
 }
 
-func interactiveSaveConfig(profileName string) error {
-	if profileName == "" {
-		return fmt.Errorf("profile name is required")
-	}
-
-	home, err := os.UserHomeDir()
+// interactiveSaveConfig prompts for settings and writes profileName's config
+// file, returning the path. An empty name and "default" both write config.yaml.
+func interactiveSaveConfig(profileName string) (string, error) {
+	configDir, err := cliconfig.Dir()
 	if err != nil {
-		return err
+		return "", err
 	}
-
-	configDir := filepath.Join(home, ".conductor-cli")
 
 	// Create config directory if it doesn't exist
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return err
+		return "", err
 	}
 
-	configFileName := fmt.Sprintf("config-%s.yaml", profileName)
-	configPath := filepath.Join(configDir, configFileName)
+	configPath := cliconfig.Resolve(configDir, profileName)
 
 	// Load existing config if it exists
 	existingConfig := make(map[string]string)
@@ -366,10 +377,13 @@ func interactiveSaveConfig(profileName string) error {
 
 	data, err := yaml.Marshal(configData)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return os.WriteFile(configPath, data, 0600)
+	if err := os.WriteFile(configPath, data, 0600); err != nil {
+		return "", err
+	}
+	return configPath, nil
 }
 
 var ErrTooLong = errors.New("input exceeds limit")
@@ -419,9 +433,109 @@ func ReadLineRaw(limit int) (string, error) {
 	}
 }
 
+// warnStrayDefaultFile reports a config-default.yaml, which no longer loads.
+// Ignoring one silently leaves the user believing its settings are active.
+func warnStrayDefaultFile(configDir string) {
+	if stray := cliconfig.StrayDefaultFile(configDir); stray != "" {
+		fmt.Fprintf(os.Stderr,
+			"Warning: %s is not used; \"default\" refers to config.yaml. Rename or delete it to silence this warning.\n",
+			stray)
+	}
+}
+
+var configShowCmd = &cobra.Command{
+	Use:   "show",
+	Short: "Show the effective configuration and where each value came from",
+	Long: `Show the configuration the CLI actually resolved, with the origin of each value.
+
+Command-line flags override individual settings. Everything else comes from a
+single source, never a mix of two:
+
+  --config <path> or --profile <name>   that file; environment ignored
+  any CONDUCTOR_* variable set          the environment; the config file is not read
+  otherwise                             ~/.conductor-cli/config.yaml
+
+Secrets are masked unless --show-secrets is passed.
+
+Examples:
+  # Show the effective configuration
+  conductor config show
+
+  # Show what a named profile resolves to
+  conductor --profile production config show
+
+  # Machine-readable output
+  conductor config show --json
+`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if configDir, err := cliconfig.Dir(); err == nil {
+			warnStrayDefaultFile(configDir)
+		}
+
+		res := activeResolution(cmd)
+
+		type entry struct {
+			Key    string `json:"key"`
+			Value  string `json:"value"`
+			Source string `json:"source"`
+		}
+		entries := make([]entry, 0, len(cliconfig.Keys))
+		for _, key := range cliconfig.Keys {
+			value := viper.GetString(key)
+			if !configShowSecrets {
+				value = cliconfig.Mask(key, value)
+			}
+			entries = append(entries, entry{Key: key, Value: value, Source: res.SourceOf(key).ShortString()})
+		}
+
+		if configShowJSON {
+			payload := struct {
+				Profile string  `json:"profile"`
+				File    string  `json:"file"`
+				Values  []entry `json:"values"`
+			}{Profile: res.Profile, File: res.File, Values: entries}
+			out, err := json.MarshalIndent(payload, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Println(string(out))
+			return nil
+		}
+
+		// Only the active source is named. Printing a profile alongside
+		// "environment variables" contradicts itself, because the profile
+		// selects a file the CLI did not read.
+		switch {
+		case res.EnvBound:
+			fmt.Printf("Source: environment variables\n")
+		case res.File != "":
+			fmt.Printf("Source: %s\n", res.File)
+		default:
+			fmt.Printf("Source: built-in defaults\n")
+		}
+		fmt.Println()
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
+		for _, e := range entries {
+			value := e.Value
+			if value == "" {
+				value = "-"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\n", e.Key, value, e.Source)
+		}
+		return w.Flush()
+	},
+	SilenceUsage: true,
+}
+
 func init() {
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(configSaveCmd)
 	configCmd.AddCommand(configListCmd)
 	configCmd.AddCommand(configDeleteCmd)
+	configCmd.AddCommand(configShowCmd)
+
+	configShowCmd.Flags().BoolVar(&configShowJSON, "json", false, "Output as JSON")
+	configShowCmd.Flags().BoolVar(&configShowSecrets, "show-secrets", false, "Display secret values instead of masking them")
 }

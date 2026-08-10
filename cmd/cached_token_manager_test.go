@@ -49,9 +49,17 @@ func TestGetConfigPath(t *testing.T) {
 		wantSuffix  string
 	}{
 		{
-			name:        "empty profile returns error",
+			// This used to return an error, so with no profile selected the
+			// cached token had no file to be written to and was refetched on
+			// every run (#98).
+			name:        "empty profile is the default config",
 			profileName: "",
-			wantSuffix:  "",
+			wantSuffix:  filepath.Join(".conductor-cli", "config.yaml"),
+		},
+		{
+			name:        "default is an alias for the same file",
+			profileName: "default",
+			wantSuffix:  filepath.Join(".conductor-cli", "config.yaml"),
 		},
 		{
 			name:        "named profile",
@@ -68,12 +76,6 @@ func TestGetConfigPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := getConfigPath(tt.profileName)
-			if tt.profileName == "" {
-				if err == nil {
-					t.Fatalf("getConfigPath(%q) expected error, got path %q", tt.profileName, got)
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("getConfigPath(%q) error: %v", tt.profileName, err)
 			}
@@ -82,6 +84,105 @@ func TestGetConfigPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTokenCachePath(t *testing.T) {
+	// Each case runs against its own HOME so the developer's real
+	// ~/.conductor-cli is never read or written.
+	newHome := func(t *testing.T, withDefaultConfig bool) string {
+		t.Helper()
+		home := t.TempDir()
+		dir := filepath.Join(home, ".conductor-cli")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if withDefaultConfig {
+			if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("server: http://x\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return home
+	}
+
+	t.Run("environment as the active source disables caching", func(t *testing.T) {
+		// The config file exists, but the environment supplied this run's
+		// credentials. Writing the token into that file would store it against
+		// the identity the file holds: a later run with the environment unset
+		// would pair the file's key and secret with a token minted from
+		// different credentials.
+		home := newHome(t, true)
+		t.Setenv("HOME", home)
+
+		got, err := tokenCachePath("", true)
+		if err != nil {
+			t.Fatalf("tokenCachePath with envActive error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("tokenCachePath with envActive = %q, want empty so the file is not written", got)
+		}
+	})
+
+	t.Run("default config absent disables caching", func(t *testing.T) {
+		// Creating the file would leave a config.yaml on someone who runs from
+		// environment variables, and it would then supply every setting on a
+		// later run with the environment unset.
+		t.Setenv("HOME", newHome(t, false))
+
+		got, err := tokenCachePath("", false)
+		if err != nil {
+			t.Fatalf("tokenCachePath(\"\") error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("tokenCachePath(\"\") = %q, want empty so no file is created", got)
+		}
+	})
+
+	t.Run("default config present is cached to", func(t *testing.T) {
+		home := newHome(t, true)
+		t.Setenv("HOME", home)
+
+		got, err := tokenCachePath("", false)
+		if err != nil {
+			t.Fatalf("tokenCachePath(\"\") error: %v", err)
+		}
+		want := filepath.Join(home, ".conductor-cli", "config.yaml")
+		if got != want {
+			t.Errorf("tokenCachePath(\"\") = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("default alias behaves like an empty name", func(t *testing.T) {
+		t.Setenv("HOME", newHome(t, false))
+
+		empty, err := tokenCachePath("", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		alias, err := tokenCachePath("default", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if empty != alias {
+			t.Errorf("tokenCachePath(\"default\") = %q, want %q", alias, empty)
+		}
+	})
+
+	t.Run("named profile is cached to even when its file is missing", func(t *testing.T) {
+		// initConfig exits when a named profile's file is absent, so reaching
+		// here means it exists. The guard must not extend to named profiles, or
+		// key/secret users would silently lose token caching.
+		home := newHome(t, false)
+		t.Setenv("HOME", home)
+
+		got, err := tokenCachePath("production", false)
+		if err != nil {
+			t.Fatalf("tokenCachePath(production) error: %v", err)
+		}
+		want := filepath.Join(home, ".conductor-cli", "config-production.yaml")
+		if got != want {
+			t.Errorf("tokenCachePath(production) = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestReadConfigFile(t *testing.T) {
