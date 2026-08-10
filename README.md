@@ -627,6 +627,7 @@ If a configuration already exists, you can press Enter to keep existing values (
 conductor config save
 
 # Example interaction:
+# Profile name (empty for default): ← Press Enter for ~/.conductor-cli/config.yaml
 # Server URL [http://localhost:8080/api]: https://developer.conductorcloud.com
 # Server type (OSS/Enterprise) [Enterprise]: ← Press Enter to keep
 #
@@ -733,11 +734,37 @@ This shows:
 - `default` - for the default `config.yaml` file
 - Profile names (e.g., `production`, `staging`) - for named profiles like `config-production.yaml`
 
+`default` is an alias for `config.yaml`, so `--profile default` and an empty profile name select
+the same file. The CLI never creates a `config-default.yaml`.
+
+**Seeing which settings are actually in effect:**
+
+```bash
+conductor config show
+```
+
+```
+Profile: default
+File:    /Users/you/.conductor-cli/config.yaml
+
+KEY           VALUE                      SOURCE
+server        http://from-env:9999/api   env CONDUCTOR_SERVER_URL
+server-type   OSS                        config.yaml
+auth-key      -                          default
+auth-secret   -                          default
+auth-token    ****                       config.yaml
+```
+
+Environment variables and the default config merge key by key: the environment wins for the keys
+it sets, and the config file supplies the rest. Selecting a named profile with `--profile` turns
+the environment off, so the profile wins. Secrets are masked unless you pass `--show-secrets`;
+`--json` prints the same data for scripts.
+
 **Deleting Profiles:**
 
 ```bash
-# Delete default config (with confirmation prompt)
-conductor config delete
+# Delete the default config (with confirmation prompt)
+conductor config delete default
 
 # Delete named profile
 conductor config delete production

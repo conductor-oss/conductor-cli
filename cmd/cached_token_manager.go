@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/conductor-oss/conductor-cli/internal/cliconfig"
 	"github.com/conductor-sdk/conductor-go/sdk/authentication"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	log "github.com/sirupsen/logrus"
@@ -193,19 +193,11 @@ func getCurrentTimeUnix() int64 {
 }
 
 // getConfigPath returns the path to the config file for the given profile.
-// Profile name is required — returns an error if empty.
+// An empty name, like "default", resolves to the default config.yaml.
 func getConfigPath(profileName string) (string, error) {
-	if profileName == "" {
-		return "", fmt.Errorf("profile name is required for config path resolution")
-	}
-
-	home, err := os.UserHomeDir()
+	configDir, err := cliconfig.Dir()
 	if err != nil {
 		return "", err
 	}
-
-	configDir := filepath.Join(home, ".conductor-cli")
-	configFileName := fmt.Sprintf("config-%s.yaml", profileName)
-
-	return filepath.Join(configDir, configFileName), nil
+	return cliconfig.Resolve(configDir, profileName), nil
 }

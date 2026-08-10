@@ -19,10 +19,10 @@ import (
 	"io"
 	stdlog "log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/conductor-oss/conductor-cli/internal"
+	"github.com/conductor-oss/conductor-cli/internal/cliconfig"
 	"github.com/conductor-oss/conductor-cli/internal/transport"
 	"github.com/conductor-oss/conductor-cli/internal/updater"
 	"github.com/conductor-sdk/conductor-go/sdk/client"
@@ -181,18 +181,21 @@ var rootCmd = &cobra.Command{
 			cachedToken := viper.GetString("cached-token")
 			cachedExpiry := viper.GetInt64("cached-token-expiry")
 
-			// Determine config path for saving cached token
-			activeProfile := profile
-			if activeProfile == "" {
-				activeProfile = os.Getenv("CONDUCTOR_PROFILE")
+			// Determine config path for saving cached token. initConfig already
+			// resolved the profile, so reuse it rather than recomputing.
+			configPath, err := getConfigPath(activeProfile)
+			if err != nil {
+				return fmt.Errorf("failed to get config path: %w", err)
 			}
 
-			configPath := ""
-			if activeProfile != "" {
-				var err error
-				configPath, err = getConfigPath(activeProfile)
-				if err != nil {
-					return fmt.Errorf("failed to get config path: %w", err)
+			// Caching into the default config is only safe when that file
+			// already exists. Creating it here would plant a config.yaml on
+			// users who deliberately run on environment variables alone, and
+			// that file would then start winning over their environment for
+			// every key it holds.
+			if cliconfig.IsDefault(activeProfile) {
+				if _, statErr := os.Stat(configPath); statErr != nil {
+					configPath = ""
 				}
 			}
 
@@ -255,61 +258,69 @@ func Execute(ctx context.Context) {
 	}
 }
 
+// activeProfile is the profile initConfig settled on: the --profile flag, else
+// CONDUCTOR_PROFILE, else empty for the default configuration. `config show`
+// reports against it.
+var activeProfile string
+
+// loadedConfigFile is the config file initConfig actually read, or "" when none
+// was found.
+var loadedConfigFile string
+
+// effectiveProfile resolves which profile the CLI should use. The --profile flag
+// takes precedence over the CONDUCTOR_PROFILE environment variable.
+func effectiveProfile() string {
+	if profile != "" {
+		return profile
+	}
+	return os.Getenv("CONDUCTOR_PROFILE")
+}
+
+// isSavingConfig reports whether this invocation is `config save`, which is
+// allowed to name a profile whose file does not exist yet.
+func isSavingConfig() bool {
+	for i, arg := range os.Args {
+		if arg == "config" && i+1 < len(os.Args) && os.Args[i+1] == "save" {
+			return true
+		}
+	}
+	return false
+}
+
 func initConfig() {
+	activeProfile = effectiveProfile()
+
 	if cfgFile != "" {
 		viper.SetConfigFile(cfgFile)
 	} else {
-		home, err := os.UserHomeDir()
+		configDir, err := cliconfig.Dir()
 		cobra.CheckErr(err)
 
 		// Use config directory structure: ~/.conductor-cli/config.yaml or config-<profile>.yaml
-		configDir := filepath.Join(home, ".conductor-cli")
 		viper.AddConfigPath(configDir)
 		viper.SetConfigType("yaml")
 
-		// Determine which profile to use: --profile flag takes precedence over CONDUCTOR_PROFILE env var
-		activeProfile := profile
-		if activeProfile == "" {
-			activeProfile = os.Getenv("CONDUCTOR_PROFILE")
+		// A named profile must already exist; the default configuration is
+		// optional, since the CLI also runs on flags and environment alone.
+		if !cliconfig.IsDefault(activeProfile) && !isSavingConfig() {
+			configPath := cliconfig.Resolve(configDir, activeProfile)
+			if _, err := os.Stat(configPath); os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Error: Profile '%s' doesn't exist (expected file: %s)\n", activeProfile, configPath)
+				os.Exit(1)
+			}
 		}
 
-		// Use profile-specific config if profile is set
-		if activeProfile != "" {
-			configName := fmt.Sprintf("config-%s", activeProfile)
-			configPath := filepath.Join(configDir, configName+".yaml")
-
-			// Check if profile config exists (skip check if we're saving a new config)
-			isSavingConfig := false
-			for i, arg := range os.Args {
-				if arg == "config" && i+1 < len(os.Args) && os.Args[i+1] == "save" {
-					isSavingConfig = true
-					break
-				}
-			}
-
-			if !isSavingConfig {
-				if _, err := os.Stat(configPath); os.IsNotExist(err) {
-					fmt.Fprintf(os.Stderr, "Error: Profile '%s' doesn't exist (expected file: %s)\n", activeProfile, configPath)
-					os.Exit(1)
-				}
-			}
-
-			viper.SetConfigName(configName)
-		}
-		// When no profile is active, no config file is loaded.
-		// The CLI relies on environment variables and CLI flags only.
+		// Name the file explicitly, including "config" for the default. viper
+		// would find that name on its own, and relying on that is precisely how
+		// the default config kept loading after `config save` lost the ability
+		// to write it (#98).
+		viper.SetConfigName(cliconfig.FileName(activeProfile))
 	}
 
-	// Only bind environment variables when no profile is active.
-	// When a profile is explicitly selected, the profile config should take
-	// precedence over ambient environment variables. CLI flags (via BindPFlag)
-	// still override everything regardless.
-	activeProfile := profile
-	if activeProfile == "" {
-		activeProfile = os.Getenv("CONDUCTOR_PROFILE")
-	}
-
-	if activeProfile == "" {
+	// Bind environment variables only for the default configuration. Selecting a
+	// named profile is an explicit choice, so it wins over ambient environment;
+	// CLI flags (via BindPFlag) still override everything either way.
+	if cliconfig.IsDefault(activeProfile) {
 		viper.SetEnvPrefix("CONDUCTOR")
 		viper.AutomaticEnv()
 
@@ -320,31 +331,49 @@ func initConfig() {
 		viper.BindEnv("server-type", "CONDUCTOR_SERVER_TYPE")
 	}
 
-	// Determine if env vars are the active config source (no profile selected)
-	usingEnvVars := profile == "" && os.Getenv("CONDUCTOR_PROFILE") == ""
-
-	if viper.GetBool("verbose") && usingEnvVars {
-		for _, ev := range []string{"CONDUCTOR_SERVER_URL", "CONDUCTOR_AUTH_TOKEN", "CONDUCTOR_AUTH_KEY", "CONDUCTOR_AUTH_SECRET", "CONDUCTOR_SERVER_TYPE"} {
-			if v := os.Getenv(ev); v != "" {
-				switch ev {
-				case "CONDUCTOR_AUTH_TOKEN", "CONDUCTOR_AUTH_SECRET":
-					fmt.Fprintf(os.Stdout, "Using env var %s: (set)\n", ev)
-				default:
-					fmt.Fprintf(os.Stdout, "Using env var %s: %s\n", ev, v)
-				}
-			}
-		}
-	}
-
+	// A missing config file is not an error: the CLI also runs on flags and
+	// environment alone. Only a file that was read counts as a source.
 	if err := viper.ReadInConfig(); err == nil {
-		if viper.GetBool("verbose") {
-			// When CONDUCTOR_SERVER_URL env var is active, suppress the config file message
-			// to avoid confusion about which source the server URL came from.
-			if !usingEnvVars || os.Getenv("CONDUCTOR_SERVER_URL") == "" {
-				fmt.Fprintf(os.Stdout, "Using config file: %s\n", viper.ConfigFileUsed())
-			}
-		}
+		loadedConfigFile = viper.ConfigFileUsed()
 	}
+
+	if viper.GetBool("verbose") {
+		reportConfigSources()
+	}
+}
+
+// reportConfigSources prints where each setting came from. It reports the file
+// and the environment together: they merge key by key for the default
+// configuration, so naming only one of them hides the other's contribution.
+func reportConfigSources() {
+	res := cliconfig.NewResolution(activeProfile, loadedConfigFile, rootFlagChanged)
+
+	if res.File != "" {
+		fmt.Fprintf(os.Stdout, "Using config file: %s\n", res.File)
+	}
+	for _, key := range cliconfig.Keys {
+		src := res.SourceOf(key)
+		if src.Kind == cliconfig.SourceDefault {
+			continue
+		}
+		// The full path is already on the "Using config file" line above.
+		fmt.Fprintf(os.Stdout, "Using %s: %s (%s)\n", key, cliconfig.Mask(key, viper.GetString(key)), src.ShortString())
+	}
+}
+
+// rootFlagChanged reports whether the user passed the flag for key.
+func rootFlagChanged(key string) bool {
+	f := rootCmd.PersistentFlags().Lookup(key)
+	return f != nil && f.Changed
+}
+
+// activeResolution describes the configuration state this invocation resolved,
+// including which flags cmd actually saw.
+func activeResolution(cmd *cobra.Command) cliconfig.Resolution {
+	return cliconfig.NewResolution(activeProfile, loadedConfigFile, func(key string) bool {
+		f := cmd.Flags().Lookup(key)
+		return f != nil && f.Changed
+	})
 }
 
 func init() {
