@@ -41,7 +41,7 @@ env:
   # TODO(#105): revisit pinning to the newest published RC instead. RCs are cut
   # from main, so an RC is a main snapshot, and pulling a cached jar is faster and
   # decouples this repo's CI from the server repo's build health. See the tracking
-  # issue linked in ADR-0001.
+  # issue; the decision itself is recorded in ADR-0002.
   CONDUCTOR_SERVER_REF: 'main'
   # Scratch directory the local server is started from. `conductor server start`
   # writes its SQLite database relative to the working directory with no flag to

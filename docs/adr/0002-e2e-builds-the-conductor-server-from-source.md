@@ -69,8 +69,21 @@ Any of these should prompt switching back to a pin:
 
 The workflow keeps a single knob for this: `CONDUCTOR_SERVER_REF`. Reverting means
 replacing the checkout-and-build steps with `conductor server start --version <x>`,
-which the earlier revision of #106 already implemented, so the change is recoverable
-from git history rather than needing redesign.
+which commit `cf9d6b8c` already implements — `CONDUCTOR_SERVER_VERSION`, an
+`actions/cache` keyed on it, and the `server start` invocation, for both server-backed
+jobs.
+
+That commit is **not reachable from `main`**: #106 was squash-merged, so
+`git log -S'server start --version'` finds nothing. Fetch it with
+`git fetch origin refs/pull/106/head`, or read the file directly:
+
+```
+gh api "repos/conductor-oss/conductor-cli/contents/.github/workflows/e2e.yml?ref=cf9d6b8c"
+```
+
+Pinning also restores coverage rather than only saving time: with `conductor server
+start` managing the server there is a CLI-managed pid file again, so the six
+`server.bats` tests that currently skip will run.
 
 ## Alternatives considered
 
