@@ -627,6 +627,7 @@ If a configuration already exists, you can press Enter to keep existing values (
 conductor config save
 
 # Example interaction:
+# Profile name (empty for default): ← Press Enter for ~/.conductor-cli/config.yaml
 # Server URL [http://localhost:8080/api]: https://developer.conductorcloud.com
 # Server type (OSS/Enterprise) [Enterprise]: ← Press Enter to keep
 #
@@ -733,11 +734,45 @@ This shows:
 - `default` - for the default `config.yaml` file
 - Profile names (e.g., `production`, `staging`) - for named profiles like `config-production.yaml`
 
+`default` is an alias for `config.yaml`, so `--profile default` and an empty profile name select
+the same file. The CLI never creates a `config-default.yaml`.
+
+**Seeing which settings are actually in effect:**
+
+```bash
+conductor config show
+```
+
+```
+Source: /Users/you/.conductor-cli/config.yaml
+
+KEY           VALUE                       SOURCE
+server        http://localhost:8080/api   config.yaml
+server-type   OSS                         config.yaml
+auth-key      -                           default
+auth-secret   -                           default
+auth-token    ****                        config.yaml
+```
+
+When an environment variable is set, the config file is not read at all — see
+[Configuration Precedence](#configuration-precedence):
+
+```
+Source: environment variables
+
+KEY           VALUE                      SOURCE
+server        http://from-env:9999/api   env CONDUCTOR_SERVER_URL
+server-type   OSS                        default
+auth-token    -                          default
+```
+
+Secrets are masked unless you pass `--show-secrets`; `--json` prints the same data for scripts.
+
 **Deleting Profiles:**
 
 ```bash
-# Delete default config (with confirmation prompt)
-conductor config delete
+# Delete the default config (with confirmation prompt)
+conductor config delete default
 
 # Delete named profile
 conductor config delete production
@@ -757,11 +792,17 @@ conductor --profile nonexistent workflow list
 
 ### Configuration Precedence
 
-The CLI can be configured using command-line flags, environment variables, or a configuration file. Configuration is handled with the following precedence (highest to lowest):
+Configuration comes from exactly one source, never a mix. Flags override individual settings.
 
-1. Command-line flags
-2. Environment variables
-3. Configuration file
+| Order | Source | Example |
+|-------|--------|---------|
+| 1 | Flags | `--server`, `--auth-token` |
+| 2 | The file from `--config` or `--profile` | `--profile prod` reads `config-prod.yaml` |
+| 3 | Environment variables | `CONDUCTOR_SERVER_URL` |
+| 4 | The default config file | `~/.conductor-cli/config.yaml` |
+
+So exporting `CONDUCTOR_SERVER_URL` switches everything onto the environment. A token in
+`config.yaml` is not used. Run `conductor config show` to see the active source.
 
 ### Command-line Flags
 
@@ -792,12 +833,22 @@ export CONDUCTOR_SERVER_URL=http://localhost:8080/api
 export CONDUCTOR_AUTH_KEY=your-api-key
 export CONDUCTOR_AUTH_SECRET=your-api-secret
 
-# Server type (OSS or Enterprise, defaults to Enterprise)
+# Server type (OSS or Enterprise, defaults to OSS)
 export CONDUCTOR_SERVER_TYPE=OSS
 
 # Profile selection
 export CONDUCTOR_PROFILE=production
 ```
+
+If you set any of `CONDUCTOR_SERVER_URL`, `CONDUCTOR_SERVER_TYPE`, `CONDUCTOR_AUTH_KEY`,
+`CONDUCTOR_AUTH_SECRET` or `CONDUCTOR_AUTH_TOKEN`, the CLI takes every setting from the
+environment and does not read `~/.conductor-cli/config.yaml`. Set all the values you need, or use
+`--profile` to read a file instead. See [Configuration Precedence](#configuration-precedence).
+
+`CONDUCTOR_PROFILE` is different. It selects which file to read, so it does not switch the CLI to
+the environment.
+
+Run `conductor config show` to see the active source and the origin of each value.
 
 #### Disabling Colored Output
 

@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/conductor-oss/conductor-cli/internal/cliconfig"
 	"github.com/conductor-sdk/conductor-go/sdk/authentication"
 	"github.com/conductor-sdk/conductor-go/sdk/settings"
 	log "github.com/sirupsen/logrus"
@@ -193,19 +193,43 @@ func getCurrentTimeUnix() int64 {
 }
 
 // getConfigPath returns the path to the config file for the given profile.
-// Profile name is required — returns an error if empty.
+// An empty name and "default" both resolve to config.yaml.
 func getConfigPath(profileName string) (string, error) {
-	if profileName == "" {
-		return "", fmt.Errorf("profile name is required for config path resolution")
-	}
-
-	home, err := os.UserHomeDir()
+	configDir, err := cliconfig.Dir()
 	if err != nil {
 		return "", err
 	}
+	return cliconfig.Resolve(configDir, profileName), nil
+}
 
-	configDir := filepath.Join(home, ".conductor-cli")
-	configFileName := fmt.Sprintf("config-%s.yaml", profileName)
-
-	return filepath.Join(configDir, configFileName), nil
+// tokenCachePath returns the file a refreshed token should be cached in, or ""
+// to disable caching.
+//
+// Caching is disabled in two cases:
+//
+// envActive — the environment supplied this run's credentials, so no file backs
+// it. Writing the token into a config file would store it against whatever
+// identity that file holds: a later run with the environment unset would read
+// the file's key and secret alongside a cached token minted from different
+// credentials, and authenticate as the wrong identity until it expired.
+//
+// The default config file does not exist — creating it would leave a
+// config.yaml on someone who runs from environment variables, and that file
+// would then supply every setting on any later run where the environment is
+// unset. A named profile always has a file already, because initConfig exits
+// when it does not.
+func tokenCachePath(profileName string, envActive bool) (string, error) {
+	if envActive {
+		return "", nil
+	}
+	path, err := getConfigPath(profileName)
+	if err != nil {
+		return "", err
+	}
+	if cliconfig.IsDefault(profileName) {
+		if _, err := os.Stat(path); err != nil {
+			return "", nil
+		}
+	}
+	return path, nil
 }
