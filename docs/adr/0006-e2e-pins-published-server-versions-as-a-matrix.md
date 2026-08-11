@@ -52,9 +52,9 @@ neither known nor selectable, so a matrix cannot reach it.
 
 All three Server Versions were run before this landed, each downloaded through the CLI
 and started against its own fresh database, so the older ones are a measurement rather
-than an expectation. These numbers come from a **local macOS run**, not from CI — one
-of the skips on every line is the macOS-only GNU `timeout(1)` guard, which does not skip
-on a Linux runner, so expect one fewer of each in CI:
+than an expectation. These counts are from a **local macOS run**; one skip on every line
+is the macOS-only GNU `timeout(1)` guard, which does not skip on a Linux runner, so
+expect one fewer of each in CI:
 
 | Server Version | tests | skips | failures |
 |---|---|---|---|
@@ -66,19 +66,32 @@ The six recovered `server.bats` tests pass on **all three**, so the launch path 
 not version-sensitive. Both older legs are otherwise *not* clean, which is why they are
 non-blocking rather than aspirationally blocking.
 
-**Three failures on both older legs, one root cause.**
+The first CI run reproduced this and confirmed the gating behaves as intended: the
+preflight passed, the matrix expanded to the three expected legs, the `3.32.0` leg and
+the Orkes-facing job passed, both older legs failed — and the run's overall conclusion
+was still **success**. Two red legs that do not gate a merge is the whole point.
+
+**Three failures on both older legs, one root cause — and it is already fixed upstream.**
 `GET /api/scheduler/schedules/<name>` returns `HTTP 200` with an empty body for a
-schedule that does not exist, where `3.32.0` does not. `schedule delete` itself works —
-the schedule leaves `schedule list` and the underlying list API — so this is the
-single-schedule read endpoint disagreeing with the list endpoint about whether the
-schedule is there.
+schedule that does not exist. That is
+[conductor-oss/conductor#1357](https://github.com/conductor-oss/conductor/pull/1357),
+merged 2026-07-19 as `c08d60c8a`, which makes the endpoint throw `NotFoundException`
+instead. By ancestry the fix is in `v3.32.0` and its RCs from `rc.14` on, and in neither
+`v3.31.0` nor `v3.30.2` — so the older legs are not reporting a new defect, they are
+reporting a fix they predate. Confirmed against `3.32.0`, which returns `404` with an
+error body both for a name that never existed and after a delete.
+
+Note that `schedule delete` works on the older lines: the schedule leaves `schedule list`
+and the underlying list API. It is only the single-schedule read that disagrees.
 
 That one behaviour produces all three failures, once directly and twice through a
 helper. `schedule.bats` test 7 asserts a deleted schedule can no longer be fetched, and
 fails outright. The suite's `ensure_schedule` helper decides whether to create a schedule
 by calling `schedule get`, so it concludes the schedule already exists, skips creating
 it, and leaves tests 12 and 19 asserting against a schedule that is not there.
-Pre-existing server-side skew, unrelated to the CLI and unrelated to pinning.
+Pre-existing server-side skew, unrelated to the CLI and unrelated to pinning — so there
+is nothing to file, and making these legs green would mean asking for a backport to the
+3.31 and 3.30 lines, which is a support-policy decision rather than a bug report.
 
 **The nine extra skips are the Agents API.** Neither older line serves it, so nine
 `agent.bats` tests skip on their runtime guard rather than fail. That guard exists
