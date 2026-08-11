@@ -103,6 +103,72 @@ bats --filter-tags 'tier:pr,!orkes-only' test/e2e/ | grep '# skip'
 > directory with no flag to override it, so starting it from the repo drops a
 > multi-hundred-MB `c123.db` here. See issue #104.
 
+## Changing which Server Versions CI tests
+
+The OSS-safe suite runs once per pinned Server Version. All the pins live in one place —
+the `server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml):
+
+```json
+[
+  { "version": "3.32.0", "blocking": true  },
+  { "version": "3.31.0", "blocking": false },
+  { "version": "3.30.2", "blocking": false }
+]
+```
+
+`blocking: true` means that leg can fail a merge. Exactly one entry must be blocking, and
+the job refuses to start otherwise. Every other leg runs on the same pull requests and
+reports in the same checks list, but cannot gate a merge, so version skew that predates
+your change can't block it.
+
+### Before adding a version, check it exists
+
+The jar bucket carries only a *subset* of the server repo's tags — some tagged versions
+are simply absent. Check with a `HEAD` first:
+
+```bash
+V=3.31.0
+curl -sI "https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-$V.jar" | head -1
+```
+
+`200` means you can pin it. `403` means you can't, whatever `git tag` says in the server
+repo. This is why the 3.31 line is pinned at `3.31.0` rather than a later patch.
+
+CI checks this too, and treats the two cases differently: an unavailable **blocking** pin
+fails the preflight outright, while an unavailable **non-blocking** pin only drops its own
+leg, with a warning saying so. Failing the whole preflight would skip the blocking leg as
+well, which would let an older version gate a merge through the back door.
+
+### The four changes you're likely to make
+
+| Goal | Change |
+|---|---|
+| Bump the blocking pin for a new release | Edit the `version` of the `blocking: true` entry |
+| Add a line to the matrix | Add an entry with `"blocking": false` |
+| Stop testing a line | Delete its entry |
+| Make an older line gate merges | Flip its `blocking` to `true` and the old one to `false` |
+
+Nothing else needs touching: the job name, the jar cache key, and the nightly job's
+version all derive from these entries. Adding a leg costs one jar download the first
+time and is cache-hit afterwards, because pins are immutable.
+
+Promoting an older line to blocking is a one-line edit but a real commitment — it means
+the suite must pass against that line, and today the older lines fail tests for reasons
+that are server-side, not CLI-side. Expect to fix or tag around those first.
+
+### Check your change before pushing
+
+```bash
+# what each leg will run
+bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
+
+# reproduce a leg locally, from a scratch dir, on a fresh database
+conductor server start --version 3.31.0
+```
+
+Run each version against its own working directory. Pointing two Server Versions at one
+`c123.db` produces spurious failures that have nothing to do with the version.
+
 ## Tags
 
 | Tag | Meaning |
