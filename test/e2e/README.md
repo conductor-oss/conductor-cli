@@ -80,9 +80,8 @@ bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
 
 ### What the OSS-safe run should report
 
-Against the blocking Server Version: 109 tests and **2 skips** on Linux, both
-Known-broken guards (`#98`, `#103`). On macOS expect a third, for absent GNU
-`timeout(1)`.
+Against the blocking Server Version: 116 tests and **1 skip** on Linux, the `#103`
+Known-broken guard. On macOS expect a second, for absent GNU `timeout(1)`.
 
 Against an older leg, expect **more** skips and some failures — neither older line
 serves the Agents API, so nine `agent.bats` tests skip, and both currently fail three

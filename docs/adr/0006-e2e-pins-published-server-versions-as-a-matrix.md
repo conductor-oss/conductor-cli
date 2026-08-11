@@ -58,9 +58,9 @@ on a Linux runner, so expect one fewer of each in CI:
 
 | Server Version | tests | skips | failures |
 |---|---|---|---|
-| `3.32.0` (blocking) | 109 | 3 | 0 |
-| `3.31.0` | 109 | 12 | 3 |
-| `3.30.2` | 109 | 12 | 3 |
+| `3.32.0` (blocking) | 116 | 2 | 0 |
+| `3.31.0` | 116 | 11 | 3 |
+| `3.30.2` | 116 | 11 | 3 |
 
 The six recovered `server.bats` tests pass on **all three**, so the launch path itself is
 not version-sensitive. Both older legs are otherwise *not* clean, which is why they are
@@ -131,11 +131,11 @@ version is started by the CLI, so those tests run. Un-skipping them is the
 fix-verification step, in the Known-broken guard sense.
 
 Measured against `3.32.0` by launching the same jar both ways, changing nothing but the
-launch path: the OSS-safe `tier:pr` selection is 109 tests, and the skip count goes from
-**9 to 3**, with all six recovered tests passing, including both mutual-exclusion guards.
-The three that remain are unrelated and expected — two Known-broken guards (`#98`,
-`#103`) and one macOS-only skip for absent GNU `timeout(1)`, which does not skip on a
-Linux runner, so CI should report 2.
+launch path: the OSS-safe `tier:pr` selection is 116 tests, and the skip count goes from
+**8 to 2**, with all six recovered tests passing, including both mutual-exclusion guards.
+The two that remain are unrelated and expected — the `#103` Known-broken guard, and one
+macOS-only skip for absent GNU `timeout(1)` which does not skip on a Linux runner, so CI
+should report 1.
 
 To keep that from silently regressing, the job fails the leg if any test skips for want
 of a CLI-managed Local server, and reports the skip count as a run annotation either
