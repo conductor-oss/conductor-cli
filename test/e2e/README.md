@@ -19,27 +19,35 @@ Run from the **repository root**, not from this directory.
 Against a local OSS server:
 
 ```bash
-conductor server start --version 3.32.0-rc.23   # from a scratch dir, see note below
+conductor server start --version 3.32.0   # from a scratch dir, see note below
 export CONDUCTOR_SERVER_URL=http://localhost:8080/api
 export CONDUCTOR_SERVER_TYPE=OSS
 bats --filter-tags 'tier:pr,!orkes-only' test/e2e/
 ```
 
-To test against the code that will actually ship, build the server from source
-instead — releases are cut from `conductor-oss/conductor` `main`, and no artifact is
-published from it:
+This is what CI does, and starting the server through the CLI rather than with
+`java -jar` is what gives `server.bats` a CLI-managed Local server to assert against.
+
+To reproduce a specific CI leg, pass that leg's Server Version. CI pins three, and the
+checks list names the version in each job title. The pins are declared in one place —
+the `server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml) — and only the
+current release gates a merge:
 
 ```bash
-cd ../conductor && git checkout main && git pull
-./gradlew :conductor-server:bootJar -x test        # note the conductor- prefix
-mkdir -p /tmp/conductor-e2e && cd /tmp/conductor-e2e
-java -jar ../../conductor/server/build/libs/*-boot.jar \
-  --conductor.integrations.ai.enabled=true --agentspan.embedded=true
+conductor server start --version 3.31.0    # a non-blocking leg
 ```
 
-This is what CI does. Because `conductor server start` can only download published
-versions, a source-built jar has no CLI-managed pid file, so the six server-dependent
-tests in `server.bats` skip. See #105.
+Pin a version the download bucket actually carries: it holds a subset of the server
+repo's tags, so several tagged versions return 403. Check before pinning, which is also
+what CI's preflight does:
+
+```bash
+curl -sI https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-3.31.0.jar | head -1
+```
+
+See [ADR-0006](../../docs/adr/0006-e2e-pins-published-server-versions-as-a-matrix.md) for
+why E2E pins published versions instead of building the server from source, and how to
+recover the source build if fidelity against unreleased `main` is needed.
 
 Against an Orkes server:
 
@@ -68,6 +76,27 @@ A single suite, or a count without running anything:
 ```bash
 bats test/e2e/agent.bats
 bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
+```
+
+### What the OSS-safe run should report
+
+Against the blocking Server Version: 109 tests and **2 skips** on Linux, both
+Known-broken guards (`#98`, `#103`). On macOS expect a third, for absent GNU
+`timeout(1)`.
+
+Against an older leg, expect **more** skips and some failures — neither older line
+serves the Agents API, so nine `agent.bats` tests skip, and both currently fail three
+`schedule.bats` tests. That is pre-existing version skew, which is why those legs do not
+gate a merge;
+[ADR-0006](../../docs/adr/0006-e2e-pins-published-server-versions-as-a-matrix.md) records
+the root cause.
+
+Anything skipping with *"no CLI-managed local server is running"* means the server was
+not started through `conductor server start`, so the six `server.bats` tests did not
+run. CI fails the leg on that rather than letting the coverage vanish quietly:
+
+```bash
+bats --filter-tags 'tier:pr,!orkes-only' test/e2e/ | grep '# skip'
 ```
 
 > Start the local server from a scratch directory (e.g. `/tmp/conductor-e2e`).

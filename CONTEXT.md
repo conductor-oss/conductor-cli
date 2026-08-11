@@ -35,6 +35,14 @@ A Conductor server that the CLI downloads and runs as a background process on th
 user's machine for development and testing.
 _Avoid_: embedded server, dev server, test server
 
+**Server Version**:
+Which published Conductor artifact a Local server runs, named by a version string
+or by the floating `latest` tag. Orthogonal to Server type: it selects an artifact,
+not a distribution. Only versions the download bucket actually carries can be named
+— it holds a subset of the server repo's tags.
+_Avoid_: version (unqualified — the CLI has its own), distribution (already names
+OSS versus Orkes), server build
+
 ### Configuration
 
 **Profile**:

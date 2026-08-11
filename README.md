@@ -526,7 +526,7 @@ conductor server <command> [flags]
 conductor server start
 
 # Start specific version on custom port
-conductor server start --version 3.21.23 --port 9090
+conductor server start --version 3.32.0 --port 9090
 
 # Run in foreground
 conductor server start -f
