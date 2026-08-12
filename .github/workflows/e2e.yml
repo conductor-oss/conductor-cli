@@ -119,6 +119,22 @@ jobs:
   e2e-enterprise:
     name: E2E (Enterprise)
     runs-on: ubuntu-latest
+    # This job addresses a single shared remote server, and the suites create fixtures
+    # under fixed global names (`e2e_test_secret`, `e2e_test_service`, …) whose
+    # `setup_file` deletes leftovers before running. Two overlapping runs therefore
+    # delete each other's fixtures mid-test. The group is a constant rather than keyed
+    # on the ref, because the contention is between *different* pull requests, not
+    # between pushes to one.
+    #
+    # A stopgap, not a fix. While one run holds the slot another can sit pending and be
+    # superseded by a newer one, so an overlapping run may report cancelled rather than
+    # green — which is at least honest, unlike the interleaved corruption it replaces.
+    # The real fix is per-run fixture namespacing, which removes the contention instead
+    # of queueing around it. The OSS matrix needs none of this: every leg gets its own
+    # private server.
+    concurrency:
+      group: e2e-enterprise-shared-server
+      cancel-in-progress: false
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.run_enterprise
