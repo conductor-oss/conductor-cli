@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 )
 
 // fakeClient records calls and returns canned values; it implements Client so the
@@ -31,6 +32,13 @@ type fakeClient struct {
 	deployResult  DeployResult
 	streamEvents  []SSEEvent
 	streamErr     error
+	// streamBuffer sizes the event channel; 0 means "big enough for every event",
+	// so only tests that care about a blocked producer have to set it.
+	streamBuffer int
+	// streamDone closes when the producer goroutine exits, so a test can prove it
+	// was not stranded on a send.
+	streamDone        chan struct{}
+	lastStreamEventID string
 }
 
 func (f *fakeClient) CheckSupported(ctx context.Context) error { return nil }
@@ -46,15 +54,33 @@ func (f *fakeClient) Deploy(ctx context.Context, framework string, rawConfig jso
 	return f.deployResult, nil
 }
 
+// Stream mirrors the real client's producer: it feeds events through a bounded
+// channel from its own goroutine and abandons a send once ctx is done, so a consumer
+// that stops reading early is visible to tests instead of silently deadlocking.
 func (f *fakeClient) Stream(ctx context.Context, id, lastEventID string) (<-chan SSEEvent, <-chan error) {
-	events := make(chan SSEEvent, len(f.streamEvents))
-	errc := make(chan error, 1)
-	for _, e := range f.streamEvents {
-		events <- e
+	f.lastStreamEventID = lastEventID
+	buffer := f.streamBuffer
+	if buffer <= 0 {
+		buffer = len(f.streamEvents)
 	}
-	close(events)
-	errc <- f.streamErr
-	close(errc)
+	events := make(chan SSEEvent, buffer)
+	errc := make(chan error, 1)
+	f.streamDone = make(chan struct{})
+
+	go func() {
+		defer close(f.streamDone)
+		defer close(errc)
+		defer close(events)
+		for _, e := range f.streamEvents {
+			select {
+			case events <- e:
+			case <-ctx.Done():
+				errc <- ctx.Err()
+				return
+			}
+		}
+		errc <- f.streamErr
+	}()
 	return events, errc
 }
 
@@ -141,6 +167,66 @@ func TestStreamExecutionForwardsEventsAndIgnoresCancel(t *testing.T) {
 	}
 	if len(sink.events) != 2 {
 		t.Fatalf("forwarded %d events, want 2", len(sink.events))
+	}
+}
+
+// Regression guard for #102: the stream must end on the terminal event itself,
+// because the server never closes an already-terminal execution's connection.
+func TestStreamExecutionStopsOnTerminalEvent(t *testing.T) {
+	for _, terminal := range []EventType{EventDone, EventError} {
+		t.Run(string(terminal), func(t *testing.T) {
+			fc := &fakeClient{streamEvents: []SSEEvent{
+				{Type: EventMessage},
+				{Type: terminal},
+				{Type: EventMessage}, // the server would keep the connection open here
+			}}
+			sink := &recordingSink{}
+
+			done := make(chan error, 1)
+			go func() { done <- NewService(fc).StreamExecution(context.Background(), "exec-1", "", sink) }()
+
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatalf("StreamExecution: %v", err)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("StreamExecution did not return after the terminal event")
+			}
+			if len(sink.events) != 2 || sink.events[1].Type != terminal {
+				t.Fatalf("sink saw %+v, want the message and the terminal event", sink.events)
+			}
+		})
+	}
+}
+
+// The producer must not be left blocked on a send once the consumer stops reading —
+// hence more trailing events than the channel buffer can hold.
+func TestStreamExecutionLeavesNoBlockedProducer(t *testing.T) {
+	fc := &fakeClient{
+		streamEvents: []SSEEvent{
+			{Type: EventDone},
+			{Type: EventMessage}, {Type: EventMessage}, {Type: EventMessage},
+		},
+		streamBuffer: 1,
+	}
+	if err := NewService(fc).StreamExecution(context.Background(), "exec-1", "", &recordingSink{}); err != nil {
+		t.Fatalf("StreamExecution: %v", err)
+	}
+	select {
+	case <-fc.streamDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("producer goroutine is still blocked after the stream ended")
+	}
+}
+
+func TestStreamExecutionPassesLastEventID(t *testing.T) {
+	fc := &fakeClient{streamEvents: []SSEEvent{{Type: EventDone}}}
+	if err := NewService(fc).StreamExecution(context.Background(), "exec-1", "42", &recordingSink{}); err != nil {
+		t.Fatalf("StreamExecution: %v", err)
+	}
+	if fc.lastStreamEventID != "42" {
+		t.Errorf("last event id = %q, want 42", fc.lastStreamEventID)
 	}
 }
 

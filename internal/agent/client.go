@@ -223,7 +223,8 @@ func (c *restClient) Deploy(ctx context.Context, framework string, rawConfig jso
 // Stream opens an SSE connection for an execution and returns an event channel and
 // a single-error channel. The caller ranges the events; when it closes, the error
 // channel carries the terminal error (nil on a clean end). Cancelling ctx ends the
-// stream — that surfaces as a context error which the service treats as a clean stop.
+// stream — that surfaces as a context error which the service treats as a clean stop
+// — and also releases a send blocked on an event channel the caller stopped reading.
 func (c *restClient) Stream(ctx context.Context, executionID, lastEventID string) (<-chan SSEEvent, <-chan error) {
 	events := make(chan SSEEvent, sseChannelBuffer)
 	errc := make(chan error, 1)
@@ -242,7 +243,7 @@ func (c *restClient) Stream(ctx context.Context, executionID, lastEventID string
 			return
 		}
 		defer resp.Body.Close()
-		errc <- parseSSE(resp.Body, events)
+		errc <- parseSSE(ctx, resp.Body, events)
 	}()
 	return events, errc
 }
