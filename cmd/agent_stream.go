@@ -14,8 +14,8 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -79,7 +79,7 @@ events in real time. Use --no-stream to start it and just print the execution id
 		fmt.Println()
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 		defer stop()
-		return svc.StreamExecution(ctx, exec.ID, "", terminalSink{})
+		return svc.StreamExecution(ctx, exec.ID, "", newTerminalSink())
 	},
 }
 
@@ -93,63 +93,63 @@ var agentStreamCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 		defer stop()
-		return internal.GetAgentService().StreamExecution(ctx, args[0], streamLastEventID, terminalSink{})
+		return internal.GetAgentService().StreamExecution(ctx, args[0], streamLastEventID, newTerminalSink())
 	},
 }
 
-// terminalSink renders streamed agent events to stdout. It is the cmd-layer
-// presentation of agent.EventSink; the service and client know nothing about it.
-type terminalSink struct{}
+// terminalSink renders streamed agent events to a writer, stdout in production. It is
+// the cmd-layer presentation of agent.EventSink; the service and client know nothing
+// about it. Every field it reads comes from the typed payload, so a server-side rename
+// breaks the build instead of quietly printing a blank line.
+type terminalSink struct {
+	w io.Writer
+}
 
-func (terminalSink) OnEvent(e agent.SSEEvent) error {
-	data := map[string]any{}
-	_ = json.Unmarshal(e.Data, &data)
+func newTerminalSink() terminalSink {
+	return terminalSink{w: os.Stdout}
+}
+
+func (s terminalSink) OnEvent(e agent.SSEEvent) error {
+	p := e.Payload()
 
 	switch e.ResolvedType() {
 	case agent.EventThinking:
-		fmt.Printf("  [thinking] %s\n", truncate(mapStr(data, "message"), truncThinking))
+		fmt.Fprintf(s.w, "  [thinking] %s\n", truncate(p.Content, truncThinking))
 	case agent.EventToolCall:
-		fmt.Printf("  [tool] %s(%s)\n", mapStr(data, "toolName"), truncate(mapStr(data, "input"), truncToolInput))
+		fmt.Fprintf(s.w, "  [tool] %s(%s)\n", p.ToolName, truncate(p.Args.String(), truncToolInput))
 	case agent.EventToolResult:
-		fmt.Printf("  [result] %s -> %s\n", mapStr(data, "toolName"), truncate(mapStr(data, "result"), truncToolResult))
+		fmt.Fprintf(s.w, "  [result] %s -> %s\n", p.ToolName, truncate(p.Result.String(), truncToolResult))
 	case agent.EventHandoff:
-		fmt.Printf("  [handoff] -> %s\n", mapStr(data, "agentName"))
+		fmt.Fprintf(s.w, "  [handoff] -> %s\n", p.Target)
 	case agent.EventMessage:
-		if content := mapStr(data, "content"); content != "" {
-			fmt.Print(content)
+		if p.Content != "" {
+			fmt.Fprint(s.w, p.Content)
 		}
 	case agent.EventWaiting:
-		fmt.Printf("  [waiting] human input required (execution: %s)\n", mapStr(data, "executionId"))
+		fmt.Fprintf(s.w, "  [waiting] human input required (execution: %s)\n", p.ExecutionID)
 	case agent.EventGuardrailPass:
-		fmt.Printf("  [guardrail] PASS %s\n", mapStr(data, "guardrailName"))
+		fmt.Fprintf(s.w, "  [guardrail] PASS %s\n", p.GuardrailName)
 	case agent.EventGuardrailFail:
-		fmt.Printf("  [guardrail] FAIL %s: %s\n", mapStr(data, "guardrailName"), mapStr(data, "reason"))
+		// The failure detail rides in content; a server that omits it leaves the
+		// name standing alone rather than trailing an empty separator.
+		if p.Content != "" {
+			fmt.Fprintf(s.w, "  [guardrail] FAIL %s: %s\n", p.GuardrailName, p.Content)
+		} else {
+			fmt.Fprintf(s.w, "  [guardrail] FAIL %s\n", p.GuardrailName)
+		}
 	case agent.EventError:
-		fmt.Printf("  [error] %s\n", mapStr(data, "message"))
+		fmt.Fprintf(s.w, "  [error] %s\n", p.Content)
 	case agent.EventDone:
-		if out := mapStr(data, "output"); out != "" {
-			fmt.Println()
-			fmt.Println(out)
+		if out := p.Output.String(); out != "" {
+			fmt.Fprintln(s.w)
+			fmt.Fprintln(s.w, out)
 		}
 	default:
 		if t := e.ResolvedType(); t != "" {
-			fmt.Printf("  [%s] %s\n", t, truncate(string(e.Data), truncEventData))
+			fmt.Fprintf(s.w, "  [%s] %s\n", t, truncate(string(e.Data), truncEventData))
 		}
 	}
 	return nil
-}
-
-// mapStr returns a string field from a decoded event payload, JSON-encoding non-string values.
-func mapStr(data map[string]any, key string) string {
-	v, ok := data[key]
-	if !ok {
-		return ""
-	}
-	if s, ok := v.(string); ok {
-		return s
-	}
-	b, _ := json.Marshal(v)
-	return string(b)
 }
 
 func truncate(s string, max int) string {
