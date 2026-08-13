@@ -468,3 +468,26 @@ func TestWritePidCreatesFile(t *testing.T) {
 		t.Errorf("got pid %d, want 42", pid)
 	}
 }
+
+func TestLocalServerArgs(t *testing.T) {
+	args := localServerArgs()
+
+	want := []string{
+		"--conductor.integrations.ai.enabled=true",
+		"--agentspan.embedded=true",
+		"--conductor.workflow-message-queue.enabled=true",
+	}
+
+	for _, w := range want {
+		found := false
+		for _, got := range args {
+			if got == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing arg %q in %v", w, args)
+		}
+	}
+}
