@@ -276,8 +276,8 @@ jobs:
       run: |
         mkdir -p "$SERVER_WORKDIR"
         # Started from the scratch dir so the SQLite database is not written into
-        # the repository (see #104). `server start` already passes the AI
-        # integration flags agent workflows need.
+        # the repository (see #104). `server start` passes the local server
+        # defaults itself, so this job does not restate them.
         cd "$SERVER_WORKDIR"
         "$GITHUB_WORKSPACE/conductor" server start --version "$SERVER_VERSION"
 
