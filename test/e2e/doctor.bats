@@ -64,14 +64,17 @@ setup_file() {
     [[ "$output" == *"OPENAI_API_KEY"* ]]
 }
 
-# Regression guard for #103: doctor advertises specific model strings that have
+# Regression guard for #103: doctor advertised specific model strings that had
 # drifted out of date (two Anthropic models return 404 from the provider API).
-# Asserts the desired end state — that doctor does not print known-dead models.
+# doctor now names no models at all, so the two dead ids are covered by the general
+# assertion as well as by name.
 @test "7. Doctor does not advertise retired model identifiers" {
-    skip "known broken: #103 — doctor hardcodes stale model strings"
     run bash -c "./conductor doctor 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [[ "$output" != *"claude-sonnet-4-20250514"* ]]
     [[ "$output" != *"claude-3-5-sonnet-20241022"* ]]
+    # No model identifier of any provider/model shape, dead or alive.
+    run bash -c "./conductor doctor 2>&1 | grep -E '^ +[a-z_]+/[A-Za-z0-9._-]+'"
+    [ "$status" -ne 0 ]
 }
