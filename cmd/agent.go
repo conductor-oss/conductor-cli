@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/conductor-oss/conductor-cli/internal"
 	"github.com/conductor-oss/conductor-cli/internal/agent"
+	"github.com/conductor-oss/conductor-cli/internal/providers"
 )
 
 // Defaults that are policy, not server contract — named so they are not magic
@@ -36,9 +38,13 @@ import (
 const (
 	defaultExecutionSearchSize = 50
 	defaultPruneOlderThanDays  = 30
-	defaultInitModel           = "openai/gpt-4o"
 	defaultInitMaxTurns        = 25
 )
+
+// initProviderLookupTimeout bounds the provider lookup on init's error path. Naming
+// the providers that actually work is the point of the error, so it is worth a short
+// wait — but never an unbounded one, and init still works with no server at all.
+const initProviderLookupTimeout = 10 * time.Second
 
 var agentCmd = &cobra.Command{
 	Use:     "agent",
@@ -318,9 +324,9 @@ var agentInitCmd = &cobra.Command{
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
-		model := initModel
-		if model == "" {
-			model = defaultInitModel
+		model, err := resolveInitModel(cmd.Context(), initModel)
+		if err != nil {
+			return err
 		}
 		cfg := map[string]any{
 			"name":         name,
@@ -335,7 +341,6 @@ var agentInitCmd = &cobra.Command{
 		}
 
 		var data []byte
-		var err error
 		ext := "yaml"
 		if initFormat == "json" {
 			ext = "json"
@@ -355,6 +360,41 @@ var agentInitCmd = &cobra.Command{
 		fmt.Printf("Run with: conductor agent run --config %s \"your prompt here\"\n", filename)
 		return nil
 	},
+}
+
+// resolveInitModel returns the model to write into a generated config, or an error
+// naming what the user can pick from.
+//
+// init used to default to a fixed OpenAI model whatever was configured, so the run
+// command it printed on the next line could not succeed for anyone without an OpenAI
+// key — and the failure landed server-side at execution time, as a FAILED workflow
+// rather than a validation error. There is no better default available: the server
+// reports which providers it can dial but no model names, so any built-in choice is a
+// guess this release cannot keep true (see #103).
+func resolveInitModel(ctx context.Context, flagValue string) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+
+	const base = "no model specified: pass --model provider/model"
+
+	lookup, cancel := context.WithTimeout(ctx, initProviderLookupTimeout)
+	defer cancel()
+
+	// The provider list is a courtesy on an error path. init scaffolds a local file
+	// and must keep working with no server reachable at all.
+	st, err := providers.Fetch(lookup, internal.Transport())
+	if err != nil {
+		return "", fmt.Errorf("%s (run 'conductor doctor' to see which providers are configured)", base)
+	}
+	configured := st.Configured()
+	if len(configured) == 0 {
+		if st.ManagedByHost {
+			return "", fmt.Errorf("%s (provider configuration is owned by the host deployment)", base)
+		}
+		return "", fmt.Errorf("%s (the server reports no configured AI providers)", base)
+	}
+	return "", fmt.Errorf("%s — providers configured on the server: %s", base, strings.Join(configured, ", "))
 }
 
 // ---- helpers (file I/O and formatting live here, in the cmd layer) ----
@@ -481,7 +521,7 @@ func init() {
 	agentPruneCmd.Flags().BoolVar(&pruneArchive, "archive", false, "Archive tasks instead of hard-deleting")
 	agentPruneCmd.Flags().BoolVar(&pruneDryRun, "dry-run", false, "Show what would be pruned without deleting")
 
-	agentInitCmd.Flags().StringVarP(&initModel, "model", "", "", "LLM model (default: "+defaultInitModel+")")
+	agentInitCmd.Flags().StringVarP(&initModel, "model", "", "", "LLM model as provider/model (required)")
 	agentInitCmd.Flags().StringVarP(&initStrategy, "strategy", "s", "", "Multi-agent strategy (handoff, sequential, parallel, ...)")
 	agentInitCmd.Flags().StringVarP(&initFormat, "format", "f", "yaml", "Output format: yaml or json")
 

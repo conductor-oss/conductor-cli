@@ -14,8 +14,9 @@
 
 AGENT_NAME="e2e_agent_probe"
 
-# A model verified to exist; the `agent init` default (openai/gpt-4o) is not
-# usable unless an OpenAI key happens to be configured — see #103.
+# A model verified to exist. `agent init` no longer supplies a default at all — the
+# server reports which providers it can dial but no model names, so every config has
+# to name one explicitly (see #103).
 LLM_MODEL="anthropic/claude-haiku-4-5-20251001"
 
 setup_file() {
@@ -84,7 +85,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "1. Agent init creates a YAML config" {
-    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init inittest 2>&1"
+    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init inittest --model $LLM_MODEL 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [ -f "$BATS_TEST_TMPDIR/inittest.yaml" ]
@@ -92,7 +93,7 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "2. Agent init --format json creates a JSON config" {
-    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init jsontest --format json 2>&1"
+    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init jsontest --format json --model $LLM_MODEL 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     [ -f "$BATS_TEST_TMPDIR/jsontest.json" ]
@@ -100,10 +101,21 @@ run_bounded() {
 
 # bats test_tags=tier:pr
 @test "3. Agent init --strategy records the strategy" {
-    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init strattest --strategy handoff 2>&1"
+    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init strattest --strategy handoff --model $LLM_MODEL 2>&1"
     echo "Output: $output"
     [ "$status" -eq 0 ]
     grep -q 'handoff' "$BATS_TEST_TMPDIR/strattest.yaml"
+}
+
+# Regression guard for #103: init used to write a fixed OpenAI model whatever was
+# configured, then print a run command that could not succeed.
+# bats test_tags=tier:pr
+@test "3b. Agent init without --model fails and writes nothing" {
+    run bash -c "cd '$BATS_TEST_TMPDIR' && '$PWD/conductor' agent init nomodel 2>&1"
+    echo "Output: $output"
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"--model"* ]]
+    [ ! -f "$BATS_TEST_TMPDIR/nomodel.yaml" ]
 }
 
 # bats test_tags=tier:pr
