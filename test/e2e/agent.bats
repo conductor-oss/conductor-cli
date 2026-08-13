@@ -64,19 +64,24 @@ EOF
 }
 
 # Helper: run a command with a portable time bound (macOS has no GNU timeout).
-# Returns 124 on timeout, mirroring timeout(1).
+# Returns 124 on timeout, mirroring timeout(1). Every wait is guarded, because a
+# bare `wait` on a killed child aborts the test under bats' errexit with the signal
+# status — which would hide the timeout the caller is asking about.
 run_bounded() {
     local secs="$1"; shift
     "$@" >"$BATS_TEST_TMPDIR/bounded.out" 2>&1 &
     local pid=$!
-    local i=0
+    local i=0 rc=0
     while [ "$i" -lt "$secs" ]; do
-        kill -0 "$pid" 2>/dev/null || { wait "$pid"; return $?; }
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid" 2>/dev/null || rc=$?
+            return "$rc"
+        fi
         sleep 1
         i=$((i + 1))
     done
     kill "$pid" 2>/dev/null
-    wait "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null || true
     return 124
 }
 
@@ -281,15 +286,14 @@ run_bounded() {
 # the fix lands.
 # bats test_tags=tier:nightly,needs:llm
 @test "17. Agent stream exits after the terminal event" {
-    skip "known broken: #102 — agent stream hangs on a terminal execution"
     require_llm
     write_agent_config "$BATS_TEST_TMPDIR/run5.yaml"
     out=$(./conductor agent run --config "$BATS_TEST_TMPDIR/run5.yaml" "Reply with one word" 2>&1)
     eid=$(echo "$out" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
     [ -n "$eid" ]
 
-    run_bounded 30 ./conductor agent stream "$eid"
-    rc=$?
+    rc=0
+    run_bounded 30 ./conductor agent stream "$eid" || rc=$?
     echo "stream exit: $rc"
     cat "$BATS_TEST_TMPDIR/bounded.out" || true
     [ "$rc" -ne 124 ]
