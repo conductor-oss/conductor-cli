@@ -60,18 +60,19 @@ jobs:
     steps:
     - name: Declare the pinned Server Versions
       run: |
-        # THE place to bump a pin. One entry per supported line, at the newest
-        # Server Version that line has actually published. Exactly one entry is
-        # blocking — the current one, which is what users are running; the rest
-        # report regressions against older lines without gating a merge.
+        # THE place to bump a pin. One entry per Server Version to test, at the
+        # newest that line has actually published. Exactly one entry is blocking
+        # — the current release, which is what users are running.
+        #
+        # Only the current release is pinned. An older line can be added as an
+        # entry with "blocking": false, which reports against that line without
+        # gating a merge; ADR-0006 records why none is pinned today.
         #
         # Pin a fixed Server Version, never `latest`: `latest` is mutable
         # content, which loses reproducibility and poisons a cache keyed on it.
         cat > pins.json <<'JSON'
         [
-          { "version": "3.32.0", "blocking": true  },
-          { "version": "3.31.0", "blocking": false },
-          { "version": "3.30.2", "blocking": false }
+          { "version": "3.32.0", "blocking": true  }
         ]
         JSON
         jq -e 'map(select(.blocking)) | length == 1' pins.json > /dev/null || {
@@ -204,23 +205,28 @@ jobs:
   # CLI's own `server start --version`. Covers the OSS code paths and the
   # `server` command group, neither of which the Enterprise job can reach.
   #
-  # One leg per pinned version. Only the current release gates a merge; the
-  # older legs run on every pull request but are non-blocking, so version skew
-  # that predates a change cannot block it.
+  # One leg per pinned version. Today that is the current release alone, which
+  # gates a merge. A leg pinned with "blocking": false reports without gating,
+  # so version skew that predates a change cannot block it.
   #
   # Starting through the CLI is also what gives server.bats a CLI-managed Local
   # server to assert against, so its six server-dependent tests run rather than
   # skip.
   # ---------------------------------------------------------------------------
   e2e-local-server:
-    name: E2E (local OSS server ${{ matrix.server.version }}, ${{ matrix.server.blocking && 'blocking' || 'non-blocking' }})
+    # Only a non-blocking leg is labelled, so the check name carries the caveat
+    # exactly when there is one; with a single pin there is nothing to contrast
+    # "blocking" against and the suffix would just raise the question.
+    # The condition is inverted deliberately: `x && '' || y` always yields y,
+    # because the empty string is falsy in a GitHub Actions expression.
+    name: E2E (local OSS server ${{ matrix.server.version }}${{ !matrix.server.blocking && ', non-blocking' || '' }})
     runs-on: ubuntu-latest
     needs: server-versions
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.run_local_server
-    # Older legs report without gating. Promoting one to blocking is a one-line
-    # change in the pins above.
+    # A non-blocking leg reports without gating. Which legs exist, and which one
+    # gates, is a one-line change in the pins above.
     continue-on-error: ${{ !matrix.server.blocking }}
     strategy:
       # Every leg's result is wanted; a failure on one must not cancel the rest.
@@ -357,9 +363,9 @@ jobs:
   # the PR path because it spends provider tokens, depends on PyPI, and is
   # non-deterministic by nature.
   #
-  # Runs against the blocking Server Version only, not the matrix: its suites
-  # depend on capabilities older lines lack, and each leg would spend model
-  # tokens to tell us so.
+  # Runs against the blocking Server Version only, however many are pinned: its
+  # suites depend on capabilities older lines lack, and each extra leg would
+  # spend model tokens to tell us so.
   #
   # Currently manual-only: there is no `schedule:` trigger, so this runs solely
   # when someone dispatches the workflow with run_nightly=true. The tier is still

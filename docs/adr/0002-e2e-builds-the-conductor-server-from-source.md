@@ -5,12 +5,12 @@ status: superseded
 # E2E builds the Conductor server from source rather than pinning a published version
 
 > **Superseded by
-> [ADR-0006](./0006-e2e-pins-published-server-versions-as-a-matrix.md).** The blocker
+> [ADR-0006](./0006-e2e-pins-a-published-server-version.md).** The blocker
 > below — that no artifact is published from `main` — expired when `3.32.0` GA shipped
-> and the S3 `latest` jar was republished to match it. E2E now pins published Server
-> Versions and runs the OSS-safe suite against three of them. Read this ADR as the
-> recorded case for source-building, not as current policy; ADR-0006 explains how to
-> recover the arrangement it describes.
+> and the S3 `latest` jar was republished to match it. E2E now pins a published Server
+> Version and runs the OSS-safe suite against it. Read this ADR as the recorded case
+> for source-building, not as current policy; ADR-0006 explains how to recover the
+> arrangement it describes.
 
 The E2E jobs check out `conductor-oss/conductor` at `main` and run
 `:conductor-server:bootJar`, instead of pinning a published version via

@@ -28,26 +28,22 @@ bats --filter-tags 'tier:pr,!orkes-only' test/e2e/
 This is what CI does, and starting the server through the CLI rather than with
 `java -jar` is what gives `server.bats` a CLI-managed Local server to assert against.
 
-To reproduce a specific CI leg, pass that leg's Server Version. CI pins three, and the
-checks list names the version in each job title. The pins are declared in one place —
-the `server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml) — and only the
-current release gates a merge:
-
-```bash
-conductor server start --version 3.31.0    # a non-blocking leg
-```
+To reproduce the CI leg, pass its Server Version — the checks list names the version in
+the job title. CI pins one, the current release, declared in a single place: the
+`server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml).
 
 Pin a version the download bucket actually carries: it holds a subset of the server
 repo's tags, so several tagged versions return 403. Check before pinning, which is also
 what CI's preflight does:
 
 ```bash
-curl -sI https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-3.31.0.jar | head -1
+curl -sI https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-3.32.0.jar | head -1
 ```
 
-See [ADR-0006](../../docs/adr/0006-e2e-pins-published-server-versions-as-a-matrix.md) for
-why E2E pins published versions instead of building the server from source, and how to
-recover the source build if fidelity against unreleased `main` is needed.
+See [ADR-0006](../../docs/adr/0006-e2e-pins-a-published-server-version.md) for why E2E
+pins a published version instead of building the server from source, why no older line
+is pinned, and how to recover the source build if fidelity against unreleased `main` is
+needed.
 
 Against an Orkes server:
 
@@ -80,15 +76,14 @@ bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
 
 ### What the OSS-safe run should report
 
-Against the blocking Server Version: 116 tests and **1 skip** on Linux, the `#103`
+Against the pinned Server Version: 116 tests and **1 skip** on Linux, the `#103`
 Known-broken guard. On macOS expect a second, for absent GNU `timeout(1)`.
 
-Against an older leg, expect **more** skips and some failures — neither older line
-serves the Agents API, so nine `agent.bats` tests skip, and both currently fail three
-`schedule.bats` tests. That is pre-existing version skew, which is why those legs do not
-gate a merge;
-[ADR-0006](../../docs/adr/0006-e2e-pins-published-server-versions-as-a-matrix.md) records
-the root cause.
+Against an older line, expect **more** skips and some failures — neither 3.31 nor 3.30
+serves the Agents API, so nine `agent.bats` tests skip, and both fail three
+`schedule.bats` tests on pre-existing server-side skew. CI does not run them for that
+reason; [ADR-0006](../../docs/adr/0006-e2e-pins-a-published-server-version.md) records
+the root cause and what would have to change to pin one.
 
 Anything skipping with *"no CLI-managed local server is running"* means the server was
 not started through `conductor server start`, so the six `server.bats` tests did not
@@ -110,16 +105,19 @@ the `server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml):
 
 ```json
 [
-  { "version": "3.32.0", "blocking": true  },
-  { "version": "3.31.0", "blocking": false },
-  { "version": "3.30.2", "blocking": false }
+  { "version": "3.32.0", "blocking": true  }
 ]
 ```
 
 `blocking: true` means that leg can fail a merge. Exactly one entry must be blocking, and
-the job refuses to start otherwise. Every other leg runs on the same pull requests and
-reports in the same checks list, but cannot gate a merge, so version skew that predates
-your change can't block it.
+the job refuses to start otherwise. Any further entry must therefore be
+`"blocking": false`: it runs on the same pull requests and reports in the same checks
+list under a job name marked *non-blocking*, but cannot gate a merge, so version skew
+that predates your change can't block it.
+
+Only the current release is pinned today. Older lines were tried and dropped —
+[ADR-0006](../../docs/adr/0006-e2e-pins-a-published-server-version.md) explains why, and
+what would make pinning one worthwhile again.
 
 ### Before adding a version, check it exists
 
@@ -132,7 +130,8 @@ curl -sI "https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-$
 ```
 
 `200` means you can pin it. `403` means you can't, whatever `git tag` says in the server
-repo. This is why the 3.31 line is pinned at `3.31.0` rather than a later patch.
+repo — the 3.31 line, for instance, is only available at `3.31.0` and not at its later
+patches.
 
 CI checks this too, and treats the two cases differently: an unavailable **blocking** pin
 fails the preflight outright, while an unavailable **non-blocking** pin only drops its own
@@ -163,7 +162,7 @@ that are server-side, not CLI-side. Expect to fix or tag around those first.
 bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
 
 # reproduce a leg locally, from a scratch dir, on a fresh database
-conductor server start --version 3.31.0
+conductor server start --version 3.32.0
 ```
 
 Run each version against its own working directory. Pointing two Server Versions at one
