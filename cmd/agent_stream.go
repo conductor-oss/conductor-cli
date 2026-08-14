@@ -79,7 +79,7 @@ events in real time. Use --no-stream to start it and just print the execution id
 		fmt.Println()
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 		defer stop()
-		return svc.StreamExecution(ctx, exec.ID, "", newTerminalSink())
+		return svc.StreamExecution(ctx, exec.ID, "", createTerminalSink())
 	},
 }
 
@@ -93,7 +93,7 @@ var agentStreamCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 		defer stop()
-		return internal.GetAgentService().StreamExecution(ctx, args[0], streamLastEventID, newTerminalSink())
+		return internal.GetAgentService().StreamExecution(ctx, args[0], streamLastEventID, createTerminalSink())
 	},
 }
 
@@ -105,7 +105,7 @@ type terminalSink struct {
 	w io.Writer
 }
 
-func newTerminalSink() terminalSink {
+func createTerminalSink() terminalSink {
 	return terminalSink{w: os.Stdout}
 }
 
