@@ -35,7 +35,8 @@ import (
 
 const (
 	// OSS Conductor server download URL template
-	// Version is substituted: "latest" or specific version like "3.21.23"
+	// Version is substituted: "latest" or specific version like "3.32.0". The bucket
+	// carries a subset of the server repo's tags, so not every tag resolves here.
 	ossJarURLTemplate = "https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-%s.jar"
 
 	// Orkes Conductor server download URL template (TBD)
@@ -93,7 +94,7 @@ Examples:
   conductor server start
 
   # Start with specific version
-  conductor server start --version 3.21.23
+  conductor server start --version 3.32.0
 
   # Start on a different port
   conductor server start --port 9090
@@ -143,7 +144,7 @@ Examples:
   conductor server update
 
   # Update a specific version
-  conductor server update --version 3.21.23`,
+  conductor server update --version 3.32.0`,
 		RunE:         updateServer,
 		SilenceUsage: true,
 	}
@@ -1041,7 +1042,7 @@ func init() {
 	// Start command flags
 	serverStartCmd.Flags().Int("port", defaultPort, "Port to run the server on")
 	serverStartCmd.Flags().BoolP("foreground", "f", false, "Run server in foreground (don't daemonize)")
-	serverStartCmd.Flags().String("version", "latest", "Server version to download and run (e.g., 'latest', '3.21.23')")
+	serverStartCmd.Flags().String("version", "latest", "Server version to download and run (e.g., 'latest', '3.32.0')")
 	serverStartCmd.Flags().Bool("oss", false, "Use open-source Conductor server (default)")
 	serverStartCmd.Flags().Bool("orkes", false, "Use Orkes Conductor server (coming soon)")
 	serverStartCmd.MarkFlagsMutuallyExclusive("oss", "orkes")
@@ -1051,7 +1052,7 @@ func init() {
 	serverLogsCmd.Flags().IntP("lines", "n", 50, "Number of lines to show")
 
 	// Update command flags
-	serverUpdateCmd.Flags().String("version", "latest", "Server version to update (e.g., 'latest', '3.21.23')")
+	serverUpdateCmd.Flags().String("version", "latest", "Server version to update (e.g., 'latest', '3.32.0')")
 	serverUpdateCmd.Flags().Bool("oss", false, "Use open-source Conductor server (default)")
 	serverUpdateCmd.Flags().Bool("orkes", false, "Use Orkes Conductor server (coming soon)")
 	serverUpdateCmd.MarkFlagsMutuallyExclusive("oss", "orkes")

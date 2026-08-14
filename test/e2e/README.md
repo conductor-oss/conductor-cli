@@ -19,27 +19,31 @@ Run from the **repository root**, not from this directory.
 Against a local OSS server:
 
 ```bash
-conductor server start --version 3.32.0-rc.23   # from a scratch dir, see note below
+conductor server start --version 3.32.0   # from a scratch dir, see note below
 export CONDUCTOR_SERVER_URL=http://localhost:8080/api
 export CONDUCTOR_SERVER_TYPE=OSS
 bats --filter-tags 'tier:pr,!orkes-only' test/e2e/
 ```
 
-To test against the code that will actually ship, build the server from source
-instead — releases are cut from `conductor-oss/conductor` `main`, and no artifact is
-published from it:
+This is what CI does, and starting the server through the CLI rather than with
+`java -jar` is what gives `server.bats` a CLI-managed Local server to assert against.
+
+To reproduce the CI leg, pass its Server Version — the checks list names the version in
+the job title. CI pins one, the current release, declared in a single place: the
+`server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml).
+
+Pin a version the download bucket actually carries: it holds a subset of the server
+repo's tags, so several tagged versions return 403. Check before pinning, which is also
+what CI's preflight does:
 
 ```bash
-cd ../conductor && git checkout main && git pull
-./gradlew :conductor-server:bootJar -x test        # note the conductor- prefix
-mkdir -p /tmp/conductor-e2e && cd /tmp/conductor-e2e
-java -jar ../../conductor/server/build/libs/*-boot.jar \
-  --conductor.integrations.ai.enabled=true --agentspan.embedded=true
+curl -sI https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-3.32.0.jar | head -1
 ```
 
-This is what CI does. Because `conductor server start` can only download published
-versions, a source-built jar has no CLI-managed pid file, so the six server-dependent
-tests in `server.bats` skip. See #105.
+See [ADR-0006](../../docs/adr/0006-e2e-pins-a-published-server-version.md) for why E2E
+pins a published version instead of building the server from source, why no older line
+is pinned, and how to recover the source build if fidelity against unreleased `main` is
+needed.
 
 Against an Orkes server:
 
@@ -70,10 +74,99 @@ bats test/e2e/agent.bats
 bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
 ```
 
+### What the OSS-safe run should report
+
+Against the pinned Server Version: 116 tests and **1 skip** on Linux, the `#103`
+Known-broken guard. On macOS expect a second, for absent GNU `timeout(1)`.
+
+Against an older line, expect **more** skips and some failures — neither 3.31 nor 3.30
+serves the Agents API, so nine `agent.bats` tests skip, and both fail three
+`schedule.bats` tests on pre-existing server-side skew. CI does not run them for that
+reason; [ADR-0006](../../docs/adr/0006-e2e-pins-a-published-server-version.md) records
+the root cause and what would have to change to pin one.
+
+Anything skipping with *"no CLI-managed local server is running"* means the server was
+not started through `conductor server start`, so the six `server.bats` tests did not
+run. CI fails the leg on that rather than letting the coverage vanish quietly:
+
+```bash
+bats --filter-tags 'tier:pr,!orkes-only' test/e2e/ | grep '# skip'
+```
+
 > Start the local server from a scratch directory (e.g. `/tmp/conductor-e2e`).
 > `conductor server start` writes its SQLite database relative to the working
 > directory with no flag to override it, so starting it from the repo drops a
 > multi-hundred-MB `c123.db` here. See issue #104.
+
+## Changing which Server Versions CI tests
+
+The OSS-safe suite runs once per pinned Server Version. All the pins live in one place —
+the `server-versions` job in [`e2e.yml`](../../.github/workflows/e2e.yml):
+
+```json
+[
+  { "version": "3.32.0", "blocking": true  }
+]
+```
+
+`blocking: true` means that leg can fail a merge. Exactly one entry must be blocking, and
+the job refuses to start otherwise. Any further entry must therefore be
+`"blocking": false`: it runs on the same pull requests and reports in the same checks
+list under a job name marked *non-blocking*, but cannot gate a merge, so version skew
+that predates your change can't block it.
+
+Only the current release is pinned today. Older lines were tried and dropped —
+[ADR-0006](../../docs/adr/0006-e2e-pins-a-published-server-version.md) explains why, and
+what would make pinning one worthwhile again.
+
+### Before adding a version, check it exists
+
+The jar bucket carries only a *subset* of the server repo's tags — some tagged versions
+are simply absent. Check with a `HEAD` first:
+
+```bash
+V=3.31.0
+curl -sI "https://conductor-server.s3.us-east-2.amazonaws.com/conductor-server-$V.jar" | head -1
+```
+
+`200` means you can pin it. `403` means you can't, whatever `git tag` says in the server
+repo — the 3.31 line, for instance, is only available at `3.31.0` and not at its later
+patches.
+
+CI checks this too, and treats the two cases differently: an unavailable **blocking** pin
+fails the preflight outright, while an unavailable **non-blocking** pin only drops its own
+leg, with a warning saying so. Failing the whole preflight would skip the blocking leg as
+well, which would let an older version gate a merge through the back door.
+
+### The four changes you're likely to make
+
+| Goal | Change |
+|---|---|
+| Bump the blocking pin for a new release | Edit the `version` of the `blocking: true` entry |
+| Add a line to the matrix | Add an entry with `"blocking": false` |
+| Stop testing a line | Delete its entry |
+| Make an older line gate merges | Flip its `blocking` to `true` and the old one to `false` |
+
+Nothing else needs touching: the job name, the jar cache key, and the nightly job's
+version all derive from these entries. Adding a leg costs one jar download the first
+time and is cache-hit afterwards, because pins are immutable.
+
+Promoting an older line to blocking is a one-line edit but a real commitment — it means
+the suite must pass against that line, and today the older lines fail tests for reasons
+that are server-side, not CLI-side. Expect to fix or tag around those first.
+
+### Check your change before pushing
+
+```bash
+# what each leg will run
+bats --count --filter-tags 'tier:pr,!orkes-only' test/e2e/
+
+# reproduce a leg locally, from a scratch dir, on a fresh database
+conductor server start --version 3.32.0
+```
+
+Run each version against its own working directory. Pointing two Server Versions at one
+`c123.db` produces spurious failures that have nothing to do with the version.
 
 ## Tags
 

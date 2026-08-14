@@ -33,22 +33,86 @@ permissions:
   pull-requests: write
 
 env:
-  # The server is built from source because releases are cut from conductor-oss
-  # main and no artifact is published from it: Maven's newest is a tagged RC and
-  # the S3 'latest' jar is months stale. Building means the CLI is tested against
-  # what will actually ship.
-  #
-  # TODO(#105): revisit pinning to the newest published RC instead. RCs are cut
-  # from main, so an RC is a main snapshot, and pulling a cached jar is faster and
-  # decouples this repo's CI from the server repo's build health. See the tracking
-  # issue linked in ADR-0001.
-  CONDUCTOR_SERVER_REF: 'main'
   # Scratch directory the local server is started from. `conductor server start`
   # writes its SQLite database relative to the working directory with no flag to
   # override it (see #104), so it must not run from the repo root.
   SERVER_WORKDIR: /tmp/conductor-e2e
+  # Bucket `conductor server start --version` downloads from. Named here so the
+  # preflight can check a pin without reimplementing the CLI's URL construction.
+  SERVER_JAR_BUCKET: https://conductor-server.s3.us-east-2.amazonaws.com
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Declares which published Server Versions the server-backed jobs pin, and
+  # proves each one is downloadable before those jobs do any real work.
+  #
+  # The bucket carries only a subset of the server repo's tags, so a version
+  # existing in conductor-oss/conductor does not mean it can be pinned here.
+  # Without this check a bad pin surfaces minutes into a job as an opaque
+  # download failure.
+  # ---------------------------------------------------------------------------
+  server-versions:
+    name: Pinned Server Versions
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.verify.outputs.matrix }}
+      blocking: ${{ steps.verify.outputs.blocking }}
+    steps:
+    - name: Declare the pinned Server Versions
+      run: |
+        # THE place to bump a pin. One entry per Server Version to test, at the
+        # newest that line has actually published. Exactly one entry is blocking
+        # — the current release, which is what users are running.
+        #
+        # Only the current release is pinned. An older line can be added as an
+        # entry with "blocking": false, which reports against that line without
+        # gating a merge; ADR-0006 records why none is pinned today.
+        #
+        # Pin a fixed Server Version, never `latest`: `latest` is mutable
+        # content, which loses reproducibility and poisons a cache keyed on it.
+        cat > pins.json <<'JSON'
+        [
+          { "version": "3.32.0", "blocking": true  }
+        ]
+        JSON
+        jq -e 'map(select(.blocking)) | length == 1' pins.json > /dev/null || {
+          echo "::error::exactly one pinned Server Version must be blocking"
+          exit 1
+        }
+
+    - name: Verify every pinned Server Version is published
+      id: verify
+      run: |
+        # The URL is built the same way cmd/server.go builds it. That is a second
+        # copy of the shape, accepted so the check can run before the CLI is even
+        # built; if the template there changes, change it here too.
+        #
+        # A missing *blocking* pin is fatal. A missing older pin only drops its
+        # own leg, with a warning — failing the whole preflight would skip the
+        # blocking leg too, and an older-version problem must never gate a merge.
+        available='[]'
+        fatal=0
+        while read -r row; do
+          version=$(jq -r '.version' <<<"$row")
+          blocking=$(jq -r '.blocking' <<<"$row")
+          url="$SERVER_JAR_BUCKET/conductor-server-$version.jar"
+          # -L because the bucket may redirect; %{http_code} is 000 on a network
+          # error, which fails the comparison just as a 403 does.
+          code=$(curl -sSL -o /dev/null -w '%{http_code}' -I "$url" || true)
+          if [ "$code" = "200" ]; then
+            echo "ok        $version  $url"
+            available=$(jq -c --argjson row "$row" '. + [$row]' <<<"$available")
+          elif [ "$blocking" = "true" ]; then
+            echo "::error::Blocking Server Version $version is not published: HEAD $url returned $code. The bucket carries a subset of conductor-oss/conductor's tags, so a git tag is not enough — check with a HEAD before pinning."
+            fatal=1
+          else
+            echo "::warning::Non-blocking Server Version $version is not published (HEAD $url returned $code), so its leg is dropped from this run. Pin a version the bucket carries, or remove the entry."
+          fi
+        done < <(jq -c '.[]' pins.json)
+        [ "$fatal" -eq 0 ] || exit 1
+        echo "matrix=$available" >> "$GITHUB_OUTPUT"
+        echo "blocking=$(jq -r 'map(select(.blocking))[0].version' <<<"$available")" >> "$GITHUB_OUTPUT"
+
   # ---------------------------------------------------------------------------
   # Remote Enterprise server. Covers the Orkes-only surface (secret, webhook,
   # api-gateway) that a local OSS server cannot exercise.
@@ -56,6 +120,22 @@ jobs:
   e2e-enterprise:
     name: E2E (Enterprise)
     runs-on: ubuntu-latest
+    # This job addresses a single shared remote server, and the suites create fixtures
+    # under fixed global names (`e2e_test_secret`, `e2e_test_service`, …) whose
+    # `setup_file` deletes leftovers before running. Two overlapping runs therefore
+    # delete each other's fixtures mid-test. The group is a constant rather than keyed
+    # on the ref, because the contention is between *different* pull requests, not
+    # between pushes to one.
+    #
+    # A stopgap, not a fix. While one run holds the slot another can sit pending and be
+    # superseded by a newer one, so an overlapping run may report cancelled rather than
+    # green — which is at least honest, unlike the interleaved corruption it replaces.
+    # The real fix is per-run fixture namespacing, which removes the contention instead
+    # of queueing around it. The OSS matrix needs none of this: every leg gets its own
+    # private server.
+    concurrency:
+      group: e2e-enterprise-shared-server
+      cancel-in-progress: false
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.run_enterprise
@@ -121,16 +201,38 @@ jobs:
         if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Local OSS server built from conductor-oss main. Covers the OSS code paths, the
-  # `server` command, and validates the CLI against the code that will ship —
-  # none of which the Enterprise job can do.
+  # Local OSS server at a pinned, published Server Version, started through the
+  # CLI's own `server start --version`. Covers the OSS code paths and the
+  # `server` command group, neither of which the Enterprise job can reach.
+  #
+  # One leg per pinned version. Today that is the current release alone, which
+  # gates a merge. A leg pinned with "blocking": false reports without gating,
+  # so version skew that predates a change cannot block it.
+  #
+  # Starting through the CLI is also what gives server.bats a CLI-managed Local
+  # server to assert against, so its six server-dependent tests run rather than
+  # skip.
   # ---------------------------------------------------------------------------
   e2e-local-server:
-    name: E2E (local OSS server)
+    # Only a non-blocking leg is labelled, so the check name carries the caveat
+    # exactly when there is one; with a single pin there is nothing to contrast
+    # "blocking" against and the suffix would just raise the question.
+    # The condition is inverted deliberately: `x && '' || y` always yields y,
+    # because the empty string is falsy in a GitHub Actions expression.
+    name: E2E (local OSS server ${{ matrix.server.version }}${{ !matrix.server.blocking && ', non-blocking' || '' }})
     runs-on: ubuntu-latest
+    needs: server-versions
     if: >-
       github.event_name != 'workflow_dispatch' ||
       inputs.run_local_server
+    # A non-blocking leg reports without gating. Which legs exist, and which one
+    # gates, is a one-line change in the pins above.
+    continue-on-error: ${{ !matrix.server.blocking }}
+    strategy:
+      # Every leg's result is wanted; a failure on one must not cancel the rest.
+      fail-fast: false
+      matrix:
+        server: ${{ fromJSON(needs.server-versions.outputs.matrix) }}
     steps:
     - uses: actions/checkout@v4
 
@@ -154,23 +256,14 @@ jobs:
         chmod +x conductor
         ./conductor --version
 
-    - name: Check out Conductor server source
-      uses: actions/checkout@v4
+    - name: Cache Conductor server jar
+      uses: actions/cache@v4
       with:
-        repository: conductor-oss/conductor
-        ref: ${{ env.CONDUCTOR_SERVER_REF }}
-        path: conductor-server-src
-
-    - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v4
-
-    - name: Build Conductor server from source
-      working-directory: conductor-server-src
-      run: |
-        # Module names are prefixed in settings.gradle, so the task is
-        # :conductor-server:bootJar, not :server:bootJar.
-        ./gradlew :conductor-server:bootJar -x test --console=plain
-        ls -la server/build/libs/*-boot.jar
+        # ~450 MB download. Cached at the per-version directory the CLI already
+        # downloads into, keyed on the version, so adding a leg costs one
+        # download once. Pins are immutable, so the key never needs busting.
+        path: ~/.conductor-cli/server/oss/${{ matrix.server.version }}
+        key: conductor-server-oss-${{ matrix.server.version }}
 
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
@@ -184,28 +277,20 @@ jobs:
         }
 
     - name: Start local Conductor server
+      env:
+        SERVER_VERSION: ${{ matrix.server.version }}
       run: |
         mkdir -p "$SERVER_WORKDIR"
-        JAR=$(ls "$GITHUB_WORKSPACE"/conductor-server-src/server/build/libs/*-boot.jar | head -1)
-        echo "starting $JAR"
-        # Run from the scratch dir so the SQLite database is not written into the
-        # repository (see #104). The AI flags mirror what `conductor server start`
-        # passes, so agent workflows behave the same as under the CLI.
-        #
-        # NOTE: a source-built jar cannot be launched via `conductor server start`,
-        # which only downloads published versions. Consequently no CLI-managed pid
-        # file exists and the 6 server-dependent tests in server.bats skip rather
-        # than run. They skip loudly with a reason; see the tracking issue in
-        # ADR-0001 for closing that gap.
+        # Started from the scratch dir so the SQLite database is not written into
+        # the repository (see #104). `server start` passes the local server
+        # defaults itself, so this job does not restate them.
         cd "$SERVER_WORKDIR"
-        nohup java -jar "$JAR" \
-          --conductor.integrations.ai.enabled=true \
-          --agentspan.embedded=true \
-          > /tmp/conductor-server.log 2>&1 &
-        echo $! > /tmp/conductor-server.pid
+        "$GITHUB_WORKSPACE/conductor" server start --version "$SERVER_VERSION"
 
     - name: Wait for server health
       run: |
+        # `server start` waits for readiness but only warns on timeout, so assert
+        # health here rather than trusting its exit status.
         for i in $(seq 1 60); do
           if curl -sf http://localhost:8080/health | grep -q '"healthy":true'; then
             echo "server healthy after ${i}s"
@@ -214,7 +299,7 @@ jobs:
           sleep 1
         done
         echo "::error::server did not become healthy within 60s"
-        tail -n 100 /tmp/conductor-server.log || true
+        ./conductor server logs -n 100 || true
         exit 1
 
     - name: Run OSS E2E tests
@@ -222,30 +307,51 @@ jobs:
         CONDUCTOR_SERVER_URL: http://localhost:8080/api
         CONDUCTOR_SERVER_TYPE: OSS
       run: |
+        # pipefail so tee does not mask a bats failure.
+        set -o pipefail
         # Excludes orkes-only; includes oss-only (the server suite).
-        bats --filter-tags 'tier:pr,!orkes-only' test/e2e/ --show-output-of-passing-tests
+        bats --filter-tags 'tier:pr,!orkes-only' test/e2e/ --show-output-of-passing-tests \
+          | tee /tmp/bats-oss.txt
+
+    - name: Report skips and guard the server-dependent tests
+      if: always()
+      env:
+        SERVER_VERSION: ${{ matrix.server.version }}
+      run: |
+        [ -f /tmp/bats-oss.txt ] || { echo "no bats output to inspect"; exit 0; }
+        skips=$(grep -c '# skip' /tmp/bats-oss.txt || true)
+        echo "::notice::OSS-safe tier:pr on ${SERVER_VERSION}: ${skips} skipped"
+        grep '# skip' /tmp/bats-oss.txt || echo "(nothing skipped)"
+        # Pinning exists so a CLI-managed Local server is available. If these skip
+        # again, the launch path regressed and the coverage silently vanished —
+        # which is exactly what this change was made to stop.
+        if grep -q 'no CLI-managed local server is running' /tmp/bats-oss.txt; then
+          echo "::error::server.bats skipped for want of a CLI-managed Local server. The server was not started through 'conductor server start', so the six server-dependent tests did not run."
+          exit 1
+        fi
 
     - name: Dump server logs on failure
       if: failure()
-      run: tail -n 200 /tmp/conductor-server.log || true
+      run: ./conductor server logs -n 200 || true
 
     - name: Collect server log for artifacts
       if: always()
       # upload-artifact does not expand '~', so copy the log into the workspace.
       run: |
         mkdir -p e2e-logs
-        cp /tmp/conductor-server.log e2e-logs/ 2>/dev/null || true
+        cp ~/.conductor-cli/server/conductor.log e2e-logs/ 2>/dev/null || true
 
     - name: Stop local Conductor server
       if: always()
-      run: |
-        [ -f /tmp/conductor-server.pid ] && kill "$(cat /tmp/conductor-server.pid)" 2>/dev/null || true
+      run: ./conductor server stop || true
 
     - name: Upload test artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: e2e-artifacts-local-server
+        # Artifact names must be unique across a workflow run, so each leg
+        # carries its Server Version.
+        name: e2e-artifacts-local-server-${{ matrix.server.version }}
         path: |
           test/e2e/*.log
           test/e2e/*.json
@@ -257,6 +363,10 @@ jobs:
   # the PR path because it spends provider tokens, depends on PyPI, and is
   # non-deterministic by nature.
   #
+  # Runs against the blocking Server Version only, however many are pinned: its
+  # suites depend on capabilities older lines lack, and each extra leg would
+  # spend model tokens to tell us so.
+  #
   # Currently manual-only: there is no `schedule:` trigger, so this runs solely
   # when someone dispatches the workflow with run_nightly=true. The tier is still
   # named "nightly" because that is its intended cadence once someone owns the
@@ -265,6 +375,7 @@ jobs:
   e2e-nightly:
     name: E2E (nightly tier - LLM + deploy, manual)
     runs-on: ubuntu-latest
+    needs: server-versions
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.run_nightly
     env:
@@ -272,6 +383,8 @@ jobs:
       # job-level `env`. Reduce the secret to a boolean here so steps can gate on
       # it without leaking the value.
       HAS_LLM_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      # Same pin as the blocking leg, taken from the same declaration.
+      CONDUCTOR_SERVER_VERSION: ${{ needs.server-versions.outputs.blocking }}
     steps:
     - uses: actions/checkout@v4
 
@@ -300,21 +413,11 @@ jobs:
         chmod +x conductor
         ./conductor --version
 
-    - name: Check out Conductor server source
-      uses: actions/checkout@v4
+    - name: Cache Conductor server jar
+      uses: actions/cache@v4
       with:
-        repository: conductor-oss/conductor
-        ref: ${{ env.CONDUCTOR_SERVER_REF }}
-        path: conductor-server-src
-
-    - name: Set up Gradle
-      uses: gradle/actions/setup-gradle@v4
-
-    - name: Build Conductor server from source
-      working-directory: conductor-server-src
-      run: |
-        ./gradlew :conductor-server:bootJar -x test --console=plain
-        ls -la server/build/libs/*-boot.jar
+        path: ~/.conductor-cli/server/oss/${{ env.CONDUCTOR_SERVER_VERSION }}
+        key: conductor-server-oss-${{ env.CONDUCTOR_SERVER_VERSION }}
 
     - name: Setup bats
       uses: bats-core/bats-action@2.0.0
@@ -328,13 +431,8 @@ jobs:
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       run: |
         mkdir -p "$SERVER_WORKDIR"
-        JAR=$(ls "$GITHUB_WORKSPACE"/conductor-server-src/server/build/libs/*-boot.jar | head -1)
         cd "$SERVER_WORKDIR"
-        nohup java -jar "$JAR" \
-          --conductor.integrations.ai.enabled=true \
-          --agentspan.embedded=true \
-          > /tmp/conductor-server.log 2>&1 &
-        echo $! > /tmp/conductor-server.pid
+        "$GITHUB_WORKSPACE/conductor" server start --version "$CONDUCTOR_SERVER_VERSION"
 
     - name: Wait for server health
       run: |
@@ -346,6 +444,7 @@ jobs:
           sleep 1
         done
         echo "::error::server did not become healthy within 60s"
+        ./conductor server logs -n 100 || true
         exit 1
 
     - name: Run agentspan deploy tests
@@ -373,19 +472,18 @@ jobs:
 
     - name: Dump server logs on failure
       if: failure()
-      run: tail -n 200 /tmp/conductor-server.log || true
+      run: ./conductor server logs -n 200 || true
 
     - name: Collect server log for artifacts
       if: always()
       # upload-artifact does not expand '~', so copy the log into the workspace.
       run: |
         mkdir -p e2e-logs
-        cp /tmp/conductor-server.log e2e-logs/ 2>/dev/null || true
+        cp ~/.conductor-cli/server/conductor.log e2e-logs/ 2>/dev/null || true
 
     - name: Stop local Conductor server
       if: always()
-      run: |
-        [ -f /tmp/conductor-server.pid ] && kill "$(cat /tmp/conductor-server.pid)" 2>/dev/null || true
+      run: ./conductor server stop || true
 
     - name: Upload test artifacts
       if: always()

@@ -1,8 +1,16 @@
 ---
-status: accepted
+status: superseded
 ---
 
 # E2E builds the Conductor server from source rather than pinning a published version
+
+> **Superseded by
+> [ADR-0006](./0006-e2e-pins-a-published-server-version.md).** The blocker
+> below — that no artifact is published from `main` — expired when `3.32.0` GA shipped
+> and the S3 `latest` jar was republished to match it. E2E now pins a published Server
+> Version and runs the OSS-safe suite against it. Read this ADR as the recorded case
+> for source-building, not as current policy; ADR-0006 explains how to recover the
+> arrangement it describes.
 
 The E2E jobs check out `conductor-oss/conductor` at `main` and run
 `:conductor-server:bootJar`, instead of pinning a published version via
@@ -69,8 +77,21 @@ Any of these should prompt switching back to a pin:
 
 The workflow keeps a single knob for this: `CONDUCTOR_SERVER_REF`. Reverting means
 replacing the checkout-and-build steps with `conductor server start --version <x>`,
-which the earlier revision of #106 already implemented, so the change is recoverable
-from git history rather than needing redesign.
+which commit `cf9d6b8c` already implements — `CONDUCTOR_SERVER_VERSION`, an
+`actions/cache` keyed on it, and the `server start` invocation, for both server-backed
+jobs.
+
+That commit is **not reachable from `main`**: #106 was squash-merged, so
+`git log -S'server start --version'` finds nothing. Fetch it with
+`git fetch origin refs/pull/106/head`, or read the file directly:
+
+```
+gh api "repos/conductor-oss/conductor-cli/contents/.github/workflows/e2e.yml?ref=cf9d6b8c"
+```
+
+Pinning also restores coverage rather than only saving time: with `conductor server
+start` managing the server there is a CLI-managed pid file again, so the six
+`server.bats` tests that currently skip will run.
 
 ## Alternatives considered
 

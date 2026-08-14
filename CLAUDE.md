@@ -134,7 +134,7 @@ background process on port 8080.
 **Flags:**
 - `--port` - Port to run the server on (default: 8080)
 - `--foreground`, `-f` - Run in the foreground instead of daemonizing
-- `--version` - Server version to download and run (default: `latest`, e.g. `3.21.23`)
+- `--version` - Server version to download and run (default: `latest`, e.g. `3.32.0`)
 - `--oss` - Use the open-source Conductor server (default)
 - `--orkes` - Use the Orkes Conductor server (coming soon)
 - `--follow`, `-f` - Follow log output like `tail -f` (logs command)
