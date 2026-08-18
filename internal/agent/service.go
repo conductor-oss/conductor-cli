@@ -88,11 +88,24 @@ func (s *service) Deploy(ctx context.Context, framework string, rawConfig json.R
 
 // StreamExecution streams an execution's events into the sink until the stream ends.
 // A context cancellation (e.g. Ctrl-C) is treated as a clean stop, not an error.
+//
+// A terminal event ends the stream from this side, once the sink has seen it. The
+// server holds an already-terminal execution's connection open indefinitely and only
+// sends heartbeats, so waiting for the body to end hangs forever. Ending it is a
+// cancellation like any other, which is also what releases the client's producer
+// goroutine from a send this loop is no longer reading.
 func (s *service) StreamExecution(ctx context.Context, executionID, lastEventID string, sink EventSink) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	events, errc := s.client.Stream(ctx, executionID, lastEventID)
 	for evt := range events {
 		if err := sink.OnEvent(evt); err != nil {
 			return err
+		}
+		if evt.ResolvedType().IsTerminal() {
+			cancel()
+			break
 		}
 	}
 	if err := <-errc; err != nil && !errors.Is(err, context.Canceled) {

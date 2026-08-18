@@ -17,11 +17,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/conductor-oss/conductor-cli/internal/transport"
 )
@@ -348,6 +350,83 @@ func TestStreamReadsSSE(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].Type != EventMessage || got[1].Type != EventDone {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestStreamSendsLastEventID(t *testing.T) {
+	var got string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get(headerLastEventID)
+		_, _ = w.Write([]byte("event: done\ndata: {}\n\n"))
+	})
+
+	events, errc := c.Stream(context.Background(), "exec-1", "42")
+	for range events { //nolint:revive // drain
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("stream error: %v", err)
+	}
+	if got != "42" {
+		t.Errorf("%s = %q, want 42", headerLastEventID, got)
+	}
+}
+
+// Regression guard for #102, at the seam where it actually bit: the server holds an
+// already-terminal execution's connection open and sends only heartbeats, so the body
+// never ends. Streaming must still return once the done event has been delivered.
+func TestStreamExecutionEndsWhenServerHoldsConnectionOpen(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", mimeEventStream)
+		_, _ = io.WriteString(w, ":connected\n\nid: 1\nevent: done\ndata: {\"output\":\"ok\"}\n\n")
+		w.(http.Flusher).Flush()
+		<-r.Context().Done() // the server never closes the stream itself
+	})
+
+	sink := &recordingSink{}
+	done := make(chan error, 1)
+	go func() {
+		done <- NewService(c).StreamExecution(context.Background(), "exec-1", "", sink)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("StreamExecution: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("StreamExecution hung against a server that keeps the connection open")
+	}
+	if len(sink.events) != 1 || sink.events[0].Type != EventDone {
+		t.Fatalf("sink saw %+v, want the done event", sink.events)
+	}
+}
+
+// A consumer that walks away with the channel buffer full must not strand the
+// producer goroutine; cancelling the context is what releases it.
+func TestStreamAbandonsSendWhenConsumerStopsReading(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", mimeEventStream)
+		for i := 0; i < sseChannelBuffer*2; i++ {
+			if _, err := io.WriteString(w, "event: message\ndata: {}\n\n"); err != nil {
+				return
+			}
+		}
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	events, errc := c.Stream(ctx, "exec-1", "")
+	<-events
+	cancel()
+
+	select {
+	case err := <-errc:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("stream error = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the producer goroutine stayed blocked on a send nobody was reading")
 	}
 }
 
