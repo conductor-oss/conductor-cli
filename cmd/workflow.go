@@ -816,6 +816,49 @@ func debugSearchWorkflows(freeText, query string, count int32) error {
 	return nil
 }
 
+// buildWorkflowSearchQuery combines the search filters into a single query
+// expression. Values that can contain spaces are quoted so the server-side
+// query parser keeps them as one term.
+func buildWorkflowSearchQuery(workflowName, status, correlationId, startTimeAfter, startTimeBefore string) (string, error) {
+	var queryParts []string
+
+	// Workflow name filter
+	if workflowName != "" {
+		queryParts = append(queryParts, "workflowType IN ("+workflowName+")")
+	}
+
+	// Status filter
+	if status != "" {
+		queryParts = append(queryParts, "status IN ("+status+")")
+	}
+
+	// Correlation ID filter
+	if correlationId != "" {
+		queryParts = append(queryParts, "correlationId = \""+correlationId+"\"")
+	}
+
+	// Start time filter (after)
+	if startTimeAfter != "" {
+		startTimeAfterMs, err := parseTimeToEpochMillis(startTimeAfter)
+		if err != nil {
+			return "", fmt.Errorf("invalid start-time-after: %v", err)
+		}
+		queryParts = append(queryParts, "startTime>"+strconv.FormatInt(startTimeAfterMs, 10))
+	}
+
+	// Start time filter (before)
+	if startTimeBefore != "" {
+		startTimeBeforeMs, err := parseTimeToEpochMillis(startTimeBefore)
+		if err != nil {
+			return "", fmt.Errorf("invalid start-time-before: %v", err)
+		}
+		queryParts = append(queryParts, "startTime<"+strconv.FormatInt(startTimeBeforeMs, 10))
+	}
+
+	// Combine all query parts with AND
+	return strings.Join(queryParts, " AND "), nil
+}
+
 func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 	debug, _ := cmd.Flags().GetBool("debug")
 
@@ -832,43 +875,16 @@ func searchWorkflowExecutions(cmd *cobra.Command, args []string) error {
 		count = 10
 	}
 
-	// Build query dynamically with AND conditions
-	var queryParts []string
-
-	// Workflow name filter
 	workflowName, _ := cmd.Flags().GetString("workflow")
-	if workflowName != "" {
-		queryParts = append(queryParts, "workflowType IN ("+workflowName+")")
-	}
-
-	// Status filter
 	status, _ := cmd.Flags().GetString("status")
-	if status != "" {
-		queryParts = append(queryParts, "status IN ("+status+")")
-	}
-
-	// Start time filter (after)
+	correlationId, _ := cmd.Flags().GetString("correlation-id")
 	startTimeAfter, _ := cmd.Flags().GetString("start-time-after")
-	if startTimeAfter != "" {
-		startTimeAfterMs, err := parseTimeToEpochMillis(startTimeAfter)
-		if err != nil {
-			return fmt.Errorf("invalid start-time-after: %v", err)
-		}
-		queryParts = append(queryParts, "startTime>"+strconv.FormatInt(startTimeAfterMs, 10))
-	}
-
-	// Start time filter (before)
 	startTimeBefore, _ := cmd.Flags().GetString("start-time-before")
-	if startTimeBefore != "" {
-		startTimeBeforeMs, err := parseTimeToEpochMillis(startTimeBefore)
-		if err != nil {
-			return fmt.Errorf("invalid start-time-before: %v", err)
-		}
-		queryParts = append(queryParts, "startTime<"+strconv.FormatInt(startTimeBeforeMs, 10))
-	}
 
-	// Combine all query parts with AND
-	query := strings.Join(queryParts, " AND ")
+	query, err := buildWorkflowSearchQuery(workflowName, status, correlationId, startTimeAfter, startTimeBefore)
+	if err != nil {
+		return err
+	}
 
 	// Debug mode: make raw HTTP request to see server response
 	if debug {
@@ -1455,6 +1471,7 @@ func init() {
 	searchExecutionCmd.Flags().Int32P("count", "c", 10, "No of workflow executions to return (max 1000)")
 	searchExecutionCmd.Flags().StringP("status", "s", "", "Filter by status one of (COMPLETED, FAILED, PAUSED, RUNNING, TERMINATED, TIMED_OUT)")
 	searchExecutionCmd.Flags().StringP("workflow", "w", "", "Workflow name")
+	searchExecutionCmd.Flags().String("correlation-id", "", "Filter by correlation ID (set with 'workflow start --correlation')")
 	searchExecutionCmd.Flags().String("start-time-after", "", "Filter executions started after this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchExecutionCmd.Flags().String("start-time-before", "", "Filter executions started before this time (YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch ms)")
 	searchExecutionCmd.Flags().Bool("json", false, "Output as JSON")

@@ -296,6 +296,7 @@ conductor workflow <command> [arguments] [flags]
 **Workflow Search Options:**
 - `-w, --workflow` - Filter by workflow name
 - `-s, --status` - Filter by status: `COMPLETED`, `FAILED`, `PAUSED`, `RUNNING`, `TERMINATED`, `TIMED_OUT`
+- `--correlation-id` - Filter by correlation ID (the value passed to `start --correlation`)
 - `-c, --count` - Number of results (default: 10, max: 1000)
 - `--start-time-after` - Filter by start time (format: `YYYY-MM-DD HH:MM:SS`, `YYYY-MM-DD`, or epoch ms)
 - `--start-time-before` - Filter by start time

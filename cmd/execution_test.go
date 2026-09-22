@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -178,4 +179,71 @@ func TestParseTimeToEpochMillis_EdgeCases(t *testing.T) {
 			t.Errorf("expected 9223372036854775807, got %d", result)
 		}
 	})
+}
+func TestBuildWorkflowSearchQuery(t *testing.T) {
+	startTime := "2023-12-25 15:30:45"
+	startTimeMs := strconv.FormatInt(time.Date(2023, 12, 25, 15, 30, 45, 0, time.UTC).Unix()*1000, 10)
+
+	tests := []struct {
+		name            string
+		workflowName    string
+		status          string
+		correlationId   string
+		startTimeAfter  string
+		startTimeBefore string
+		expected        string
+		expectError     bool
+	}{
+		{
+			name:     "no filters",
+			expected: "",
+		},
+		{
+			name:          "correlation id only",
+			correlationId: "order-123",
+			expected:      `correlationId = "order-123"`,
+		},
+		{
+			name:          "correlation id with spaces stays one term",
+			correlationId: "order 123",
+			expected:      `correlationId = "order 123"`,
+		},
+		{
+			name:          "correlation id combined with other filters",
+			workflowName:  "my_workflow",
+			status:        "COMPLETED",
+			correlationId: "order-123",
+			expected:      `workflowType IN (my_workflow) AND status IN (COMPLETED) AND correlationId = "order-123"`,
+		},
+		{
+			name:            "correlation id combined with time range",
+			correlationId:   "order-123",
+			startTimeAfter:  startTime,
+			startTimeBefore: startTime,
+			expected:        `correlationId = "order-123" AND startTime>` + startTimeMs + ` AND startTime<` + startTimeMs,
+		},
+		{
+			name:           "invalid start-time-after",
+			startTimeAfter: "not-a-time",
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query, err := buildWorkflowSearchQuery(tt.workflowName, tt.status, tt.correlationId, tt.startTimeAfter, tt.startTimeBefore)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected an error, got query %q", query)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if query != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, query)
+			}
+		})
+	}
 }

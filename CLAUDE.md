@@ -162,7 +162,7 @@ background process on port 8080.
 | `workflow start --sync` | Start and wait for completion | None | `--workflow`, `--input`, `--file`, `--wait-until` | `conductor workflow start --workflow my_workflow --sync` |
 | `workflow status <id>` | Get execution status | workflow ID | | `conductor workflow status abc-123` |
 | `workflow get-execution <id>` | Get full execution details | workflow ID | `--complete` | `conductor workflow get-execution abc-123` |
-| `workflow search` | Search executions | None | `--workflow`, `--status`, `--count`, `--start-time-after`, `--start-time-before`, `--json` | `conductor workflow search --workflow my_workflow --status FAILED` |
+| `workflow search` | Search executions | None | `--workflow`, `--status`, `--correlation-id`, `--count`, `--start-time-after`, `--start-time-before`, `--json` | `conductor workflow search --workflow my_workflow --status FAILED` |
 | `workflow terminate <id>` | Terminate execution | workflow ID | | `conductor workflow terminate abc-123` |
 | `workflow pause <id>` | Pause execution | workflow ID | | `conductor workflow pause abc-123` |
 | `workflow resume <id>` | Resume paused execution | workflow ID | | `conductor workflow resume abc-123` |
@@ -713,9 +713,14 @@ conductor workflow search --workflow my_workflow \
   --start-time-after "2025-01-01" \
   --start-time-before "2025-01-31"
 
+# Find every execution tagged with a correlation ID at start time
+conductor workflow start --workflow my_workflow --correlation "order-12345"
+conductor workflow search --correlation-id "order-12345"
+
 # Combine filters
 conductor workflow search --workflow my_workflow \
   --status RUNNING \
+  --correlation-id "order-12345" \
   --start-time-after "2025-01-01 10:00:00" \
   --count 100
 ```
@@ -723,6 +728,7 @@ conductor workflow search --workflow my_workflow \
 **Search flags:**
 - `--workflow <name>` - Filter by workflow name
 - `--status <status>` - Filter by status (COMPLETED, FAILED, RUNNING, PAUSED, TERMINATED, TIMED_OUT)
+- `--correlation-id <id>` - Filter by correlation ID, the value given to `workflow start --correlation`. Matched exactly; quote ids containing spaces.
 - `--count <n>` - Number of results (max 1000, default 10)
 - `--start-time-after <time>` - Started after time (formats: YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or epoch milliseconds)
 - `--start-time-before <time>` - Started before time (same formats)

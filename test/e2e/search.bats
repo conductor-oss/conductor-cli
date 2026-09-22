@@ -7,6 +7,7 @@
 
 WORKFLOW_NAME="cli_e2e_test_workflow_2"
 WORKFLOW_FILE="test/e2e/test-workflow-2.json"
+CORRELATION_ID="cli e2e search correlation"
 
 setup() {
     if [ ! -f "./conductor" ]; then
@@ -31,7 +32,7 @@ get_workflow_id() {
 }
 
 @test "2. Start workflow execution" {
-    run bash -c "./conductor workflow start --workflow '$WORKFLOW_NAME' 2>/dev/null"
+    run bash -c "./conductor workflow start --workflow '$WORKFLOW_NAME' --correlation '$CORRELATION_ID' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
 
@@ -113,7 +114,38 @@ get_workflow_id() {
     echo "$output" | grep -q "$WORKFLOW_NAME"
 }
 
-@test "10. Search for non-existent workflow returns no results" {
+@test "10. Search by correlation ID" {
+    WORKFLOW_ID=$(cat /tmp/search_workflow_id.txt)
+    [ -n "$WORKFLOW_ID" ]
+
+    run bash -c "./conductor workflow search --correlation-id '$CORRELATION_ID' 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "$WORKFLOW_ID"
+}
+
+@test "11. Search by correlation ID combined with other filters" {
+    WORKFLOW_ID=$(cat /tmp/search_workflow_id.txt)
+    [ -n "$WORKFLOW_ID" ]
+
+    run bash -c "./conductor workflow search --workflow '$WORKFLOW_NAME' --correlation-id '$CORRELATION_ID' --status COMPLETED 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    echo "$output" | grep -q "$WORKFLOW_ID"
+}
+
+@test "12. Search by unknown correlation ID returns no results" {
+    WORKFLOW_ID=$(cat /tmp/search_workflow_id.txt)
+    [ -n "$WORKFLOW_ID" ]
+
+    run bash -c "./conductor workflow search --correlation-id 'nonexistent_correlation_xyz_12345' 2>/dev/null"
+    echo "Output: $output"
+    [ "$status" -eq 0 ]
+    RESULT_COUNT=$(echo "$output" | grep -c "$WORKFLOW_ID" || true)
+    [ "$RESULT_COUNT" -eq 0 ]
+}
+
+@test "13. Search for non-existent workflow returns no results" {
     run bash -c "./conductor workflow search --workflow 'nonexistent_workflow_xyz_12345' 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -123,7 +155,7 @@ get_workflow_id() {
     [ "$RESULT_COUNT" -eq 0 ]
 }
 
-@test "11. Search by status RUNNING returns no matches for completed workflow" {
+@test "14. Search by status RUNNING returns no matches for completed workflow" {
     run bash -c "./conductor workflow search --workflow '$WORKFLOW_NAME' --status RUNNING --count 1 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
@@ -135,7 +167,7 @@ get_workflow_id() {
 # Cleanup
 # ==========================================
 
-@test "12. Cleanup - Delete workflow execution" {
+@test "15. Cleanup - Delete workflow execution" {
     WORKFLOW_ID=$(cat /tmp/search_workflow_id.txt)
     [ -n "$WORKFLOW_ID" ]
 
@@ -145,7 +177,7 @@ get_workflow_id() {
     [[ "$output" == *"deleted successfully"* ]]
 }
 
-@test "13. Cleanup - Delete workflow definition" {
+@test "16. Cleanup - Delete workflow definition" {
     run bash -c "./conductor workflow delete '$WORKFLOW_NAME' 1 -y 2>/dev/null"
     echo "Output: $output"
     [ "$status" -eq 0 ]
