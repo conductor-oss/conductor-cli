@@ -20,6 +20,7 @@ import (
 	stdlog "log"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/conductor-oss/conductor-cli/internal"
 	"github.com/conductor-oss/conductor-cli/internal/cliconfig"
@@ -88,13 +89,39 @@ var localOnlyCommands = map[string]bool{
 // elsewhere (e.g. "schedule update") still get an API client.
 func isLocalOnlyCommand(cmd *cobra.Command) bool {
 	topLevel := cmd
-	for topLevel.Parent() != nil && topLevel.Parent().Parent() != nil {
+	for topLevel.Parent() != nil && !isConductorRoot(topLevel.Parent()) {
 		topLevel = topLevel.Parent()
 	}
 	if topLevel.Parent() == nil {
-		return false // cmd is the root command itself
+		return false // cmd is the root command itself, or the host's root when embedded
 	}
 	return localOnlyCommands[topLevel.Name()]
+}
+
+// isConductorRoot reports whether c is this CLI's root, whether it runs
+// standalone or mounted under a host program's root.
+func isConductorRoot(c *cobra.Command) bool { return c.Name() == NAME }
+
+// embedded is set when another program mounts rootCmd as a subcommand.
+var embedded bool
+
+// initOnce guards initConfig when it runs from the pre-run hook instead of a
+// process-wide cobra initializer.
+var initOnce sync.Once
+
+// RootCommand returns the root command for embedding in another Cobra program,
+// for example as `orkes conductor`. Configuration then loads in the root's own
+// persistent pre-run hook, so the host program's other commands are unaffected.
+func RootCommand() *cobra.Command {
+	if !embedded {
+		embedded = true
+		inner := rootCmd.PersistentPreRunE
+		rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+			initOnce.Do(initConfig)
+			return inner(cmd, args)
+		}
+	}
+	return rootCmd
 }
 
 var rootCmd = &cobra.Command{
@@ -111,8 +138,9 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Check for updates if 24h have passed (non-blocking with 3s timeout)
-		// Skip update check for the update command itself
-		if cmd.Name() != "update" {
+		// Skip update check for the update command itself, and when embedded:
+		// the host program ships its own releases.
+		if cmd.Name() != "update" && !embedded {
 			updater.CheckAndUpdateState(cmd.Context(), Version)
 
 			// Show notification if update is available
@@ -224,6 +252,9 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context) {
+	// Standalone use loads configuration before any command runs. Embedding
+	// programs get the same step from RootCommand's pre-run hook instead.
+	cobra.OnInitialize(initConfig)
 	cc.Init(&cc.Config{
 		RootCmd:         rootCmd,
 		Headings:        cc.Red + cc.Bold,
@@ -367,8 +398,6 @@ func activeResolution(cmd *cobra.Command) cliconfig.Resolution {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
-
 	// Suppress debug logs from conductor-go SDK
 	stdlog.SetOutput(io.Discard)
 	stdlog.SetFlags(0)
