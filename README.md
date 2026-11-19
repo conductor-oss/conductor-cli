@@ -1034,3 +1034,20 @@ Error: Profile 'prod' doesn't exist (expected file: ~/.conductor-cli/config-prod
 ## For AI Assistants & LLMs
 
 For a concise, LLM-optimized reference with command tables, exit codes, and canonical examples, see **[CLAUDE.md](./CLAUDE.md)**.
+
+### Connected Apps and integrations
+
+Use the current server profile to discover installed providers and saved connections:
+
+```bash
+conductor integration types --category MCP
+conductor integration type-config aws-s3
+conductor integration list --type aws-s3
+conductor integration get my-s3
+conductor integration operations --type aws-s3
+conductor integration operations my-s3 --name "List Buckets" --json
+conductor integration create --file connection.json
+conductor integration delete my-s3
+```
+
+Creation accepts a JSON object with `name`, `type`, `category`, `enabled`, `description` and `configuration`. Supply credentials via stdin or a protected file. The CLI checks for an existing name before calling the server's upsert endpoint. List and get output omit saved configuration values. Operation schemas describe inputs under `inputSchema.data`; availability at execution also depends on the connection's credentials and permissions.
