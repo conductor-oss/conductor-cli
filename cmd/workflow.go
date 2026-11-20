@@ -617,7 +617,7 @@ func parseAPIError(err error, defaultMsg string) error {
 					message += fmt.Sprintf(" (status: %d)", errorResponse.Status)
 				}
 
-				return errors.New(message)
+				return fmt.Errorf("%s", message)
 			}
 		}
 	}
